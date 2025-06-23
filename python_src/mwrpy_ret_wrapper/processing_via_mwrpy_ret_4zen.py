@@ -85,7 +85,7 @@ if __name__ == "__main__":
         # INFO:root:Processing took 602.0 seconds == 10 minuten pro Profil.
         # INFO:root:Processing took 651.9 seconds
         workdir = (args.output).split("/mwrpy_ret/")[0]+"/mwrpy_ret"
-        # run_mwrpy_ret(workdir, site=args.site, date=yyyy+"-"+mm+"-"+dd)
+        run_mwrpy_ret(workdir, site=args.site, date=yyyy+"-"+mm+"-"+dd)
 
         # Move result file:
         new_name = args.final_output+"mwrpy_ret_out_rs_"+file.split("/")[-1]
@@ -103,8 +103,8 @@ if __name__ == "__main__":
 
         ################
         # Remove this break for operational run!!
-        print("Remove this break for operational run!!")
-        break
+        # print("Remove this break for operational run!!")
+        # break
 
 
 
