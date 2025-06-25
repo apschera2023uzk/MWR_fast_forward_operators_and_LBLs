@@ -169,11 +169,15 @@ def get_mwr_tbs_of_datetime(datetime_of_mwr_plus20, original_mwr_datetime, args)
     mean_rainfall = np.nanmean(ds_c1["rainfall_rate"].values[t_index0-558:t_index0+558])
     if np.isnan(mean_rainfall):
         mean_rainfall = 0
-    elevation = ds_c1["elevation_angle"].values[t_index0]
+    elevation = np.nanmean(ds_c1["elevation_angle"].values[t_index0:t_index20])
+    print("Bedenke das MWR TBs ein Mittelwert über 1 Minute oder ",\
+        len((ds_c1["elevation_angle"].values[t_index0:t_index20])), " Datenpunkte sind.")
+    print("Zeitfenster von: ", ds_c1["time"].values[t_index0], " bis ", ds_c1["time"].values[t_index20])
     frequency = ds_c1["frequency"].values
-    mean_noise31 = np.nanstd(ds_c1["tb"][t_index0-1122:t_index0+1122, 6].values)
+    std31 = np.nanstd(ds_c1["tb"][t_index0-1122:t_index0+1122, 6].values)
+    print("31 GHz values: ", ds_c1["tb"][t_index0-1122:t_index0+1122, 6].values)
  
-    return tbs_mwr, quality_flag, mean_cloudflag, frequency, mean_rainfall, mean_noise31, elevation
+    return tbs_mwr, quality_flag, mean_cloudflag, frequency, mean_rainfall, std31, elevation
 
 ##############################################################################
 
@@ -231,15 +235,15 @@ def get_tbs_of_all(index, nc_dict,rttov_files, lbl_files, mwr_files_l1,\
     else:
         TBs_rttov = get_radisonde_tbs_of_file(rttov_file)
     tbs_mwr, quality_flag, mean_cloudflag, frequency, mean_rainfall,\
-        mean_noise31, elevation =\
+        std31, elevation =\
         get_mwr_tbs_of_datetime(datetime_mwr_plus, datetime_mwr, args)
     nc_dict["cloud_flag"][index] = mean_cloudflag
     nc_dict["mean_rainfall"][index] = mean_rainfall
-    nc_dict["mean_noise31"][index] = mean_noise31
+    nc_dict["std31"][index] = std31
     nc_dict["elevation"][index] = elevation
     # Let's just get more outputs from MWR also frquecncy!!!
 
-    print(tbs_mwr)
+    # print(tbs_mwr)
     nc_dict["TBs_RTTOV-gb"][index,:] = TBs_rttov
     nc_dict["TBs_mwrpy_ret"][index,:] = lbl_tbs
     nc_dict["TBs_HATPRO"][index,:] = tbs_mwr
@@ -261,7 +265,7 @@ def dictionary2nc(nc_dict, nc_out_path="~/PhD_data/combined_dataset.nc"):
         "TBs_HATPRO": (("time", "frequency"), nc_dict["TBs_HATPRO"]),
         "cloud_flag": (("time"), nc_dict["cloud_flag"]),
         "mean_rainfall": (("time"), nc_dict["mean_rainfall"]),
-        "mean_noise31": (("time"), nc_dict["mean_noise31"]),
+        "std31": (("time"), nc_dict["std31"]),
         "elevation": (("time"), nc_dict["elevation"]),
     },
     coords={
@@ -303,7 +307,7 @@ if __name__ == "__main__":
     nc_dict["frequency"] = np.zeros([14])
     nc_dict["cloud_flag"] = np.zeros([len(rs_files)])
     nc_dict["mean_rainfall"] = np.zeros([len(rs_files)])
-    nc_dict["mean_noise31"] = np.zeros([len(rs_files)])
+    nc_dict["std31"] = np.zeros([len(rs_files)])
     nc_dict["elevation"] = np.zeros([len(rs_files)])
     # LWP (time)
 
