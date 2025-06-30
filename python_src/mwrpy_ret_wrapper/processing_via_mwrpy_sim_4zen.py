@@ -18,7 +18,7 @@ import shutil
 
 def parse_arguments():
     parser = argparse.ArgumentParser(
-        description="Wrapper for Radiosonde processing with mwrpy_ret."
+        description="Wrapper for Radiosonde processing with mwrpy_sim."
     )
     parser.add_argument(
         "--input", "-i",
@@ -112,7 +112,7 @@ if __name__ == "__main__":
             os.remove(old_file)
             print(f"Datei '{infile}' wurde gelöscht.")
 
-        break
+
         ################
         # Remove this break for operational run!!
         # print("Remove this break for operational run!!")

@@ -40,6 +40,20 @@ def parse_arguments():
         default=os.path.expanduser("~/PhD_data/Vital_I/hatpro-joyhat/"),
         help="MWR l2 data with atmospheric profiles"
     )
+
+    parser.add_argument(
+        "--ham_path1", "-h1",
+        type=str,
+        default=os.path.expanduser("~/PhD_data/Vital_I/hamhat/"),
+        help="2nd MWR l1 data with Tbs"
+    )
+    parser.add_argument(
+        "--ham_path2", "-h2",
+        type=str,
+        default=os.path.expanduser("~/PhD_data/Vital_I/hamhat/"),
+        help="2nd MWR l2 data with atmospheric profiles"
+    )
+
     parser.add_argument(
         "--mwrpy_ret", "-mp",
         type=str,
@@ -118,11 +132,15 @@ def derive_datetime_of_mwr(file, timedelta_min=1): # _plus10min
 
 ##############################################################################
 
-def get_mwr_tbs_of_datetime(datetime_of_mwr_plus20, original_mwr_datetime, args):
+def get_mwr_tbs_of_datetime(datetime_of_mwr_plus20, original_mwr_datetime, mwr_path):
     quality_flag = 0
-    mwr_path = args.mwr_path1
-    ds_c1 = xr.open_dataset(mwr_path+"/MWR_1C01_XXX_202408"+\
+    filelist = glob.glob(mwr_path+"MWR_1C01*202408"+\
         str(datetime_of_mwr_plus20)[8:10]+".nc")
+
+    if len(filelist)!=1:
+        return [np.nan]*14, np.nan, np.nan, [np.nan]*14, np.nan, np.nan, np.nan
+
+    ds_c1 = xr.open_dataset(filelist[0])
     t_index0 = np.argmin(\
         [abs(value) for value in [ds_c1["time"].values - original_mwr_datetime]] )
     t_index20 = np.argmin(\
@@ -150,23 +168,14 @@ def get_mwr_tbs_of_datetime(datetime_of_mwr_plus20, original_mwr_datetime, args)
         quality_flag = 3
         print("Excluded because of slant path: ", original_mwr_datetime)
 
-        '''
-        # Shift time according to time difference rule:
-        if (abs(ds_c1["elevation_angle"].values[t_index0+50:t_index20+50]-90)>0.5).any(): # + 5 Minuten == 187
-            t_index0 = t_index0+50
-            t_index20 = t_index20+50
-            quality_flag = 0
-        elif (abs(ds_c1["elevation_angle"].values[t_index0-50:t_index20-50]-90)>0.5).any(): # 74 == - 2 Minuten
-            t_index0 = t_index0-50
-            t_index20 = t_index20-50
-            quality_flag = 0
-        '''
-
     tbs_mwr = ds_c1["tb"][t_index0:t_index20, :].mean(dim="time", skipna=True).values
     mean_cloudflag = np.nanmean(ds_c1["liquid_cloud_flag"].values[t_index0-558:t_index0+558])
     if np.isnan(mean_cloudflag):
         mean_cloudflag = 0
-    mean_rainfall = np.nanmean(ds_c1["rainfall_rate"].values[t_index0-558:t_index0+558])
+    try:
+        mean_rainfall = np.nanmean(ds_c1["rainfall_rate"].values[t_index0-558:t_index0+558])
+    except:
+        mean_rainfall = np.nan
     if np.isnan(mean_rainfall):
         mean_rainfall = 0
     elevation = np.nanmean(ds_c1["elevation_angle"].values[t_index0:t_index20])
@@ -236,17 +245,22 @@ def get_tbs_of_all(index, nc_dict,rttov_files, lbl_files, mwr_files_l1,\
         TBs_rttov = get_radisonde_tbs_of_file(rttov_file)
     tbs_mwr, quality_flag, mean_cloudflag, frequency, mean_rainfall,\
         std31, elevation =\
-        get_mwr_tbs_of_datetime(datetime_mwr_plus, datetime_mwr, args)
+        get_mwr_tbs_of_datetime(datetime_mwr_plus, datetime_mwr, args.mwr_path1)
+    tbs_mwr2, quality_flag2, mean_cloudflag2, frequency2, mean_rainfall2,\
+        std31_2, elevation2 =\
+        get_mwr_tbs_of_datetime(datetime_mwr_plus, datetime_mwr, args.ham_path1)
     nc_dict["cloud_flag"][index] = mean_cloudflag
     nc_dict["mean_rainfall"][index] = mean_rainfall
     nc_dict["std31"][index] = std31
     nc_dict["elevation"][index] = elevation
+    nc_dict["elevation2"][index] = elevation2
     # Let's just get more outputs from MWR also frquecncy!!!
 
     # print(tbs_mwr)
     nc_dict["TBs_RTTOV-gb"][index,:] = TBs_rttov
     nc_dict["TBs_mwrpy_ret"][index,:] = lbl_tbs
-    nc_dict["TBs_HATPRO"][index,:] = tbs_mwr
+    nc_dict["TBs_joyhat"][index,:] = tbs_mwr
+    nc_dict["TBs_hamhat"][index,:] = tbs_mwr2
     if index<2:
         nc_dict["frequency"] = frequency
     return nc_dict
@@ -254,6 +268,7 @@ def get_tbs_of_all(index, nc_dict,rttov_files, lbl_files, mwr_files_l1,\
 ##############################################################################
 
 def dictionary2nc(nc_dict, nc_out_path="~/PhD_data/combined_dataset.nc"):
+
     # Erzeuge xarray Dataset
     ds = xr.Dataset(
     {
@@ -262,11 +277,13 @@ def dictionary2nc(nc_dict, nc_out_path="~/PhD_data/combined_dataset.nc"):
         "p_radiosonde": (("time", "height"), nc_dict["p_radiosonde"]),
         "TBs_RTTOV_gb": (("time", "frequency"), nc_dict["TBs_RTTOV-gb"]),
         "TBs_mwrpy_ret": (("time", "frequency"), nc_dict["TBs_mwrpy_ret"]),
-        "TBs_HATPRO": (("time", "frequency"), nc_dict["TBs_HATPRO"]),
+        "TBs_joyhat": (("time", "frequency"), nc_dict["TBs_joyhat"]),
+        "TBs_hamhat": (("time", "frequency"), nc_dict["TBs_hamhat"]),
         "cloud_flag": (("time"), nc_dict["cloud_flag"]),
         "mean_rainfall": (("time"), nc_dict["mean_rainfall"]),
         "std31": (("time"), nc_dict["std31"]),
         "elevation": (("time"), nc_dict["elevation"]),
+        "elevation2": (("time"), nc_dict["elevation2"]),
     },
     coords={
         "time": np.array(nc_dict["time"]),
@@ -280,6 +297,12 @@ def dictionary2nc(nc_dict, nc_out_path="~/PhD_data/combined_dataset.nc"):
         "source": "Script combining radiosonde, MWR, RTTOV, and LBL results",
     }
     )
+
+    #######
+    # Danach Attribute hinzufügen
+    ds["elevation"].attrs["long_name"] = "Elevation of Joyhat"
+    ds["elevation2"].attrs["long_name"] = "Elevation of Hamhat"
+
     # Speichere Dataset als NetCDF
     ds.to_netcdf(nc_out_path)
 
@@ -303,12 +326,14 @@ if __name__ == "__main__":
     nc_dict["p_radiosonde"] = np.zeros([len(rs_files), len(nc_dict["height"])])
     nc_dict["TBs_RTTOV-gb"] = np.zeros([len(rs_files), 14])
     nc_dict["TBs_mwrpy_ret"] = np.zeros([len(rs_files), 14])
-    nc_dict["TBs_HATPRO"] = np.zeros([len(rs_files), 14])
+    nc_dict["TBs_joyhat"] = np.zeros([len(rs_files), 14])
+    nc_dict["TBs_hamhat"] = np.zeros([len(rs_files), 14])
     nc_dict["frequency"] = np.zeros([14])
     nc_dict["cloud_flag"] = np.zeros([len(rs_files)])
     nc_dict["mean_rainfall"] = np.zeros([len(rs_files)])
     nc_dict["std31"] = np.zeros([len(rs_files)])
     nc_dict["elevation"] = np.zeros([len(rs_files)])
+    nc_dict["elevation2"] = np.zeros([len(rs_files)])
     # LWP (time)
 
     # 1st First read relevant data from all files in
