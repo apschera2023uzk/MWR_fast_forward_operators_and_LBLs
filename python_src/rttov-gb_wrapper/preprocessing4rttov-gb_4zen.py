@@ -58,13 +58,22 @@ def rh2mixing_ratio(RH=70, abs_T=273.15+15, p=101325):
 
 ##############################################################################
 
-def read_radiosonde_csv(file=None):
+def read_radiosonde_csv(file=None, crop=0):
     dataframe = pd.read_csv(file,skiprows=9, encoding_errors='ignore',\
-        header=None,names=["HeightMSL","Temp","Dewp","RH","P","Lat","Lon","AscRate","Dir","Speed","Elapsed time"])
-    df_resampled =  pd.concat([dataframe.iloc[:100:15], dataframe.iloc[100:500:15],dataframe.iloc[500:1000:20],\
-                               dataframe.iloc[1000:1500:25],dataframe.iloc[1500:3000:25],dataframe.iloc[3000::50]])
+        header=None,names=["HeightMSL","Temp","Dewp","RH","P","Lat","Lon",\
+        "AscRate","Dir","Speed","Elapsed time"])
+
+    # Or just find 132 m height:
+    if crop > 0:
+        crop = np.nanargmin(abs(dataframe["HeightMSL"].values -132))
+    if crop > 8:
+        print("Unusually high crop value: ",crop)
+
+    df_resampled =  pd.concat([dataframe.iloc[crop:100:15],\
+        dataframe.iloc[100:500:15],dataframe.iloc[500:1000:20],\
+        dataframe.iloc[1000:1500:25],dataframe.iloc[1500:3000:25],\
+        dataframe.iloc[3000::50]])
     length_value = len(df_resampled)
-    # es_array = [100*clausius_clapeyron(value) for value in df_resampled["Temp"].values[::-1]] # hPa
     t_array = df_resampled["Temp"].values[::-1] + 273.15
     p_array = df_resampled["P"].values[::-1]
 
@@ -122,6 +131,7 @@ if __name__ == "__main__":
         It had problems with that... (?)")
 
     for i, file in enumerate(files_in):
+        print(i, file)
         
         # Read inputfile and reduce vertical resolution dz for rttov-gb input:
         length_value, p_array, t_array, ppmv_array, height_in_km, deg_lat,\
@@ -136,8 +146,13 @@ if __name__ == "__main__":
             p_array,height_in_km=height_in_km, deg_lat=deg_lat,\
             filename=rttovgb_infile)
 
-
-
+        # Write cropped output:
+        length_value, p_array, t_array, ppmv_array, height_in_km, deg_lat,\
+            m_array = read_radiosonde_csv(file=file, crop=7)
+        rttovgb_infile_crop = args.output+"prof_"+str(datetime_of_sonde)+"_crop.dat"
+        write_combined_input_prof_file(t_array, ppmv_array,length_value,\
+            p_array,height_in_km=height_in_km, deg_lat=deg_lat,\
+            filename=rttovgb_infile_crop)
 
 
 

@@ -68,6 +68,7 @@ if __name__ == "__main__":
     script_file = args.rttov_script
 
     for i, file in enumerate(files_in):
+        print("infile: ", file)
 
         # Copy inputfile into RTTOV-gb inputs:
         shutil.copy(file, args.infile_rttov_gb)
@@ -91,9 +92,8 @@ if __name__ == "__main__":
 
         # Copy result back to inputs:
         new_output_file=args.input+"rttov-gb_"+file.split("/")[-1][5:-4]+".txt"
+        print("Outfile: ", new_output_file)
         shutil.copy(args.outfile_rttov_gb, new_output_file)
-
-
 
 
 

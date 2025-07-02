@@ -70,7 +70,7 @@ def run_mwrpy_sim(workdir, site="juelich", date="2024-08-19"):
     # This function just runs the LBL model mwrpy_ret:
     os.chdir(workdir)
     venv_activate = os.path.join(workdir, "venv", "bin", "activate")
-    subprocess.run(f"source {venv_activate} && pip3 install .",\
+    subprocess.run(f"source {venv_activate}",\
         shell=True, executable="/bin/bash", check=True)
     subprocess.run(f"source {venv_activate} && ./mwrpy_sim/cli.py -s "+site+" -d "+date+" radiosonde",\
         shell=True, executable="/bin/bash", check=True)
@@ -110,7 +110,7 @@ if __name__ == "__main__":
             print(f"Datei '{infile}' wurde gelöscht.")
         if os.path.exists(old_file):
             os.remove(old_file)
-            print(f"Datei '{infile}' wurde gelöscht.")
+            print(f"Datei '{old_file}' wurde gelöscht.")
 
 
         ################
