@@ -342,6 +342,43 @@ def all_plots_of_ds(reduced_ds, tag=""):
         label_rs=rs_tag, label_mwr="LBL (mwrpy_sim)",\
         campaign_name="Vital I",tag=tag)
 
+    # 5th Block all against LBL:
+    # 5.1 Joyhat:
+    plot_tb_scatter_per_channel(reduced_ds["TBs_joyhat"].values,\
+        reduced_ds["TBs_prl"].values,\
+        ds["frequency"].values, output_dir, 
+        label_rs="RPG HATPRO 'Joyhat'", label_mwr="LBL (TBs pyrtlib)",\
+        campaign_name="Vital I",tag=tag)
+    plot_tb_scatter_all_channels(reduced_ds["TBs_joyhat"].values,\
+        reduced_ds["TBs_prl"].values,\
+        ds["frequency"].values, output_dir, 
+        label_rs="RPG HATPRO 'Joyhat'", label_mwr="LBL (TBs pyrtlib)",\
+        campaign_name="Vital I",tag=tag)
+
+    # 5.2 Hamhat:
+    plot_tb_scatter_per_channel(reduced_ds["TBs_hamhat"].values,\
+        reduced_ds["TBs_prl"].values,\
+        ds["frequency"].values, output_dir, 
+        label_rs="RPG HATPRO 'Hamhat'", label_mwr="LBL (TBs pyrtlib)",\
+        campaign_name="Vital I",tag=tag)
+    plot_tb_scatter_all_channels(reduced_ds["TBs_hamhat"].values,\
+        reduced_ds["TBs_prl"].values,\
+        ds["frequency"].values, output_dir, 
+        label_rs="RPG HATPRO 'Hamhat'", label_mwr="LBL (TBs pyrtlib)",\
+        campaign_name="Vital I",tag=tag)
+
+    # 5.3 RTTOV-gb
+    plot_tb_scatter_per_channel(reduced_ds["TBs_RTTOV_gb"].values,\
+        reduced_ds["TBs_prl"].values,\
+        ds["frequency"].values, output_dir, 
+        label_rs=rs_tag, label_mwr="LBL (TBs pyrtlib)",\
+        campaign_name="Vital I",tag=tag)
+    plot_tb_scatter_all_channels(reduced_ds["TBs_RTTOV_gb"].values,\
+        reduced_ds["TBs_prl"].values,\
+        ds["frequency"].values, output_dir, 
+        label_rs=rs_tag, label_mwr="LBL (TBs pyrtlib)",\
+        campaign_name="Vital I",tag=tag)
+
     return 0
 
 ##############################################################################

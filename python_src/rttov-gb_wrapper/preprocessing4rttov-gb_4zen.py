@@ -66,6 +66,7 @@ def read_radiosonde_csv(file=None, crop=0):
     # Or just find 132 m height:
     if crop > 0:
         crop = np.nanargmin(abs(dataframe["HeightMSL"].values -132))
+        # print("crop: ", crop)
     if crop > 8:
         print("Unusually high crop value: ",crop)
 
@@ -130,6 +131,9 @@ if __name__ == "__main__":
     print("Could I use full rs resolution with RTTOV-gb?\
         It had problems with that... (?)")
 
+    # print(args.input+args.pattern)
+    # print(files_in)
+
     for i, file in enumerate(files_in):
         print(i, file)
         
@@ -145,6 +149,8 @@ if __name__ == "__main__":
         write_combined_input_prof_file(t_array, ppmv_array,length_value,\
             p_array,height_in_km=height_in_km, deg_lat=deg_lat,\
             filename=rttovgb_infile)
+
+        print("Pressurevergleich: ", p_array)
 
         # Write cropped output:
         length_value, p_array, t_array, ppmv_array, height_in_km, deg_lat,\
