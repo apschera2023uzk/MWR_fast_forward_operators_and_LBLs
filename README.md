@@ -51,7 +51,7 @@ This repository provides:
 
 ## ⚠Requirements
 
-See [`environment.yml`](./environment.yml) for Conda-based environment setup.
+See [`requirements.txt`](./requirements.txt) for environment setup.
 
 ## How to Run
 

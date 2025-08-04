@@ -2,7 +2,7 @@
 
 ./python_src/rttov-gb_wrapper/preprocessing4rttov-gb_4zen.py &&
 ./python_src/rttov-gb_wrapper/run_rttov-gb_on_rs4zen.py &&
-# Add LBl processing once it works...
+./python_src/run_pyrtlib/run_pyrtlib_on_all.py &&
 # Add ARMS-gb processing
 ./python_src/merge_data_into_netCDF/merge2nc.py &&
 ./python_src/plot_scripts/plot_TB-scatter_MWR.py
