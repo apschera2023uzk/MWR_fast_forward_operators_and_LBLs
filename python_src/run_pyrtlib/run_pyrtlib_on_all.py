@@ -8,9 +8,7 @@ import argparse
 import os
 import subprocess
 import glob
-# import pandas as pd
 import numpy as np
-import shutil
 
 ##############################################################################
 # 2nd Used functions:
@@ -48,6 +46,7 @@ if __name__ == "__main__":
     args = parse_arguments()
     files_in = glob.glob(args.input+args.pattern)
     script = args.script
+    print("\n\nStart processing of all files via pyrtlib: ")
 
     for i, file in enumerate(files_in):
         print(i, file)
@@ -56,6 +55,7 @@ if __name__ == "__main__":
         except:
             print("Could not process radiosonde: ", file)
             continue
+    print("Finished processing of all files via pyrtlib\n\n")
 
 
 ######################

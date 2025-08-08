@@ -8,6 +8,7 @@ import argparse
 import os
 import glob
 import pandas as pd
+import xarray as xr
 import numpy as np
 
 ##############################################################################
@@ -35,6 +36,12 @@ def parse_arguments():
         type=str,
         default=os.path.expanduser("csvexport_*.txt"),
         help="Name convention of radiosonde csv-files"
+    )
+    parser.add_argument(
+        "--pattern2", "-p2",
+        type=str,
+        default=os.path.expanduser("202408*_*.nc"),
+        help="Name convention of radiosonde nc-files"
     )
     return parser.parse_args()
 
@@ -66,7 +73,7 @@ def read_radiosonde_csv(file=None, crop=0):
     # Or just find 132 m height:
     if crop > 0:
         crop = np.nanargmin(abs(dataframe["HeightMSL"].values -132))
-        # print("crop: ", crop)
+        print("Found crop in CSV: ", crop)
     if crop > 8:
         print("Unusually high crop value: ",crop)
 
@@ -85,6 +92,9 @@ def read_radiosonde_csv(file=None, crop=0):
     
     height_in_km = df_resampled["HeightMSL"].values[0]/1000
     deg_lat = df_resampled["Lat"].values[0]
+
+    # print("\n\nAll results CSV!: ")
+    # print(length_value, p_array, t_array, ppmv_array, height_in_km, deg_lat, m_array)
     
     return length_value, p_array, t_array, ppmv_array, height_in_km, deg_lat, m_array
 
@@ -119,40 +129,95 @@ def derive_datetime_of_sonde(file):
     return datetime_of_sonde
 
 ##############################################################################
+
+def read_radiosonde_nc(file=None, crop=0):
+    if file==None:
+        return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan
+    ds = xr.open_dataset(file)
+    max_index = np.nanargmax(ds["Height"].values)
+    # Or just find 132 m height:
+    if crop > 0:
+        crop = np.nanargmin(abs(ds["Height"].values -132))
+        print("Found crop in NetCDF: ", crop)
+        # print("crop: ", crop)
+    if crop > 8:
+        print("Unusually high crop value: ",crop)
+    if max_index<150:
+        return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan
+        
+    # Thinning pattern:
+    inds = np.r_[crop:100:15,
+             100:500:15,
+             500:1000:20,
+             1000:1500:25,
+             1500:2500:25,
+             2500:max_index:50]
+    inds = np.unique(inds)
+        
+    t_array = ds["Temperature"].isel(Time=inds).values[::-1]
+    length_value = len(t_array )
+    p_array = ds["Pressure"].isel(Time=inds).values[::-1]
+    rh = ds["Humidity"].isel(Time=inds).values[::-1]
+
+    m_array = []
+    for rh_lev, t_lev, p_lev in zip (rh, t_array, p_array):
+        m_array.append(rh2mixing_ratio(RH=rh_lev, abs_T=t_lev, p=p_lev*100))
+    ppmv_array = np.array(m_array) * (28.9644e6 / 18.0153)
+    
+    height_in_km = ds["Height"].values[0]/1000
+    deg_lat = ds["Latitude"].values[0]
+    
+    # print("\n\nAll results: ")
+    # print(length_value, p_array, t_array, ppmv_array, height_in_km, deg_lat, m_array)
+    
+    return length_value, p_array, t_array, ppmv_array, height_in_km, deg_lat, m_array
+    
+##############################################################################
 # 3 Main
 ##############################################################################
 
 if __name__ == "__main__":
     args = parse_arguments()
     files_in = glob.glob(args.input+args.pattern)
+    files_in2 = glob.glob(args.input+args.pattern2)
     
+    print("******* Started preprcoessing for RTTOV-gb***************")
     print("***Warning: Remember that radiosonde resolution dz is reduced here!\
         Could that have an effect on results?")
     print("Could I use full rs resolution with RTTOV-gb?\
         It had problems with that... (?)")
 
-    # print(args.input+args.pattern)
-    # print(files_in)
-
-    for i, file in enumerate(files_in):
-        print(i, file)
+    for i, (file, file2) in enumerate(zip(files_in, files_in2)):
+        print(i, file, file2)
         
         # Read inputfile and reduce vertical resolution dz for rttov-gb input:
         length_value, p_array, t_array, ppmv_array, height_in_km, deg_lat,\
             m_array = read_radiosonde_csv(file=file)
         if length_value<100:
+            print("Length value: ", length_value)
             continue
 
         # Write output file:
+        # 1st from CSV
         datetime_of_sonde = derive_datetime_of_sonde(file)
         rttovgb_infile = args.output+"prof_"+str(datetime_of_sonde)+".dat"
         write_combined_input_prof_file(t_array, ppmv_array,length_value,\
             p_array,height_in_km=height_in_km, deg_lat=deg_lat,\
             filename=rttovgb_infile)
+            
+        # 2nd from nc:
+        length_value, p_array, t_array, ppmv_array, height_in_km, deg_lat,\
+            m_array = read_radiosonde_nc(file=file2)
+        if length_value<100:
+            print("Length value: ", length_value)
+            continue
+        rttovgb_infile = args.output+"prof_"+str(datetime_of_sonde)+"4nc.dat"
+        write_combined_input_prof_file(t_array, ppmv_array,length_value,\
+            p_array,height_in_km=height_in_km, deg_lat=deg_lat,\
+            filename=rttovgb_infile)
 
-        print("Pressurevergleich: ", p_array)
-
-        # Write cropped output:
+        # Write cropped output:        
+        # 1st from CSV
         length_value, p_array, t_array, ppmv_array, height_in_km, deg_lat,\
             m_array = read_radiosonde_csv(file=file, crop=7)
         rttovgb_infile_crop = args.output+"prof_"+str(datetime_of_sonde)+"_crop.dat"
@@ -160,11 +225,16 @@ if __name__ == "__main__":
             p_array,height_in_km=height_in_km, deg_lat=deg_lat,\
             filename=rttovgb_infile_crop)
 
+        # 2nd from nc
+        length_value, p_array, t_array, ppmv_array, height_in_km, deg_lat,\
+            m_array = read_radiosonde_nc(file=file2, crop=7)
+        rttovgb_infile_crop = args.output+"prof_"+str(datetime_of_sonde)+"4nc_crop.dat"
+        write_combined_input_prof_file(t_array, ppmv_array,length_value,\
+            p_array,height_in_km=height_in_km, deg_lat=deg_lat,\
+            filename=rttovgb_infile_crop)    
 
 
-
-
-
+    print("******* Finished preprcoessing for RTTOV-gb***************")
 
 
 

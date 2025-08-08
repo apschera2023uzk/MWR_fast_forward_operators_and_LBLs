@@ -12,6 +12,11 @@ Slant path microwave observations (5–20° elevation) from ground-based radiome
 - Analyze observational data from ground-based instruments and radiosondes.
 - Quantify model performance under various assumptions of atmospheric homogeneity.
 
+## How to setup the Code:
+
+1. Download RTTOV-gb code from here: https://nwp-saf.eumetsat.int/site/software/rttov-gb/ and put it in your home directory ~/
+2. Download git of pyrtlib: https://github.com/SatCloP/pyrtlib and put it also into your home directory ~/
+
 ## Scope of the Repository
 
 This repository provides:

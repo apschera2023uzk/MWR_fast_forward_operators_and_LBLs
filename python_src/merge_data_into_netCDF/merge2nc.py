@@ -220,15 +220,23 @@ def get_radisonde_tbs_of_file(rttovgb_outfile):
 def get_matching_rttov_and_lbl_files(datetime_mwr,rttov_files, lbl_files,\
          prl_files):
     rttov_file = None
+    rttov_crop_file = None
+    rttov_nc_file = None
+    rttov_nc_crop_file = None
     lbl_file = None
     prl_file = None
     for file in rttov_files:
         if str(datetime_mwr)[2:-2] in file:
-            if "crop" in file:
-                rttov_crop_file = file
+            if "nc" in file:
+                if "crop" in file:
+                    rttov_nc_crop_file = file
+                else:
+                    rttov_nc_file =  file
             else:
-                rttov_file = file
-
+                if "crop" in file:
+                    rttov_crop_file = file
+                else:
+                    rttov_file = file
             # print("worked: ", file, str(datetime_mwr)[2:-2])
     lbl_pattern = str(datetime_mwr).replace("-","").replace(":", "").replace("T", "_")
     for file in lbl_files:
@@ -240,14 +248,16 @@ def get_matching_rttov_and_lbl_files(datetime_mwr,rttov_files, lbl_files,\
         if lbl_pattern[2:-2] in file:
             prl_file = file
 
-    return prl_file, lbl_file, rttov_file, rttov_crop_file
+    return prl_file, lbl_file, rttov_file, rttov_crop_file,\
+        rttov_nc_file, rttov_nc_crop_file
 
 ##############################################################################
 
 def get_tbs_of_all(index, nc_dict,rttov_files, lbl_files, prl_files, \
             mwr_files_l1, datetime_mwr_plus, datetime_mwr, args):
 
-    prl_file, lbl_file, rttov_file, rttov_crop_file = get_matching_rttov_and_lbl_files(\
+    prl_file, lbl_file, rttov_file, rttov_crop_file,\
+        rttov_nc_file, rttov_nc_crop_file = get_matching_rttov_and_lbl_files(\
         datetime_mwr, rttov_files, lbl_files, prl_files)
 
     if lbl_file==None:
@@ -258,7 +268,7 @@ def get_tbs_of_all(index, nc_dict,rttov_files, lbl_files, prl_files, \
         if np.nanmean(lbl_tbs)<0:
             lbl_tbs = np.array([np.nan]*14)
     if prl_file==None:
-         prl_tbs = np.array([np.nan]*14)
+         prl_tbs = np.array([np.nan]*224)
     else:
          df_prl = pd.read_csv(prl_file)
          prl_tbs = df_prl["tbtotal"].values
@@ -270,6 +280,15 @@ def get_tbs_of_all(index, nc_dict,rttov_files, lbl_files, prl_files, \
         TBs_rttov_crop = np.array([np.nan]*14)
     else:
         TBs_rttov_crop = get_radisonde_tbs_of_file(rttov_crop_file)
+    if rttov_nc_file==None:
+        TBs_rttov_nc = np.array([np.nan]*14)
+    else:
+        TBs_rttov_nc = get_radisonde_tbs_of_file(rttov_nc_file)
+    if rttov_nc_crop_file==None:
+        TBs_rttov_nc_crop = np.array([np.nan]*14)
+    else:
+        TBs_rttov_nc_crop = get_radisonde_tbs_of_file(rttov_nc_crop_file)
+        
     tbs_mwr, quality_flag, mean_cloudflag, frequency, mean_rainfall,\
         std31, elevation =\
         get_mwr_tbs_of_datetime(datetime_mwr_plus, datetime_mwr, args.mwr_path1)
@@ -283,13 +302,32 @@ def get_tbs_of_all(index, nc_dict,rttov_files, lbl_files, prl_files, \
     nc_dict["elevation2"][index] = elevation2
     # Let's just get more outputs from MWR also frquecncy!!!
 
-    # print(tbs_mwr)
     nc_dict["TBs_RTTOV-gb"][index,:] = TBs_rttov
     nc_dict["TBs_RTTOV-gb_cropped"][index,:] = TBs_rttov_crop
+    nc_dict["TBs_RTTOV-gb_nc"][index,:] = TBs_rttov_nc
+    nc_dict["TBs_RTTOV-gb_nc_cropped"][index,:] = TBs_rttov_nc_crop
     nc_dict["TBs_mwrpy_sim"][index,:] = lbl_tbs
     nc_dict["TBs_joyhat"][index,:] = tbs_mwr
     nc_dict["TBs_hamhat"][index,:] = tbs_mwr2
-    nc_dict["TBs_prl"][index,:]  = prl_tbs
+    
+    nc_dict["TBs_R17"][index,:]  = prl_tbs[0:14]
+    nc_dict["TBs_R03"][index,:]  = prl_tbs[14:28]
+    nc_dict["TBs_R16"][index,:]  = prl_tbs[28:42]
+    nc_dict["TBs_R19"][index,:]  = prl_tbs[42:56]
+    nc_dict["TBs_R98"][index,:]  = prl_tbs[56:70]
+    nc_dict["TBs_R19SD"][index,:]  = prl_tbs[70:84]
+    nc_dict["TBs_R20"][index,:]  = prl_tbs[84:98]
+    nc_dict["TBs_R20SD"][index,:]  = prl_tbs[98:112]
+
+    nc_dict["TBs_R17_cropped"][index,:]  = prl_tbs[112:126]
+    nc_dict["TBs_R03_cropped"][index,:]  = prl_tbs[126:140]
+    nc_dict["TBs_R16_cropped"][index,:]  = prl_tbs[140:154]
+    nc_dict["TBs_R19_cropped"][index,:]  = prl_tbs[154:168]
+    nc_dict["TBs_R98_cropped"][index,:]  = prl_tbs[168:182]
+    nc_dict["TBs_R19SD_cropped"][index,:]  = prl_tbs[182:196]
+    nc_dict["TBs_R20_cropped"][index,:]  = prl_tbs[196:210]
+    nc_dict["TBs_R20SD_cropped"][index,:]  = prl_tbs[210:224]
+    
     if index<2:
         nc_dict["frequency"] = frequency
     return nc_dict
@@ -297,8 +335,6 @@ def get_tbs_of_all(index, nc_dict,rttov_files, lbl_files, prl_files, \
 ##############################################################################
 
 def dictionary2nc(nc_dict, nc_out_path="~/PhD_data/combined_dataset.nc"):
-
-    print(nc_dict["frequency"])
 
     # Erzeuge xarray Dataset
     ds = xr.Dataset(
@@ -308,8 +344,30 @@ def dictionary2nc(nc_dict, nc_out_path="~/PhD_data/combined_dataset.nc"):
         "p_radiosonde": (("time", "height"), nc_dict["p_radiosonde"]),
         "TBs_RTTOV_gb": (("time", "frequency"), nc_dict["TBs_RTTOV-gb"]),
         "TBs_RTTOV_gb_cropped": (("time", "frequency"), nc_dict["TBs_RTTOV-gb_cropped"]),
+        "TBs_RTTOV_gb_nc": (("time", "frequency"), nc_dict["TBs_RTTOV-gb"]),
+        "TBs_RTTOV_gb_nc_cropped": (("time", "frequency"),\
+             nc_dict["TBs_RTTOV-gb_cropped"]),
         "TBs_mwrpy_sim": (("time", "frequency"), nc_dict["TBs_mwrpy_sim"]),
-        "TBs_prl": (("time", "frequency"), nc_dict["TBs_prl"]),
+        
+        # Pyrtlib models:
+        "TBs_R17": (("time", "frequency"), nc_dict["TBs_R17"]),
+        "TBs_R03": (("time", "frequency"), nc_dict["TBs_R03"]),
+        "TBs_R16": (("time", "frequency"), nc_dict["TBs_R16"]),
+        "TBs_R19": (("time", "frequency"), nc_dict["TBs_R19"]),
+        "TBs_R98": (("time", "frequency"), nc_dict["TBs_R98"]),
+        "TBs_R19SD": (("time", "frequency"), nc_dict["TBs_R19SD"]),
+        "TBs_R20": (("time", "frequency"), nc_dict["TBs_R20"]),
+        "TBs_R20SD": (("time", "frequency"), nc_dict["TBs_R20SD"]),
+
+        "TBs_R17_cropped": (("time", "frequency"), nc_dict["TBs_R17_cropped"]),
+        "TBs_R03_cropped": (("time", "frequency"), nc_dict["TBs_R03_cropped"]),
+        "TBs_R16_cropped": (("time", "frequency"), nc_dict["TBs_R16_cropped"]),
+        "TBs_R19_cropped": (("time", "frequency"), nc_dict["TBs_R19_cropped"]),
+        "TBs_R98_cropped": (("time", "frequency"), nc_dict["TBs_R98_cropped"]),
+        "TBs_R19SD_cropped": (("time", "frequency"), nc_dict["TBs_R19SD_cropped"]),
+        "TBs_R20_cropped": (("time", "frequency"), nc_dict["TBs_R20_cropped"]),
+        "TBs_R20SD_cropped": (("time", "frequency"), nc_dict["TBs_R20SD_cropped"]),
+
         "TBs_joyhat": (("time", "frequency"), nc_dict["TBs_joyhat"]),
         "TBs_hamhat": (("time", "frequency"), nc_dict["TBs_hamhat"]),
         "cloud_flag": (("time"), nc_dict["cloud_flag"]),
@@ -344,6 +402,7 @@ def dictionary2nc(nc_dict, nc_out_path="~/PhD_data/combined_dataset.nc"):
 ##############################################################################
 
 if __name__ == "__main__":
+    print("\n***** Start NetCDF merge script**************\n")
     args = parse_arguments()
     # 0th Get inputs:
     rs_files, mwr_files_l1, mwr_files_l2, rttov_files, lbl_files,\
@@ -359,8 +418,25 @@ if __name__ == "__main__":
     nc_dict["p_radiosonde"] = np.zeros([len(rs_files), len(nc_dict["height"])])
     nc_dict["TBs_RTTOV-gb"] = np.zeros([len(rs_files), 14])
     nc_dict["TBs_RTTOV-gb_cropped"] = np.zeros([len(rs_files), 14])
+    nc_dict["TBs_RTTOV-gb_nc"] = np.zeros([len(rs_files), 14])
+    nc_dict["TBs_RTTOV-gb_nc_cropped"] = np.zeros([len(rs_files), 14])
     nc_dict["TBs_mwrpy_sim"] = np.zeros([len(rs_files), 14])
-    nc_dict["TBs_prl"] = np.zeros([len(rs_files), 14])
+    nc_dict["TBs_R17_cropped"] = np.zeros([len(rs_files), 14])
+    nc_dict["TBs_R03_cropped"] = np.zeros([len(rs_files), 14])
+    nc_dict["TBs_R16_cropped"] = np.zeros([len(rs_files), 14])
+    nc_dict["TBs_R19_cropped"] = np.zeros([len(rs_files), 14])
+    nc_dict["TBs_R98_cropped"] = np.zeros([len(rs_files), 14])
+    nc_dict["TBs_R19SD_cropped"] = np.zeros([len(rs_files), 14])
+    nc_dict["TBs_R20_cropped"] = np.zeros([len(rs_files), 14])
+    nc_dict["TBs_R20SD_cropped"] = np.zeros([len(rs_files), 14])
+    nc_dict["TBs_R17"] = np.zeros([len(rs_files), 14])
+    nc_dict["TBs_R03"] = np.zeros([len(rs_files), 14])
+    nc_dict["TBs_R16"] = np.zeros([len(rs_files), 14])
+    nc_dict["TBs_R19"] = np.zeros([len(rs_files), 14])
+    nc_dict["TBs_R98"] = np.zeros([len(rs_files), 14])
+    nc_dict["TBs_R19SD"] = np.zeros([len(rs_files), 14])
+    nc_dict["TBs_R20"] = np.zeros([len(rs_files), 14])
+    nc_dict["TBs_R20SD"] = np.zeros([len(rs_files), 14])
     nc_dict["TBs_joyhat"] = np.zeros([len(rs_files), 14])
     nc_dict["TBs_hamhat"] = np.zeros([len(rs_files), 14])
     nc_dict["frequency"] = np.zeros([14])
@@ -405,6 +481,7 @@ if __name__ == "__main__":
         # break
 
 dictionary2nc(nc_dict, nc_out_path="~/PhD_data/combined_dataset.nc")
+print("\n***** Finished NetCDF merge script**************\n")
 
 # Data:
 # Radiosonde profiles: T, q, lat, lon?
