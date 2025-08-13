@@ -343,12 +343,17 @@ def dictionary2nc(nc_dict, nc_out_path="~/PhD_data/combined_dataset.nc"):
         "mr_radiosonde": (("time", "height"), nc_dict["mr_radiosonde"]),
         "p_radiosonde": (("time", "height"), nc_dict["p_radiosonde"]),
         "TBs_RTTOV_gb": (("time", "frequency"), nc_dict["TBs_RTTOV-gb"]),
-        "TBs_RTTOV_gb_cropped": (("time", "frequency"), nc_dict["TBs_RTTOV-gb_cropped"]),
+        "TBs_RTTOV_gb_cropped": (("time", "frequency"),\
+            nc_dict["TBs_RTTOV-gb_cropped"]),
         "TBs_RTTOV_gb_nc": (("time", "frequency"), nc_dict["TBs_RTTOV-gb"]),
         "TBs_RTTOV_gb_nc_cropped": (("time", "frequency"),\
-             nc_dict["TBs_RTTOV-gb_cropped"]),
+            nc_dict["TBs_RTTOV-gb_cropped"]),
         "TBs_mwrpy_sim": (("time", "frequency"), nc_dict["TBs_mwrpy_sim"]),
-        
+        "TBs_ARMS_gb": (("time", "frequency"),\
+            nc_dict["TBs_ARMS-gb"]),
+        "TBs_ARMS_gb_cropped": (("time", "frequency"),\
+            nc_dict["TBs_ARMS-gb_cropped"]),
+
         # Pyrtlib models:
         "TBs_R17": (("time", "frequency"), nc_dict["TBs_R17"]),
         "TBs_R03": (("time", "frequency"), nc_dict["TBs_R03"]),
@@ -398,26 +403,20 @@ def dictionary2nc(nc_dict, nc_out_path="~/PhD_data/combined_dataset.nc"):
     ds.to_netcdf(nc_out_path)
 
 ##############################################################################
-# 3 Main
-##############################################################################
 
-if __name__ == "__main__":
-    print("\n***** Start NetCDF merge script**************\n")
-    args = parse_arguments()
-    # 0th Get inputs:
-    rs_files, mwr_files_l1, mwr_files_l2, rttov_files, lbl_files,\
-        prl_files = read_all_inputs(args)
-
-    # Create preliminary dataset:
+def initialize_nc_dict(rs_files):
     nc_dict = {}
     nc_dict["time"] = []
     max_height = 9500
     nc_dict["height"] = np.linspace(112,max_height,195)
-    nc_dict["t_radiosonde"] = np.zeros([len(rs_files), len(nc_dict["height"])])
+    '''
+    nc_dict["t_radiosonde"] = np.zero([len(rs_files), len(nc_dict["height"])])
     nc_dict["mr_radiosonde"] = np.zeros([len(rs_files), len(nc_dict["height"])])
     nc_dict["p_radiosonde"] = np.zeros([len(rs_files), len(nc_dict["height"])])
     nc_dict["TBs_RTTOV-gb"] = np.zeros([len(rs_files), 14])
     nc_dict["TBs_RTTOV-gb_cropped"] = np.zeros([len(rs_files), 14])
+    nc_dict["TBs_ARMS-gb"] = np.zeros([len(rs_files), 14])
+    nc_dict["TBs_ARMS-gb_cropped"] = np.zeros([len(rs_files), 14])
     nc_dict["TBs_RTTOV-gb_nc"] = np.zeros([len(rs_files), 14])
     nc_dict["TBs_RTTOV-gb_nc_cropped"] = np.zeros([len(rs_files), 14])
     nc_dict["TBs_mwrpy_sim"] = np.zeros([len(rs_files), 14])
@@ -445,6 +444,62 @@ if __name__ == "__main__":
     nc_dict["std31"] = np.zeros([len(rs_files)])
     nc_dict["elevation"] = np.zeros([len(rs_files)])
     nc_dict["elevation2"] = np.zeros([len(rs_files)])
+    '''
+    nc_dict["t_radiosonde"] = np.full((len(rs_files),\
+	    len(nc_dict["height"])), np.nan)
+    nc_dict["mr_radiosonde"] = np.full((len(rs_files),\
+	    len(nc_dict["height"])), np.nan)
+    nc_dict["p_radiosonde"] = np.full((len(rs_files),\
+	    len(nc_dict["height"])), np.nan)
+    nc_dict["TBs_RTTOV-gb"] = np.full((len(rs_files), 14), np.nan)
+    nc_dict["TBs_RTTOV-gb_cropped"] = np.full((len(rs_files), 14), np.nan)
+    nc_dict["TBs_ARMS-gb"] = np.full((len(rs_files), 14), np.nan)
+    nc_dict["TBs_ARMS-gb_cropped"] = np.full((len(rs_files), 14), np.nan)
+    nc_dict["TBs_RTTOV-gb_nc"] = np.full((len(rs_files), 14), np.nan)
+    nc_dict["TBs_RTTOV-gb_nc_cropped"] = np.full((len(rs_files), 14), np.nan)
+    nc_dict["TBs_mwrpy_sim"] = np.full((len(rs_files), 14), np.nan)
+    nc_dict["TBs_R17_cropped"] = np.full((len(rs_files), 14), np.nan)
+    nc_dict["TBs_R03_cropped"] = np.full((len(rs_files), 14), np.nan)
+    nc_dict["TBs_R16_cropped"] = np.full((len(rs_files), 14), np.nan)
+    nc_dict["TBs_R19_cropped"] = np.full((len(rs_files), 14), np.nan)
+    nc_dict["TBs_R98_cropped"] = np.full((len(rs_files), 14), np.nan)
+    nc_dict["TBs_R19SD_cropped"] = np.full((len(rs_files), 14), np.nan)
+    nc_dict["TBs_R20_cropped"] = np.full((len(rs_files), 14), np.nan)
+    nc_dict["TBs_R20SD_cropped"] = np.full((len(rs_files), 14), np.nan)
+    nc_dict["TBs_R17"] = np.full((len(rs_files), 14), np.nan)
+    nc_dict["TBs_R03"] = np.full((len(rs_files), 14), np.nan)
+    nc_dict["TBs_R16"] = np.full((len(rs_files), 14), np.nan)
+    nc_dict["TBs_R19"] = np.full((len(rs_files), 14), np.nan)
+    nc_dict["TBs_R98"] = np.full((len(rs_files), 14), np.nan)
+    nc_dict["TBs_R19SD"] = np.full((len(rs_files), 14), np.nan)
+    nc_dict["TBs_R20"] = np.full((len(rs_files), 14), np.nan)
+    nc_dict["TBs_R20SD"] = np.full((len(rs_files), 14), np.nan)
+    nc_dict["TBs_joyhat"] = np.full((len(rs_files), 14), np.nan)
+    nc_dict["TBs_hamhat"] = np.full((len(rs_files), 14), np.nan)
+    nc_dict["frequency"] = np.full((14,), np.nan)
+    nc_dict["cloud_flag"] = np.full((len(rs_files),), np.nan)
+    nc_dict["mean_rainfall"] = np.full((len(rs_files),), np.nan)
+    nc_dict["std31"] = np.full((len(rs_files),), np.nan)
+    nc_dict["elevation"] = np.full((len(rs_files),), np.nan)
+    nc_dict["elevation2"] = np.full((len(rs_files),), np.nan)
+
+    return nc_dict, max_height 
+
+##############################################################################
+# 3 Main
+##############################################################################
+
+if __name__ == "__main__":
+    print("\n***** Start NetCDF merge script**************\n")
+    args = parse_arguments()
+    # 0th Get inputs:
+    rs_files, mwr_files_l1, mwr_files_l2, rttov_files, lbl_files,\
+        prl_files = read_all_inputs(args)
+
+    # Create preliminary dataset:
+    nc_dict, max_height = initialize_nc_dict(rs_files)
+ 
+    
     # LWP (time)
 
     # 1st First read relevant data from all files in
