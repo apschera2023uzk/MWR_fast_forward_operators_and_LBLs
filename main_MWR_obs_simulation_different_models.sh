@@ -1,9 +1,21 @@
 #!/bin/bash
 
+# RTTOV-gb processing:
 ./python_src/rttov-gb_wrapper/preprocessing4rttov-gb_4zen.py &&
 ./python_src/rttov-gb_wrapper/run_rttov-gb_on_rs4zen.py &&
+
+# Prtlib processing:
 ./python_src/run_pyrtlib/run_pyrtlib_on_all.py &&
-# Add ARMS-gb processing
+
+# ARMS-gb processing:
+./python_src/arms-gb-wrapper/preprocessing4armsgb.py &&
+cd /home/aki/armsgb/Obs_Sim_armsgb &&
+export FC=ifx &&
+make clean &&
+make &&
+./FWD_Test &&
+
+# Summarize and plot:
 ./python_src/merge_data_into_netCDF/merge2nc.py &&
 ./python_src/plot_scripts/plot_TB-scatter_MWR.py
 
