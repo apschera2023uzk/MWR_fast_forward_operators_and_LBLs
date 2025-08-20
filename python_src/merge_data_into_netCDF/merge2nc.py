@@ -66,6 +66,18 @@ def parse_arguments():
         default=os.path.expanduser("~/PhD_data/Vital_I/pyrtlib_out/"),
         help="Simulated Brightness temperatures by LBL pyrtlib"
     )
+    parser.add_argument(
+        "--armsgb1", "-arm1",
+        type=str,
+        default=os.path.expanduser("~/PhD_data/Vital_I/radiosondes/armsgb_vital_1_zenith.nc"),
+        help="Simulated Brightness temperatures by ARMS-gb"
+    )
+    parser.add_argument(
+        "--armsgb2", "-arm2",
+        type=str,
+        default=os.path.expanduser("~/PhD_data/Vital_I/radiosondes/armsgb_vital_1_zenith_cropped.nc"),
+        help="Simulated Brightness temperatures by ARMS-gb cropped"
+    )
     return parser.parse_args()
 
 ##############################################################################
@@ -253,8 +265,36 @@ def get_matching_rttov_and_lbl_files(datetime_mwr,rttov_files, lbl_files,\
 
 ##############################################################################
 
+def derive_arms_TBs(datetime_mwr, args):
+
+    # Open files and prep out-arrays:
+    ds_arms_zen = xr.open_dataset(args.armsgb1)
+    ds_arms_zen_crop = xr.open_dataset(args.armsgb2)
+    arms_zen_tbs = np.array([np.nan]*14)
+    arms_zen_tbs_crop = np.array([np.nan]*14)
+    
+    # Get timestep and retrieve TBs zenith:
+    np_datetimes = (ds_arms_zen["times"].values).astype('datetime64[s]')
+    index_zen = np.nanargmin(abs(np_datetimes - datetime_mwr))
+    dist = str(np.nanmin(abs(np_datetimes - datetime_mwr))).split(" seconds")[0]
+    if int(dist) < 300:
+        arms_zen_tbs = ds_arms_zen["Sim_BT"].values[:,index_zen]
+     
+    # Get timestep and retrieve TBs zenith cropped:
+    np_datetimes = (ds_arms_zen_crop["times"].values).astype('datetime64[s]')
+    index_zen = np.nanargmin(abs(np_datetimes - datetime_mwr))
+    dist = str(np.nanmin(abs(np_datetimes - datetime_mwr))).split(" seconds")[0]
+    if int(dist) < 300:
+        arms_zen_tbs_crop = ds_arms_zen["Sim_BT"].values[:,index_zen]
+    
+    return arms_zen_tbs, arms_zen_tbs_crop
+    
+##############################################################################
+
 def get_tbs_of_all(index, nc_dict,rttov_files, lbl_files, prl_files, \
             mwr_files_l1, datetime_mwr_plus, datetime_mwr, args):
+
+    arms_zen_tbs, arms_zen_tbs_crop = derive_arms_TBs(datetime_mwr, args)
 
     prl_file, lbl_file, rttov_file, rttov_crop_file,\
         rttov_nc_file, rttov_nc_crop_file = get_matching_rttov_and_lbl_files(\
@@ -302,6 +342,8 @@ def get_tbs_of_all(index, nc_dict,rttov_files, lbl_files, prl_files, \
     nc_dict["elevation2"][index] = elevation2
     # Let's just get more outputs from MWR also frquecncy!!!
 
+    nc_dict["TBs_ARMS-gb"][index,:] = arms_zen_tbs
+    nc_dict["TBs_ARMS-gb_cropped"][index,:] = arms_zen_tbs_crop
     nc_dict["TBs_RTTOV-gb"][index,:] = TBs_rttov
     nc_dict["TBs_RTTOV-gb_cropped"][index,:] = TBs_rttov_crop
     nc_dict["TBs_RTTOV-gb_nc"][index,:] = TBs_rttov_nc
@@ -533,6 +575,7 @@ if __name__ == "__main__":
             mwr_files_l1,\
             datetime_mwr_plus, datetime_mwr, args)
 
+        ########
         # break
 
 dictionary2nc(nc_dict, nc_out_path="~/PhD_data/combined_dataset.nc")

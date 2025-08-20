@@ -26,10 +26,16 @@ def parse_arguments():
         description="Preprocess radiosonde data for RTTOV-gb input format."
     )
     parser.add_argument(
-        "--output", "-o",
+        "--output1", "-o1",
         type=str,
         default=os.path.expanduser("~/PhD_data/Vital_I/radiosondes/armsgb_vital_1_zenith.nc"),
         help="ARMS-gb summarized outputs!"
+    )
+    parser.add_argument(
+        "--output2", "-o2",
+        type=str,
+        default=os.path.expanduser("~/PhD_data/Vital_I/radiosondes/armsgb_vital_1_zenith_cropped.nc"),
+        help="ARMS-gb summarized CROPPED (!) outputs!"
     )
     return parser.parse_args()
 
@@ -121,7 +127,8 @@ def derive_date_from_nc_name(file):
 ##############################################################################
 
 def summarize_many_profiles(pattern=\
-                    "/home/aki/PhD_data/Vital_I/radiosondes/202408*_*.nc"):
+                    "/home/aki/PhD_data/Vital_I/radiosondes/202408*_*.nc",\
+                    crop=False):
     # Bodenlevel ist bei Index -1 - Umkehr der Profile!
     
     files = glob.glob(pattern)
@@ -138,8 +145,12 @@ def summarize_many_profiles(pattern=\
     sza = [0.]*n
     
     for i, file in enumerate(files):
-        length_value, p_array, t_array, ppmv_array, height_in_km, deg_lat,\
-            m_array = read_radiosonde_nc_arms(file=file)
+        if crop:
+            length_value, p_array, t_array, ppmv_array, height_in_km, deg_lat,\
+                m_array = read_radiosonde_nc_arms(file=file, crop=7)
+        else:
+            length_value, p_array, t_array, ppmv_array, height_in_km, deg_lat,\
+                m_array = read_radiosonde_nc_arms(file=file)
         profile_indices.append(i)
         if length_value<50:
             continue
@@ -213,6 +224,7 @@ def write_armsgb_input_nc(profile_indices, level_pressures,
             'Level_O3':             (("N_Levels", "N_Profiles"), level_o3s),
 
             # Oberflächenparameter
+            "times":                (("N_Times"), times),
             "Obs_Surface_Pressure": (("N_Times",), srf_pressures[profile_indices]),
             "Obs_Temperature_2M":   (("N_Times",), srf_temps[profile_indices]),
             "Obs_H2O_2M":           (("N_Times",), srf_wvs[profile_indices]),
@@ -254,10 +266,21 @@ def write_armsgb_input_nc(profile_indices, level_pressures,
 
 if __name__=="__main__":
     args = parse_arguments()
+    
+    # Uncropped:
     profile_indices, level_pressures, level_temperatures, level_wvs,\
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times =\
         summarize_many_profiles()
     write_armsgb_input_nc(profile_indices, level_pressures,\
         level_temperatures, level_wvs,\
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times ,\
-        outifle=args.output)
+        outifle=args.output1)
+        
+    # Cropped version:
+    profile_indices, level_pressures, level_temperatures, level_wvs,\
+        srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times =\
+        summarize_many_profiles(crop=True)
+    write_armsgb_input_nc(profile_indices, level_pressures,\
+        level_temperatures, level_wvs,\
+        srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times ,\
+        outifle=args.output2)

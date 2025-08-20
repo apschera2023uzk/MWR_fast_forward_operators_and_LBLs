@@ -462,6 +462,99 @@ def all_plots_of_ds(reduced_ds, tag=""):
         ds["frequency"].values, output_dir, 
         label_rs="RTTOV-gb (uncropped_nc)", label_mwr="R17 uncropped",\
         campaign_name="Vital I",tag=tag, folder="RTTOV_LBL/")
+        
+    # 8. ARMS-gb uncropped:
+    # 8.1: Hamhat
+    plot_tb_scatter_per_channel(reduced_ds["TBs_ARMS_gb"].values,\
+        reduced_ds["TBs_hamhat"].values,\
+        ds["frequency"].values, output_dir, 
+        label_rs="ARMS-gb (uncropped_nc)", label_mwr="RPG HATPRO 'Hamhat'",\
+        campaign_name="Vital I",tag=tag)
+    plot_tb_scatter_all_channels(reduced_ds["TBs_ARMS_gb"].values,\
+        reduced_ds["TBs_hamhat"].values,\
+        ds["frequency"].values, output_dir, 
+        label_rs="ARMS-gb (uncropped_nc)", label_mwr="RPG HATPRO 'Hamhat'",\
+        campaign_name="Vital I",tag=tag, folder="ARMS_Hamhat/") 
+    # 8.2: Joyhat
+    plot_tb_scatter_per_channel(reduced_ds["TBs_ARMS_gb"].values,\
+        reduced_ds["TBs_joyhat"].values,\
+        ds["frequency"].values, output_dir, 
+        label_rs="ARMS-gb (uncropped_nc)", label_mwr="RPG HATPRO 'Joyhat'",\
+        campaign_name="Vital I",tag=tag+"_uncropped", folder="ARMS_Joyhat/")
+    plot_tb_scatter_all_channels(reduced_ds["TBs_ARMS_gb"].values,\
+        reduced_ds["TBs_joyhat"].values,\
+        ds["frequency"].values, output_dir, 
+        label_rs="ARMS-gb (uncropped_nc)", label_mwr="RPG HATPRO 'Joyhat'",\
+        campaign_name="Vital I",tag=tag+"_uncropped", folder="ARMS_Joyhat/")
+    # 8.3 R17:
+    plot_tb_scatter_per_channel(reduced_ds["TBs_ARMS_gb"].values,\
+        reduced_ds["TBs_R17"].values,\
+        ds["frequency"].values, output_dir, 
+        label_rs="ARMS-gb (uncropped_nc)", label_mwr="R17 uncropped",\
+        campaign_name="Vital I",tag=tag)
+    plot_tb_scatter_all_channels(reduced_ds["TBs_ARMS_gb"].values,\
+        reduced_ds["TBs_R17"].values,\
+        ds["frequency"].values, output_dir, 
+        label_rs="ARMS-gb (uncropped_nc)", label_mwr="R17 uncropped",\
+        campaign_name="Vital I",tag=tag, folder="ARMS_LBL/")
+    # 8.4 RTTOV-gb:
+    plot_tb_scatter_per_channel(reduced_ds["TBs_RTTOV_gb_nc"].values,\
+        reduced_ds["TBs_ARMS_gb"].values,\
+        ds["frequency"].values, output_dir, 
+        label_rs="RTTOV-gb (uncropped_nc)", label_mwr="ARMS-gb uncropped",\
+        campaign_name="Vital I",tag=tag)
+    plot_tb_scatter_all_channels(reduced_ds["TBs_RTTOV_gb_nc"].values,\
+        reduced_ds["TBs_ARMS_gb"].values,\
+        ds["frequency"].values, output_dir, 
+        label_rs="RTTOV-gb (uncropped_nc)", label_mwr="ARMS-gb uncropped",\
+        campaign_name="Vital I",tag=tag, folder="RTTOV_ARMS/")
+
+    # 9. ARMS-gb cropped:
+    # 9.1: Hamhat
+    plot_tb_scatter_per_channel(reduced_ds["TBs_ARMS_gb_cropped"].values,\
+        reduced_ds["TBs_hamhat"].values,\
+        ds["frequency"].values, output_dir, 
+        label_rs="ARMS-gb (cropped_nc)", label_mwr="RPG HATPRO 'Hamhat'",\
+        campaign_name="Vital I", tag=tag)
+    plot_tb_scatter_all_channels(reduced_ds["TBs_ARMS_gb_cropped"].values,\
+        reduced_ds["TBs_hamhat"].values,\
+        ds["frequency"].values, output_dir, 
+        label_rs="ARMS-gb (cropped_nc)", label_mwr="RPG HATPRO 'Hamhat'",\
+        campaign_name="Vital I", tag=tag, folder="ARMS_Hamhat/") 
+    # 9.2: Joyhat
+    plot_tb_scatter_per_channel(reduced_ds["TBs_ARMS_gb_cropped"].values,\
+        reduced_ds["TBs_joyhat"].values,\
+        ds["frequency"].values, output_dir, 
+        label_rs="ARMS-gb (cropped_nc)", label_mwr="RPG HATPRO 'Joyhat'",\
+        campaign_name="Vital I", tag=tag+"_cropped", folder="ARMS_Joyhat/")
+    plot_tb_scatter_all_channels(reduced_ds["TBs_ARMS_gb_cropped"].values,\
+        reduced_ds["TBs_joyhat"].values,\
+        ds["frequency"].values, output_dir, 
+        label_rs="ARMS-gb (cropped_nc)", label_mwr="RPG HATPRO 'Joyhat'",\
+        campaign_name="Vital I", tag=tag+"_cropped", folder="ARMS_Joyhat/")
+    # 9.3: R17
+    plot_tb_scatter_per_channel(reduced_ds["TBs_ARMS_gb_cropped"].values,\
+        reduced_ds["TBs_R17"].values,\
+        ds["frequency"].values, output_dir, 
+        label_rs="ARMS-gb (cropped_nc)", label_mwr="R17 uncropped",\
+        campaign_name="Vital I", tag=tag)
+    plot_tb_scatter_all_channels(reduced_ds["TBs_ARMS_gb_cropped"].values,\
+        reduced_ds["TBs_R17"].values,\
+        ds["frequency"].values, output_dir, 
+        label_rs="ARMS-gb (cropped_nc)", label_mwr="R17 uncropped",\
+        campaign_name="Vital I", tag=tag, folder="ARMS_LBL/")
+    # 9.4: RTTOV-gb
+    plot_tb_scatter_per_channel(reduced_ds["TBs_RTTOV_gb_nc"].values,\
+        reduced_ds["TBs_ARMS_gb_cropped"].values,\
+        ds["frequency"].values, output_dir, 
+        label_rs="RTTOV-gb (uncropped_nc)", label_mwr="ARMS-gb cropped",\
+        campaign_name="Vital I", tag=tag)
+    plot_tb_scatter_all_channels(reduced_ds["TBs_RTTOV_gb_nc"].values,\
+        reduced_ds["TBs_ARMS_gb_cropped"].values,\
+        ds["frequency"].values, output_dir, 
+        label_rs="RTTOV-gb (uncropped_nc)", label_mwr="ARMS-gb cropped",\
+        campaign_name="Vital I", tag=tag, folder="RTTOV_ARMS/")
+        
     plt.close("all")
     return 0
 
@@ -473,13 +566,13 @@ def divide2roof_and_yard_sets(ds):
         "TBs_R03", "TBs_R16", "TBs_R19",\
         "TBs_R98", "TBs_R19SD",\
         "TBs_R20", "TBs_R20SD", "TBs_hamhat",\
-        "TBs_RTTOV_gb_nc"]
+        "TBs_RTTOV_gb_nc", "TBs_ARMS_gb"]
     # ,
     roof_variables = ["TBs_RTTOV_gb_cropped",\
         "TBs_R17_cropped", "TBs_R03_cropped", "TBs_R16_cropped",\
         "TBs_R19_cropped", "TBs_R98_cropped", "TBs_R19SD_cropped",\
         "TBs_R20_cropped", "TBs_R20SD_cropped", "TBs_joyhat",\
-        "TBs_RTTOV_gb_nc_cropped"]
+        "TBs_RTTOV_gb_nc_cropped", "TBs_ARMS_gb_cropped"]
     
     ds_yard = ds[yard_variables]
     ds_roof = ds[roof_variables]
@@ -531,7 +624,7 @@ def create_bias_plot_of_all_mods(ds, tag="any tag", out=""):
     
     # 2nd derive difference of mean for single model from combined mean
     colors=["blue", "orange", "green", "red","purple", "brown", "pink",\
-         "gray", "olive", "cyan", "sandybrown"]
+         "gray", "olive", "cyan", "indigo", "darkgreen"]
     #2.1.1
     plt.figure()
     plt.title(f"K-Band channels Bias Vital I (roof / Joyhat / {tag})")
@@ -539,7 +632,7 @@ def create_bias_plot_of_all_mods(ds, tag="any tag", out=""):
     plt.plot(np.arange(1,8), [1]*7, color="black", linestyle="dashed")
     plt.plot(np.arange(1,8), [0]*7, color="black")
     for i, var in enumerate(ds_roof.data_vars):
-         if i==0 or i==1 or i==9:
+         if i==0 or i==1 or i==9 or i==10:
              plt.plot(np.arange(1,8), (ds_roof.mean(dim="time",\
                  skipna=True)[var].values-mean_by_channel_roof)[:7],\
                  label=f"Bias {var}",  color=colors[i])
@@ -562,7 +655,7 @@ def create_bias_plot_of_all_mods(ds, tag="any tag", out=""):
     plt.plot(np.arange(8,15), [1]*7, color="black", linestyle="dashed")
     plt.plot(np.arange(8,15), [0]*7, color="black")
     for i, var in enumerate(ds_roof.data_vars):
-         if i==0 or i==1 or i==9:
+         if i==0 or i==1 or i==9 or i==10:
              plt.plot(np.arange(8,15), (ds_roof.mean(dim="time",\
                  skipna=True)[var].values-mean_by_channel_roof)[7:],\
                  label=f"Bias {var}",  color=colors[i])
@@ -586,7 +679,7 @@ def create_bias_plot_of_all_mods(ds, tag="any tag", out=""):
     plt.plot(np.arange(1,8), [1]*7, color="black", linestyle="dashed")
     plt.plot(np.arange(1,8), [0]*7, color="black")
     for i, var in enumerate(ds_yard.data_vars):#
-         if i==0 or i==1 or i==9:
+         if i==0 or i==1 or i==9 or i==10:
              plt.plot(np.arange(1,8), (ds_yard.mean(dim="time",\
                  skipna=True)[var].values-mean_by_channel_yard)[:7],\
                  label=f"Bias {var}",  color=colors[i])
@@ -609,7 +702,7 @@ def create_bias_plot_of_all_mods(ds, tag="any tag", out=""):
     plt.plot(np.arange(8,15), [1]*7, color="black", linestyle="dashed")
     plt.plot(np.arange(8,15), [0]*7, color="black")
     for i, var in enumerate(ds_yard.data_vars):
-         if i==0 or i==1 or i==9:
+         if i==0 or i==1 or i==9 or i==10:
              plt.plot(np.arange(8,15), (ds_yard.mean(dim="time",\
                  skipna=True)[var].values-mean_by_channel_yard)[7:],\
                  label=f"Bias {var}",  color=colors[i])
@@ -636,7 +729,7 @@ def create_bias_plot_of_all_mods(ds, tag="any tag", out=""):
     plt.plot(np.arange(1,8), [1]*7, color="black", linestyle="dashed")
     plt.plot(np.arange(1,8), [0]*7, color="black")
     for i, var in enumerate(ds_yard.data_vars):#
-         if i==0 or i==1 or i==9:
+         if i==0 or i==1 or i==9 or i==10:
              plt.plot(np.arange(1,8), (ds_yard.mean(dim="time",\
                  skipna=True)[var].values-mean_by_channel_yard)[:7],\
                  label=f"Bias {var}",  color=colors[i])
@@ -655,6 +748,9 @@ def create_bias_plot_of_all_mods(ds, tag="any tag", out=""):
     plt.legend(loc='lower right', fontsize=9)
     plt.savefig(out+tag+"K_bias_combined.png")
 
+    ##########################
+    # Add anything on ARMS-gb here? Following lines?
+
     # 3.2 combined bias plot roof+yard V:
     plt.figure()
     plt.title(f"V-Band Bias Vital I (Combined by offset / {tag})")
@@ -662,7 +758,7 @@ def create_bias_plot_of_all_mods(ds, tag="any tag", out=""):
     plt.plot(np.arange(8,15), [1]*7, color="black", linestyle="dashed")
     plt.plot(np.arange(8,15), [0]*7, color="black")
     for i, var in enumerate(ds_yard.data_vars):
-         if i==0 or i==1 or i==9:
+         if i==0 or i==1 or i==9 or i==10:
              plt.plot(np.arange(8,15), (ds_yard.mean(dim="time",\
                  skipna=True)[var].values-mean_by_channel_yard)[7:],\
                  label=f"Bias {var}",  color=colors[i])
@@ -851,13 +947,15 @@ if __name__ == "__main__":
     create_data_avail_plot(ds_zen_clear, tag="clear_sky",\
         out=os.path.expanduser("~/PhD_plots/availability/"))
     # all_plots_of_ds(ds_zen_clear, tag=" clear_sky ")
-    create_bias_plot_of_all_mods(ds_zen_clear, tag=" clear_sky ", out=args.output2)
+    create_bias_plot_of_all_mods(ds_zen_clear, tag=" clear_sky ",\
+        out=args.output2)
 
     print("Processing all sky zenith...")
     create_data_avail_plot(ds_zen_all, tag="all_sky",\
         out=os.path.expanduser("~/PhD_plots/availability/"))
     # all_plots_of_ds(ds_zen_all, tag=" all_sky ")
-    create_bias_plot_of_all_mods(ds_zen_all, tag=" all_sky ", out=args.output2)
+    create_bias_plot_of_all_mods(ds_zen_all, tag=" all_sky ",\
+        out=args.output2)
 
 
 
