@@ -74,6 +74,22 @@ def read_radiosonde_csv(file=None, crop=0):
     if crop > 0:
         crop = np.nanargmin(abs(dataframe["HeightMSL"].values -132))
         print("Found crop in CSV: ", crop)
+        
+    # AccRate / Height change crop:
+    if crop == 0:
+        old_h = dataframe["HeightMSL"].values[0]
+        for i in range(100):
+            current_h = dataframe["HeightMSL"].values[i]
+            current_AscRate = dataframe["AscRate"].values[i]
+            if current_AscRate == 0. and current_h==old_h:
+                if i!=0:
+                    crop +=1
+            else:
+                break
+            old_h = dataframe["HeightMSL"].values[i]
+        if crop > 0:
+            print("Crop due to height and AscRate in CSV: ", crop)
+            
     if crop > 8:
         print("Unusually high crop value: ",crop)
 
@@ -140,6 +156,21 @@ def read_radiosonde_nc(file=None, crop=0):
         crop = np.nanargmin(abs(ds["Height"].values -132))
         print("Found crop in NetCDF: ", crop)
         # print("crop: ", crop)
+        
+    # AccRate / Height change crop:
+    if crop == 0:
+        old_h = ds["Height"].values[0]
+        for i in range(100):
+            current_h = ds["Height"].values[i]
+            if abs(current_h-old_h)<0.3:
+                if i!=0:
+                    crop +=1
+            else:
+                break
+            old_h = current_h
+        if crop > 0:
+            print("Crop due to same height in NC: ", crop)
+        
     if crop > 8:
         print("Unusually high crop value: ",crop)
     if max_index<150:

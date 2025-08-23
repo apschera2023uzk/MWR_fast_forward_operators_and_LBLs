@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # RTTOV-gb processing:
-# ./python_src/rttov-gb_wrapper/preprocessing4rttov-gb_4zen.py &&
-# ./python_src/rttov-gb_wrapper/run_rttov-gb_on_rs4zen.py &&
+./python_src/rttov-gb_wrapper/preprocessing4rttov-gb_4zen.py &&
+./python_src/rttov-gb_wrapper/run_rttov-gb_on_rs4zen.py &&
 
 # Prtlib processing:
-# ./python_src/run_pyrtlib/run_pyrtlib_on_all.py &&
+./python_src/run_pyrtlib/run_pyrtlib_on_all.py &&
 
 # ARMS-gb processing:
 ./python_src/arms-gb-wrapper/preprocessing4armsgb.py &&
@@ -25,17 +25,13 @@ cd ~/MWR_fast_forward_operators_and_LBLs &&
 ./python_src/merge_data_into_netCDF/merge2nc.py &&
 ./python_src/plot_scripts/plot_TB-scatter_MWR.py
 
-
-
-
-
 ###############################
+# Maybe move up and make code dependent on folders:
 
-path_lbl="~/mwrpy_ret"
-path_rttov_gb="~/RTTOV-gb"
-path_radiosondes="~/atris/radiosondes/2024/08" # ganzer Monat in einem!
-path_MWR="~/atris/hatpro-joyhat/2024/08" # plus dd Ordner!
-path_output="~/PhD_data"
+# path_rttov_gb="~/RTTOV-gb"
+# path_radiosondes="~/atris/radiosondes/2024/08" # ganzer Monat in einem!
+# path_MWR="~/atris/hatpro-joyhat/2024/08" # plus dd Ordner!
+# path_output="~/PhD_data"
 
-echo path_rttov_gb
+# echo path_rttov_gb
 

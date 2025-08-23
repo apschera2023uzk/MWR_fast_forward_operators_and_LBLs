@@ -66,13 +66,30 @@ def read_radiosonde_nc_arms(file="/home/aki/PhD_data/Vital_I/radiosondes/2024080
         return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan
     ds = xr.open_dataset(file)
     max_index = np.nanargmax(ds["Height"].values)
-    # Or just find 132 m height:
+    
+   # Or just find 132 m height:
     if crop > 0:
         crop = np.nanargmin(abs(ds["Height"].values -132))
         print("Found crop in NetCDF: ", crop)
         # print("crop: ", crop)
+        
+    # AccRate / Height change crop:
+    if crop == 0:
+        old_h = ds["Height"].values[0]
+        for i in range(100):
+            current_h = ds["Height"].values[i]
+            if abs(current_h-old_h)<0.3:
+                if i!=0:
+                    crop +=1
+            else:
+                break
+            old_h = current_h
+        if crop > 0:
+            print("Crop due to same height in NC: ", crop)
+        
     if crop > 8:
         print("Unusually high crop value: ",crop)
+        
     if max_index<150:
         return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan
         
