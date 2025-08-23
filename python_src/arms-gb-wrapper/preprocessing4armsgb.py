@@ -153,14 +153,23 @@ def summarize_many_profiles(pattern=\
                 m_array = read_radiosonde_nc_arms(file=file)
         profile_indices.append(i)
         if length_value<50:
+            srf_temps[i] = 320
+            level_pressures[:,i] = np.array([1000]*137)
+            level_temperatures[:,i] = np.array([320]*137)
+            level_wvs[:,i] = np.array([8.]*137)
+            srf_pressures[i] = 1000
+            srf_temps[i] = 320
+            srf_wvs[i] = 8
+            srf_altitude[i] = 0.5
             continue
+        
         p_array, t_array, ppmv_array, m_array = add_clim2profiles(\
                                     p_array, t_array, ppmv_array, m_array)
         # p in hPa as in other inputs!
         # mixing ratio in g/kg
         level_pressures[:,i] = p_array[-137:]
         level_temperatures[:,i] = t_array[-137:]
-        level_wvs[:,i] = m_array[-137:]
+        level_wvs[:,i] = m_array[-137:]*1000 # convert kg/kg to g/kg
         datetime_np = derive_date_from_nc_name(file)
         
         srf_pressures[i] = p_array[-1]

@@ -624,7 +624,7 @@ def create_bias_plot_of_all_mods(ds, tag="any tag", out=""):
     
     # 2nd derive difference of mean for single model from combined mean
     colors=["blue", "orange", "green", "red","purple", "brown", "pink",\
-         "gray", "olive", "cyan", "indigo", "darkgreen"]
+         "gray", "olive", "cyan", "indigo", "darkgreen", "coral"]
     #2.1.1
     plt.figure()
     plt.title(f"K-Band channels Bias Vital I (roof / Joyhat / {tag})")
@@ -632,7 +632,7 @@ def create_bias_plot_of_all_mods(ds, tag="any tag", out=""):
     plt.plot(np.arange(1,8), [1]*7, color="black", linestyle="dashed")
     plt.plot(np.arange(1,8), [0]*7, color="black")
     for i, var in enumerate(ds_roof.data_vars):
-         if i==0 or i==1 or i==9 or i==10:
+         if i==0 or i==1 or 9<=i<=11:
              plt.plot(np.arange(1,8), (ds_roof.mean(dim="time",\
                  skipna=True)[var].values-mean_by_channel_roof)[:7],\
                  label=f"Bias {var}",  color=colors[i])
@@ -655,7 +655,7 @@ def create_bias_plot_of_all_mods(ds, tag="any tag", out=""):
     plt.plot(np.arange(8,15), [1]*7, color="black", linestyle="dashed")
     plt.plot(np.arange(8,15), [0]*7, color="black")
     for i, var in enumerate(ds_roof.data_vars):
-         if i==0 or i==1 or i==9 or i==10:
+         if i==0 or i==1 or 9<=i<=11:
              plt.plot(np.arange(8,15), (ds_roof.mean(dim="time",\
                  skipna=True)[var].values-mean_by_channel_roof)[7:],\
                  label=f"Bias {var}",  color=colors[i])
@@ -679,7 +679,7 @@ def create_bias_plot_of_all_mods(ds, tag="any tag", out=""):
     plt.plot(np.arange(1,8), [1]*7, color="black", linestyle="dashed")
     plt.plot(np.arange(1,8), [0]*7, color="black")
     for i, var in enumerate(ds_yard.data_vars):#
-         if i==0 or i==1 or i==9 or i==10:
+         if i==0 or i==1 or 9<=i<=11:
              plt.plot(np.arange(1,8), (ds_yard.mean(dim="time",\
                  skipna=True)[var].values-mean_by_channel_yard)[:7],\
                  label=f"Bias {var}",  color=colors[i])
@@ -702,7 +702,7 @@ def create_bias_plot_of_all_mods(ds, tag="any tag", out=""):
     plt.plot(np.arange(8,15), [1]*7, color="black", linestyle="dashed")
     plt.plot(np.arange(8,15), [0]*7, color="black")
     for i, var in enumerate(ds_yard.data_vars):
-         if i==0 or i==1 or i==9 or i==10:
+         if i==0 or i==1 or 9<=i<=11:
              plt.plot(np.arange(8,15), (ds_yard.mean(dim="time",\
                  skipna=True)[var].values-mean_by_channel_yard)[7:],\
                  label=f"Bias {var}",  color=colors[i])
@@ -729,7 +729,7 @@ def create_bias_plot_of_all_mods(ds, tag="any tag", out=""):
     plt.plot(np.arange(1,8), [1]*7, color="black", linestyle="dashed")
     plt.plot(np.arange(1,8), [0]*7, color="black")
     for i, var in enumerate(ds_yard.data_vars):#
-         if i==0 or i==1 or i==9 or i==10:
+         if i==0 or i==1 or 9<=i<=11:
              plt.plot(np.arange(1,8), (ds_yard.mean(dim="time",\
                  skipna=True)[var].values-mean_by_channel_yard)[:7],\
                  label=f"Bias {var}",  color=colors[i])
@@ -758,7 +758,7 @@ def create_bias_plot_of_all_mods(ds, tag="any tag", out=""):
     plt.plot(np.arange(8,15), [1]*7, color="black", linestyle="dashed")
     plt.plot(np.arange(8,15), [0]*7, color="black")
     for i, var in enumerate(ds_yard.data_vars):
-         if i==0 or i==1 or i==9 or i==10:
+         if i==0 or i==1 or 9<=i<=11:
              plt.plot(np.arange(8,15), (ds_yard.mean(dim="time",\
                  skipna=True)[var].values-mean_by_channel_yard)[7:],\
                  label=f"Bias {var}",  color=colors[i])
