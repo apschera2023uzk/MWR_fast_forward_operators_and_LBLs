@@ -34,7 +34,7 @@ def parse_arguments():
     parser.add_argument(
         "--NetCDF", "-nc",
         type=str,
-        default=os.path.expanduser("~/PhD_data/combined_dataset.nc"),
+        default=os.path.expanduser("~/PhD_data/Vital_I_zenith_TBs.nc"),
         help="Input data"
     )
     parser.add_argument(
@@ -562,17 +562,17 @@ def all_plots_of_ds(reduced_ds, tag=""):
 
 def divide2roof_and_yard_sets(ds):
     # , 
-    yard_variables = ["TBs_RTTOV_gb", "TBs_R17",\
+    yard_variables = ["TBs_RTTOV_gb", "TBs_R24",\
         "TBs_R03", "TBs_R16", "TBs_R19",\
         "TBs_R98", "TBs_R19SD",\
         "TBs_R20", "TBs_R20SD", "TBs_hamhat",\
-        "TBs_RTTOV_gb_nc", "TBs_ARMS_gb"]
+        "TBs_RTTOV_gb_nc", "TBs_ARMS_gb", "TBs_R17"]
     # ,
     roof_variables = ["TBs_RTTOV_gb_cropped",\
-        "TBs_R17_cropped", "TBs_R03_cropped", "TBs_R16_cropped",\
+        "TBs_R24_cropped", "TBs_R03_cropped", "TBs_R16_cropped",\
         "TBs_R19_cropped", "TBs_R98_cropped", "TBs_R19SD_cropped",\
         "TBs_R20_cropped", "TBs_R20SD_cropped", "TBs_joyhat",\
-        "TBs_RTTOV_gb_nc_cropped", "TBs_ARMS_gb_cropped"]
+        "TBs_RTTOV_gb_nc_cropped", "TBs_ARMS_gb_cropped","TBs_R17_cropped"]
     
     ds_yard = ds[yard_variables]
     ds_roof = ds[roof_variables]
@@ -624,7 +624,7 @@ def create_bias_plot_of_all_mods(ds, tag="any tag", out=""):
     
     # 2nd derive difference of mean for single model from combined mean
     colors=["blue", "orange", "green", "red","purple", "brown", "pink",\
-         "gray", "olive", "cyan", "indigo", "darkgreen", "coral"]
+         "gray", "olive", "cyan", "indigo", "darkgreen", "coral", "black"]
     #2.1.1
     plt.figure()
     plt.title(f"K-Band channels Bias Vital I (roof / Joyhat / {tag})")
@@ -877,8 +877,6 @@ def create_data_avail_plot(ds, tag="any tag", out=""):
         #############################
         # Zeros are not sorted out!!!
         # ARMS-gb is shown to be available!!!
-    
-    
         bool_indx = np.invert(np.isnan(ds[variable].mean(dim="frequency").values))
         availability[i,bool_indx] = 1.
         ##################
