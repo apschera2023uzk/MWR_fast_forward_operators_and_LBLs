@@ -292,11 +292,14 @@ def write_armsgb_input_nc(profile_indices, level_pressures,
 
 if __name__=="__main__":
     args = parse_arguments()
+    h_km_vital = 0.092
+    # h_km_vital_crop = 0.112
     
     # Uncropped:
     profile_indices, level_pressures, level_temperatures, level_wvs,\
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times =\
         summarize_many_profiles()
+    srf_altitude = np.array([h_km_vital]*len(srf_altitude,))
     write_armsgb_input_nc(profile_indices, level_pressures,\
         level_temperatures, level_wvs,\
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times ,\

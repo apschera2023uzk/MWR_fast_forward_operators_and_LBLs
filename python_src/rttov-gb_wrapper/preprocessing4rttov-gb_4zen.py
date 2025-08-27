@@ -211,6 +211,8 @@ if __name__ == "__main__":
     args = parse_arguments()
     files_in = glob.glob(args.input+args.pattern)
     files_in2 = glob.glob(args.input+args.pattern2)
+    h_km_vital = 0.092
+    h_km_vital_crop = 0.112
     
     print("******* Started preprcoessing for RTTOV-gb***************")
     print("***Warning: Remember that radiosonde resolution dz is reduced here!\
@@ -233,7 +235,7 @@ if __name__ == "__main__":
         datetime_of_sonde = derive_datetime_of_sonde(file)
         rttovgb_infile = args.output+"prof_"+str(datetime_of_sonde)+".dat"
         write_combined_input_prof_file(t_array, ppmv_array,length_value,\
-            p_array,height_in_km=height_in_km, deg_lat=deg_lat,\
+            p_array,height_in_km=h_km_vital, deg_lat=deg_lat,\
             filename=rttovgb_infile)
             
         # 2nd from nc:
@@ -244,7 +246,7 @@ if __name__ == "__main__":
             continue
         rttovgb_infile = args.output+"prof_"+str(datetime_of_sonde)+"4nc.dat"
         write_combined_input_prof_file(t_array, ppmv_array,length_value,\
-            p_array,height_in_km=height_in_km, deg_lat=deg_lat,\
+            p_array,height_in_km=h_km_vital, deg_lat=deg_lat,\
             filename=rttovgb_infile)
 
         # Write cropped output:        
@@ -253,7 +255,7 @@ if __name__ == "__main__":
             m_array = read_radiosonde_csv(file=file, crop=7)
         rttovgb_infile_crop = args.output+"prof_"+str(datetime_of_sonde)+"_crop.dat"
         write_combined_input_prof_file(t_array, ppmv_array,length_value,\
-            p_array,height_in_km=height_in_km, deg_lat=deg_lat,\
+            p_array,height_in_km=h_km_vital_crop, deg_lat=deg_lat,\
             filename=rttovgb_infile_crop)
 
         # 2nd from nc
@@ -261,7 +263,7 @@ if __name__ == "__main__":
             m_array = read_radiosonde_nc(file=file2, crop=7)
         rttovgb_infile_crop = args.output+"prof_"+str(datetime_of_sonde)+"4nc_crop.dat"
         write_combined_input_prof_file(t_array, ppmv_array,length_value,\
-            p_array,height_in_km=height_in_km, deg_lat=deg_lat,\
+            p_array,height_in_km=h_km_vital_crop, deg_lat=deg_lat,\
             filename=rttovgb_infile_crop)    
 
 

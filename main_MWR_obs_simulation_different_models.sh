@@ -20,10 +20,14 @@ make clean &&
 make &&
 ./FWD_Test &&
 
-# Summarize and plot:
+# Summarize data:
 cd ~/MWR_fast_forward_operators_and_LBLs &&
 ./python_src/merge_data_into_netCDF/merge2nc.py &&
-./python_src/plot_scripts/plot_TB-scatter_MWR.py
+
+# Plot data:
+./python_src/plot_scripts/plot_TB-scatter_MWR.py &&
+./python_src/plot_scripts/final_zenith_plots.py
+
 
 ###############################
 # Maybe move up and make code dependent on folders:
