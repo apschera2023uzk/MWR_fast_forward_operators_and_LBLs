@@ -14,11 +14,13 @@ export FC=ifx &&
 make clean &&
 make &&
 ./FWD_Test &&
+sleep 3 &&
 cd /home/aki/armsgb/Obs_Sim_armsgb_crop &&
 export FC=ifx &&
 make clean &&
 make &&
 ./FWD_Test &&
+sleep 3 &&
 
 # Summarize data:
 cd ~/MWR_fast_forward_operators_and_LBLs &&
