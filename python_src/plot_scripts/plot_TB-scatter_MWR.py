@@ -942,15 +942,15 @@ if __name__ == "__main__":
     #############
         
     print("Processing clear sky zenith...")
-    create_data_avail_plot(ds_zen_clear, tag="clear_sky",\
-        out=os.path.expanduser("~/PhD_plots/availability/"))
+    #create_data_avail_plot(ds_zen_clear, tag="clear_sky",\
+    #    out=os.path.expanduser("~/PhD_plots/availability/"))
     all_plots_of_ds(ds_zen_clear, tag=" clear_sky ")
     create_bias_plot_of_all_mods(ds_zen_clear, tag=" clear_sky ",\
         out=args.output2)
 
     print("Processing all sky zenith...")
-    create_data_avail_plot(ds_zen_all, tag="all_sky",\
-        out=os.path.expanduser("~/PhD_plots/availability/"))
+    #create_data_avail_plot(ds_zen_all, tag="all_sky",\
+    #    out=os.path.expanduser("~/PhD_plots/availability/"))
     all_plots_of_ds(ds_zen_all, tag=" all_sky ")
     create_bias_plot_of_all_mods(ds_zen_all, tag=" all_sky ",\
         out=args.output2)

@@ -210,6 +210,9 @@ def get_mwr_tbs_of_datetime(datetime_of_mwr_plus20, original_mwr_datetime, mwr_p
     print("Zeitfenster von: ", ds_c1["time"].values[t_index0], " bis ", ds_c1["time"].values[t_index20])
     frequency = ds_c1["frequency"].values
     std31 = np.nanstd(ds_c1["tb"][t_index0-1122:t_index0+1122, 6].values)
+    
+    ##############
+    # print("c1 variables: ", ds_c1.data_vars)
  
     return tbs_mwr, quality_flag, mean_cloudflag, frequency, mean_rainfall, std31, elevation
 
@@ -297,8 +300,47 @@ def derive_arms_TBs(datetime_mwr, args):
     
 ##############################################################################
 
+def derive_IWV_LWP_of_datetime(\
+        datetime_mwr_plus, datetime_mwr, mwr_path):
+        
+    quality_flag = 0
+    filelist = glob.glob(mwr_path+"MWR_single*202408"+\
+        str(datetime_mwr_plus)[8:10]+".nc")
+    if len(filelist)!=1:
+        print("Found more or less than 1 file: ", filelist)
+        return np.nan, np.nan
+
+    ds_l2 = xr.open_dataset(filelist[0])    
+    t_index0 = np.argmin(\
+        [abs(value) for value in [ds_l2["time"].values - datetime_mwr]] )
+    t_index20 = np.argmin(\
+        [abs(value) for value in [ds_l2["time"].values - datetime_mwr_plus]] )
+    time_diff = float(ds_l2["time"].values[t_index0]-datetime_mwr)
+
+    # Exclude certain data:
+    # 1. No MWR measurement during radiosonde launch:
+    if abs(time_diff)>100000000000: # 100 Sekunden
+        quality_flag = 1
+        print("Excluded because of time difference: ",\
+            ds_l2["time"].values[t_index0],  " == ", datetime_mwr)    
+    
+    IWV = ds_l2["iwv"][t_index0:t_index20].mean(dim="time", skipna=True).values
+    LWP = ds_l2["lwp"][t_index0:t_index20].mean(dim="time", skipna=True).values
+    
+    print(filelist[0])
+    print("Units IWV: ", ds_l2["iwv"].units)
+    print("Units LWP: ", ds_l2["lwp"].units)
+    
+    print(IWV)
+    print(LWP)
+    
+    return IWV, LWP
+    
+##############################################################################
+
 def get_tbs_of_all(index, nc_dict,rttov_files, lbl_files, prl_files, \
-            mwr_files_l1, datetime_mwr_plus, datetime_mwr, args):
+            mwr_files_l1, mwr_files_l2, datetime_mwr_plus, datetime_mwr,\
+             args):
 
     arms_zen_tbs, arms_zen_tbs_crop = derive_arms_TBs(datetime_mwr, args)
 
@@ -335,6 +377,10 @@ def get_tbs_of_all(index, nc_dict,rttov_files, lbl_files, prl_files, \
     else:
         TBs_rttov_nc_crop = get_radisonde_tbs_of_file(rttov_nc_crop_file)
         
+    IWV_jh, LWP_jh = derive_IWV_LWP_of_datetime(\
+        datetime_mwr_plus, datetime_mwr, args.mwr_path2)    
+    IWV_hh, LWP_hh = derive_IWV_LWP_of_datetime(\
+        datetime_mwr_plus, datetime_mwr, args.ham_path2)
     tbs_mwr, quality_flag, mean_cloudflag, frequency, mean_rainfall,\
         std31, elevation =\
         get_mwr_tbs_of_datetime(datetime_mwr_plus, datetime_mwr, args.mwr_path1)
@@ -346,6 +392,16 @@ def get_tbs_of_all(index, nc_dict,rttov_files, lbl_files, prl_files, \
     nc_dict["std31"][index] = std31
     nc_dict["elevation"][index] = elevation
     nc_dict["elevation2"][index] = elevation2
+    
+    print("IWV_hh: ", IWV_hh)
+    print("IWV_hh shape: ", np.shape(IWV_hh))
+    print("nc_dict WIC hamha]: ", nc_dict["IWV_hamhat"])
+    print("shape nc_dict WIC hamha]: ", np.shape(nc_dict["IWV_hamhat"]))
+    
+    nc_dict["IWV_hamhat"][index] = IWV_hh
+    nc_dict["IWV_joyhat"][index] = IWV_jh
+    nc_dict["LWP_hamhat"][index] = LWP_hh
+    nc_dict["LWP_joyhat"][index] = LWP_jh
     # Let's just get more outputs from MWR also frquecncy!!!
 
     nc_dict["TBs_ARMS-gb"][index,:] = arms_zen_tbs
@@ -432,6 +488,12 @@ def dictionary2nc(nc_dict, nc_out_path="~/PhD_data/combined_dataset.nc"):
         "std31": (("time"), nc_dict["std31"]),
         "elevation": (("time"), nc_dict["elevation"]),
         "elevation2": (("time"), nc_dict["elevation2"]),
+        
+        "IWV_hamhat": (("time"), nc_dict["IWV_hamhat"]),
+        "IWV_joyhat": (("time"), nc_dict["IWV_joyhat"]),
+        "LWP_hamhat": (("time"), nc_dict["LWP_hamhat"]),
+        "LWP_joyhat": (("time"), nc_dict["LWP_joyhat"]),
+        
     },
     coords={
         "time": np.array(nc_dict["time"]),
@@ -500,6 +562,12 @@ def initialize_nc_dict(rs_files):
     nc_dict["std31"] = np.full((len(rs_files),), np.nan)
     nc_dict["elevation"] = np.full((len(rs_files),), np.nan)
     nc_dict["elevation2"] = np.full((len(rs_files),), np.nan)
+    nc_dict["IWV_hamhat"] = np.full((len(rs_files),), np.nan)
+    nc_dict["IWV_joyhat"] = np.full((len(rs_files),), np.nan)
+    nc_dict["LWP_hamhat"] = np.full((len(rs_files),), np.nan)
+    nc_dict["LWP_joyhat"] = np.full((len(rs_files),), np.nan)
+    
+    print("LWP shape: ", np.shape(nc_dict["LWP_joyhat"]))
 
     return nc_dict, max_height 
 
@@ -548,7 +616,7 @@ if __name__ == "__main__":
         nc_dict["p_radiosonde"][i,:] = interpolated_p
 
         nc_dict = get_tbs_of_all(i, nc_dict,rttov_files, lbl_files,prl_files,\
-            mwr_files_l1,\
+            mwr_files_l1, mwr_files_l2,\
             datetime_mwr_plus, datetime_mwr, args)
 
         ########

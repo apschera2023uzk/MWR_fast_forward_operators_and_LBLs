@@ -75,16 +75,21 @@ def divide2roof_and_yard_sets(ds):
         "TBs_R03", "TBs_R16", "TBs_R19",\
         "TBs_R98", "TBs_R19SD",\
         "TBs_R20", "TBs_R20SD", "TBs_hamhat",\
-        "TBs_RTTOV_gb_nc", "TBs_ARMS_gb", "TBs_R17"]
+        "TBs_RTTOV_gb_nc", "TBs_ARMS_gb", "TBs_R17", "IWV_hamhat",\
+         "LWP_hamhat"]
     # ,
     roof_variables = ["TBs_RTTOV_gb_cropped",\
         "TBs_R24_cropped", "TBs_R03_cropped", "TBs_R16_cropped",\
         "TBs_R19_cropped", "TBs_R98_cropped", "TBs_R19SD_cropped",\
         "TBs_R20_cropped", "TBs_R20SD_cropped", "TBs_joyhat",\
-        "TBs_RTTOV_gb_nc_cropped", "TBs_ARMS_gb_cropped","TBs_R17_cropped"]
+        "TBs_RTTOV_gb_nc_cropped", "TBs_ARMS_gb_cropped",\
+        "TBs_R17_cropped", "IWV_joyhat", "LWP_joyhat"]
+        
+    ds_yard = ds[yard_variables].where(ds["elevation2"]>89.5)
+    ds_roof = ds[roof_variables].where(ds["elevation"]>89.5)\
+        .where(ds["TBs_joyhat"]>0.000001)
     
-    ds_yard = ds[yard_variables]
-    ds_roof = ds[roof_variables]
+    
     return ds_yard, ds_roof
     
 ##############################################################################
@@ -126,10 +131,18 @@ def derive_mean_of_all_channels(ds_yard, ds_roof):
 
 def bias_plot_by_R24(ds, tag="any tag", out=""):
     ds_yard, ds_roof = divide2roof_and_yard_sets(ds)
+
+    #################
+    # New availability plots:
+    create_data_avail_plot(ds_roof, tag=tag+" roof ",\
+        out=os.path.expanduser("~/PhD_plots/availability/"))
+    create_data_avail_plot(ds_yard, tag=tag+" yard ",\
+        out=os.path.expanduser("~/PhD_plots/availability/"))
+    #################
     
     # 1st derive mean TBs of all models per channel
-    mean_by_channel_roof, mean_by_channel_yard =\
-        derive_mean_of_all_channels(ds_yard, ds_roof)
+    # mean_by_channel_roof, mean_by_channel_yard =\
+    #    derive_mean_of_all_channels(ds_yard, ds_roof)
     
     # 2nd derive difference of mean for single model from combined mean
     colors=["blue", "orange", "green", "purple", "brown", "pink",\
@@ -262,9 +275,22 @@ def bias_plot_by_R24(ds, tag="any tag", out=""):
 
 def create_data_avail_plot(ds, tag="any tag", out=""):
     # make data availability plot for all dates:
-    obs = ["TBs_RTTOV_gb", "TBs_hamhat", "TBs_joyhat", "TBs_R24", "TBs_ARMS_gb"]
+    if "yard" in tag:
+        obs = ["TBs_RTTOV_gb", "TBs_hamhat", "TBs_R24", "TBs_ARMS_gb"]
+    elif "roof" in tag:
+        obs = ["TBs_RTTOV_gb_cropped", "TBs_joyhat", "TBs_R24_cropped",\
+            "TBs_ARMS_gb_cropped"]
+    else:
+        obs = ["TBs_RTTOV_gb", "TBs_hamhat", "TBs_joyhat", "TBs_R24", "TBs_ARMS_gb"]
     # prtlib; rttov-gb; hamhat; joyhat; potentially arms-gb
     # => cropped versions extra?
+    
+    print("Data availability for"+tag+": ",\
+        ds["time"].values[np.invert(np.isnan(\
+        ds[obs[0]].mean(dim="frequency").values))])
+    df = create_statistics_dataframe(ds, tag=tag)
+    ##########
+    error_by_IWV_or_LWP(ds, tag =tag)
     
     n_obs = len(obs)
     n_time = len(ds["time"].values)
@@ -276,13 +302,15 @@ def create_data_avail_plot(ds, tag="any tag", out=""):
         #############################
         # Zeros are not sorted out!!!
         # ARMS-gb is shown to be available!!!
-        bool_indx = np.invert(np.isnan(ds[variable].mean(dim="frequency").values))
-        availability[i,bool_indx] = 1.
+        nan_indx = np.invert(np.isnan(ds[variable].mean(dim="frequency").values))
+        availability[i,nan_indx] = 1.  
+        zero_indx = ds[variable].mean(dim="frequency").values == 0.
+        availability[i,zero_indx] = 0.   
         ##################
         # print("bool_indx: ", bool_indx) 
         # print("availability: ", availability)
     
-    fig, ax = plt.subplots(figsize=(20, 12))
+    fig, ax = plt.subplots(figsize=(25, 8))
     # Plot colored grid
     cax = ax.imshow(availability, cmap="Greens",\
         aspect="auto", interpolation="nearest")
@@ -326,8 +354,8 @@ def create_single_sonde_TSI_plot(ds, tag="any tag", out="",\
     ds_yard, ds_roof = divide2roof_and_yard_sets(ds)
     
     # 1st derive mean TBs of all models per channel
-    mean_by_channel_roof, mean_by_channel_yard =\
-        derive_mean_of_all_channels(ds_yard, ds_roof)
+    # mean_by_channel_roof, mean_by_channel_yard =\
+    #    derive_mean_of_all_channels(ds_yard, ds_roof)
     
     # 2nd derive difference of mean for single model from combined mean
     colors=["blue", "orange", "green", "purple", "brown", "pink",\
@@ -343,6 +371,7 @@ def create_single_sonde_TSI_plot(ds, tag="any tag", out="",\
         ds_zen_clear["TBs_RTTOV_gb"].mean(dim="frequency").values))]
     bool_array = np.invert(np.isnan(ds_zen_clear["TBs_RTTOV_gb"]\
                             .mean(dim="frequency").values))
+    # n_sondes = len(relevant_times)
     indices = np.where(bool_array)[0].tolist()
 
     # Loop:
@@ -532,6 +561,195 @@ def create_single_sonde_TSI_plot(ds, tag="any tag", out="",\
     return 0
 
 ##############################################################################
+
+def bias_by_channel(ds, var, ref_var):
+    bias_array = ds.mean(dim="time",\
+        skipna=True)[ref_var].values[:]-ds.mean(dim="time",\
+        skipna=True)[var].values
+    return bias_array
+
+##############################################################################
+
+def std_by_channel(ds, var):
+    std_array = ds[var].std(dim="time", skipna=True).values
+    return std_array
+
+##############################################################################
+
+def create_statistics_dataframe(ds, tag ="any tag", outdir="~/PhD_data/"):
+    df_rmse = pd.DataFrame()
+    df_std = pd.DataFrame()
+    df_bias = pd.DataFrame()
+    df_bias["frequency"] = ds["frequency"].values
+    
+    if "roof" in tag:
+        ds_roof = ds
+    elif "yard" in tag:
+        ds_yard = ds
+    else:
+        ds_yard, ds_roof = divide2roof_and_yard_sets(ds)
+        
+    # 2nd derive difference of mean for single model from combined mean
+    colors=["blue", "orange", "green", "purple", "brown", "pink",\
+         "gray", "red","olive", "cyan", "indigo", "darkgreen", "coral", "black"]
+    markers = ["X", "o", "+", "<"]
+                 
+    yard_reference = "TBs_R24"
+    yard_vars = ["TBs_RTTOV_gb", "TBs_hamhat", "TBs_ARMS_gb"]
+    roof_reference = "TBs_R24_cropped"
+    roof_vars = ["TBs_RTTOV_gb_cropped", "TBs_joyhat", "TBs_ARMS_gb_cropped"]
+    
+    if "yard" in tag:
+        for var in yard_vars :
+            df_bias[var+"_bias"] = bias_by_channel(ds, var, yard_reference)
+            df_std[var+"_std"] = std_by_channel(ds, var)
+            df_rmse[var+"_rmse"] = df_bias[var+"_bias"]+df_std[var+"_std"]
+    if "roof" in tag:
+        for var in roof_vars:
+            df_bias[var+"_bias"] = bias_by_channel(ds, var, roof_reference)
+            df_std[var+"_std"] = std_by_channel(ds, var)
+            df_rmse[var+"_rmse"] = df_bias[var+"_bias"]+df_std[var+"_std"]
+
+    df = df_bias.join(df_std).join(df_rmse)
+    df.to_csv(outdir+tag+"statistics_viatl_I.csv")
+    
+    return df
+    
+##############################################################################
+
+def IWV_channel_plots(var_np, ref_var_np, iwv_var_np, lwp_var_np,\
+        vartag="None", outdir="", tag=None):
+    # error vs. IWV scatterplot...    
+    bias_by_channel = var_np - ref_var_np
+    std_by_channel = np.std(var_np, axis=0)
+    rmse_by_channel = bias_by_channel + std_by_channel
+    
+    # For now plot them together:
+    bias_comp = np.mean(bias_by_channel, axis=1)
+    # std_comp = np.sqrt(np.mean((ref_var_np - var_np - bias_by_channel)**2, axis=1))
+    # rmse_comp = bias_comp+std_comp
+    
+    print("*********************")
+    print("bias_comp: ", bias_comp)
+    print("iwv_var_np: ", iwv_var_np)
+    
+    ############
+    # Bias:
+    # Plot IWV: 
+    plt.figure(figsize=(10,10))
+    plt.title("Bias of "+vartag+" by IWV - "+tag)
+    plt.scatter(iwv_var_np, bias_comp, marker="X")
+    plt.ylabel("Bias in K")
+    plt.xlabel("IWV [kg m-2]")
+    plt.savefig(outdir+vartag+"bias_by_IWV.png")
+    
+    # Plot LWP: 
+    plt.figure(figsize=(10,10))
+    plt.title("Bias of "+vartag+" by LWP - "+tag)
+    plt.scatter( lwp_var_np, bias_comp, marker="X")
+    plt.ylabel("Bias in K")
+    plt.xlabel("LWP [kg m-2]")
+    plt.savefig(outdir+vartag+"bias_by_LWP.png")
+
+    '''
+    ############
+    # Std:
+    # Plot IWV: 
+    plt.figure(figsize=(10,10))
+    plt.title("Standard deviation of "+vartag+" by IWV - "+tag)
+    plt.scatter(iwv_var_np, std_comp)
+    plt.ylabel("Std in K")
+    plt.xlabel("IWV [kg m-2]")
+    plt.savefig(outdir+vartag+"std_by_IWV.png")
+    
+    # Plot LWP: 
+    plt.figure(figsize=(10,10))
+    plt.title("Standard deviation of "+vartag+" by LWP - "+tag)
+    plt.scatter(lwp_var_np, std_comp)
+    plt.ylabel("Std in K")
+    plt.xlabel("LWP [kg m-2]")
+    plt.savefig(outdir+vartag+"std_by_LWP.png")
+    
+    ############
+    # RMSE:
+    # Plot IWV: 
+    plt.figure(figsize=(10,10))
+    plt.title("RMSE of "+vartag+" by IWV - "+tag)
+    plt.scatter(iwv_var_np, rmse_comp)
+    plt.ylabel("RMSE in K")
+    plt.xlabel("IWV [kg m-2]")
+    plt.savefig(outdir+vartag+"rmse_by_IWV.png")
+    
+    # Plot LWP: 
+    plt.figure(figsize=(10,10))
+    plt.title("RMSE of "+vartag+" by LWP - "+tag)
+    plt.scatter(lwp_var_np, rmse_comp)
+    plt.ylabel("RMSE in K")
+    plt.xlabel("LWP [kg m-2]")
+    plt.savefig(outdir+vartag+"rmse_by_LWP.png") 
+    '''
+    ###########
+    # But also by channel? slopes or correlations as one plot?
+    ###########
+
+    return 0
+##############################################################################
+
+def error_by_IWV_or_LWP(ds, tag =" any tag ", outdir="/home/aki/PhD_plots/IWV_LWP/"):
+    
+    if "yard" in tag:
+        ds_yard = ds
+    elif "roof" in tag:
+        ds_roof = ds
+    else:
+        ds_yard, ds_roof = divide2roof_and_yard_sets(ds)
+    
+    # 1st derive mean TBs of all models per channel
+    #mean_by_channel_roof, mean_by_channel_yard =\
+    #    derive_mean_of_all_channels(ds_yard, ds_roof)
+    
+    # 2nd derive difference of mean for single model from combined mean
+    colors=["blue", "orange", "green", "purple", "brown", "pink",\
+         "gray", "red","olive", "cyan", "indigo", "darkgreen", "coral", "black"]
+    markers = ["X", "o", "+", "<"]
+                 
+    yard_reference = "TBs_R24"
+    yard_vars = ["TBs_RTTOV_gb", "TBs_hamhat", "TBs_ARMS_gb"]
+    roof_reference = "TBs_R24_cropped"
+    roof_vars = ["TBs_RTTOV_gb_cropped", "TBs_joyhat", "TBs_ARMS_gb_cropped"]
+    
+    relevant_times = ds_zen_clear["time"].values[np.invert(np.isnan(\
+        ds_zen_clear["TBs_RTTOV_gb"].mean(dim="frequency").values))]
+    bool_array = np.invert(np.isnan(ds_zen_clear["TBs_RTTOV_gb"]\
+                            .mean(dim="frequency").values))
+    indices = np.where(bool_array)[0].tolist()
+
+    if "yard" in tag:
+        for var in yard_vars:
+            # print("VAR: ", var)
+            IWV_channel_plots(ds_yard[var].values[indices], \
+	        ds_yard[yard_reference].values[indices],\
+	        ds_yard["IWV_hamhat"].values[indices],\
+	        ds_yard["LWP_hamhat"].values[indices],\
+	        vartag=var, outdir=outdir, tag=tag)
+	 
+    if "roof" in tag: 
+        for var in roof_vars:
+            # print("VAR: ", var)
+            IWV_channel_plots(ds_roof[var].values[indices], \
+	        ds_roof[roof_reference].values[indices],\
+	        ds_roof["IWV_joyhat"].values[indices,0],\
+	        ds_roof["LWP_joyhat"].values[indices,0],\
+	        vartag=var, outdir=outdir, tag=tag)
+
+    return 0
+
+##############################################################################
+
+def shi_plot_bias_std(df, tag =" any tag "):
+    return 0
+
+##############################################################################
 # 3 Main
 ##############################################################################
 
@@ -543,36 +761,38 @@ if __name__ == "__main__":
     output_dir = args.output
 
     # Filter for different issues:
-    ds_zen_clear = ds.where(ds["cloud_flag"]==0).where(ds["elevation"]>89.5)\
-    .where(ds["mean_rainfall"]<0.000001).where(ds["TBs_joyhat"]>0.000001)\
-    .where(ds["elevation2"]>89.5)    
-    print("Clear sky sondes: ",\
-        ds_zen_clear["time"].values[np.invert(np.isnan(\
-        ds_zen_clear["TBs_RTTOV_gb"].mean(dim="frequency").values))])
+    ds_zen_all = ds.where(ds["mean_rainfall"]<0.000001)
+    ds_zen_clear = ds_zen_all.where(ds["cloud_flag"]==0)\
+    .where(ds["mean_rainfall"]<0.000001)
     
-    ds_zen_all = ds.where(ds["elevation"]>89.5)\
-    .where(ds["mean_rainfall"]<0.000001).where(ds["TBs_joyhat"]>0.000001)\
-    .where(ds["elevation2"]>89.5)
-    print("All sky sondes: ",\
-        ds_zen_all["time"].values[np.invert(np.isnan(\
-        ds_zen_all["TBs_RTTOV_gb"].mean(dim="frequency").values))])
+    '''
+    #print("First filter: ")    
+    #print("All sky sondes: ",\
+    #    ds_zen_all["time"].values[np.invert(np.isnan(\
+    #    ds_zen_all["TBs_RTTOV_gb"].mean(dim="frequency").values))])
+    '''
 
     #############
-        
-    print("Processing clear sky zenith...")
-    create_single_sonde_TSI_plot(ds_zen_clear, tag=" clear_sky ",\
-        out=output_dir)
+    # Complete data availability:
+    # create_data_avail_plot(ds, tag="all_data",\
+    #     out=os.path.expanduser("~/PhD_plots/availability/"))
     create_data_avail_plot(ds_zen_clear, tag="clear_sky",\
         out=os.path.expanduser("~/PhD_plots/availability/"))
+    create_data_avail_plot(ds_zen_all, tag="all_sky",\
+        out=os.path.expanduser("~/PhD_plots/availability/"))
+        
+    print("Processing clear sky zenith...")
+    # shi_plot_bias_std(df, tag =" clear_sky ")
+    error_by_IWV_or_LWP(ds_zen_clear, tag =" clear_sky ")
+    create_single_sonde_TSI_plot(ds_zen_clear, tag=" clear_sky ",\
+        out=output_dir)
     bias_plot_by_R24(ds_zen_clear, tag=" clear_sky ",\
         out=args.output2)
-    
 
     print("Processing all sky zenith...")#
     create_single_sonde_TSI_plot(ds_zen_all, tag=" all_sky ",\
-        out=output_dir)
-    create_data_avail_plot(ds_zen_all, tag="all_sky",\
-        out=os.path.expanduser("~/PhD_plots/availability/"))
+        out=output_dir)#
+    error_by_IWV_or_LWP(ds_zen_clear, tag =" clear_sky ")
     bias_plot_by_R24(ds_zen_all, tag=" all_sky ",\
         out=args.output2)
 
