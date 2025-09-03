@@ -134,9 +134,9 @@ def bias_plot_by_R24(ds, tag="any tag", out=""):
 
     #################
     # New availability plots:
-    create_data_avail_plot(ds_roof, tag=tag+" roof ",\
+    n_roof = create_data_avail_plot(ds_roof, tag=tag+" roof ",\
         out=os.path.expanduser("~/PhD_plots/availability/"))
-    create_data_avail_plot(ds_yard, tag=tag+" yard ",\
+    n_yard = create_data_avail_plot(ds_yard, tag=tag+" yard ",\
         out=os.path.expanduser("~/PhD_plots/availability/"))
     #################
     
@@ -156,7 +156,7 @@ def bias_plot_by_R24(ds, tag="any tag", out=""):
     
     # New bias plot yard:
     plt.figure()
-    plt.title(f"HATPRO channels bias against Rosenkranz 24\nVital I (yard / Hamhat / {tag})")
+    plt.title(f"HATPRO channels bias against Rosenkranz 24\nVital I (yard / Hamhat / {tag})\nnumber of sondes: "+str(n_yard))
     plt.plot(np.arange(1,15), [-0.5]*14, color="red", linestyle="dashed")
     plt.plot(np.arange(1,15), [0.5]*14, color="red", linestyle="dashed")
     plt.plot(np.arange(1,15), [0]*14, color="black")
@@ -175,7 +175,7 @@ def bias_plot_by_R24(ds, tag="any tag", out=""):
 
     # New bias plot yard:
     plt.figure()
-    plt.title(f"K-band channels bias against Rosenkranz 24\nVital I (yard / Hamhat / {tag})")
+    plt.title(f"K-band channels bias against Rosenkranz 24\nVital I (yard / Hamhat / {tag})\nnumber of sondes: "+str(n_yard))
     plt.plot(np.arange(1,8), [-0.5]*7, color="red", linestyle="dashed")
     plt.plot(np.arange(1,8), [0.5]*7, color="red", linestyle="dashed")
     plt.plot(np.arange(1,8), [0]*7, color="black")
@@ -194,7 +194,7 @@ def bias_plot_by_R24(ds, tag="any tag", out=""):
     
     # New bias plot yard:
     plt.figure()
-    plt.title(f"V-band channels bias against Rosenkranz 24\nVital I (yard / Hamhat / {tag})")
+    plt.title(f"V-band channels bias against Rosenkranz 24\nVital I (yard / Hamhat / {tag})\nnumber of sondes: "+str(n_yard))
     plt.plot(np.arange(8,15), [-0.5]*7, color="red", linestyle="dashed")
     plt.plot(np.arange(8,15), [0.5]*7, color="red", linestyle="dashed")
     plt.plot(np.arange(8,15), [0]*7, color="black")
@@ -213,7 +213,7 @@ def bias_plot_by_R24(ds, tag="any tag", out=""):
     
     # New bias plot roof all:
     plt.figure()
-    plt.title(f"HATPRO channels bias against Rosenkranz 24\nVital I (roof / Joyhat / {tag})")
+    plt.title(f"HATPRO channels bias against Rosenkranz 24\nVital I (roof / Joyhat / {tag})\nnumber of sondes: "+str(n_roof))
     plt.plot(np.arange(1,15), [-0.5]*14, color="red", linestyle="dashed")
     plt.plot(np.arange(1,15), [0.5]*14, color="red", linestyle="dashed")
     plt.plot(np.arange(1,15), [0]*14, color="black")
@@ -232,7 +232,7 @@ def bias_plot_by_R24(ds, tag="any tag", out=""):
 
     # New bias plot roof k:
     plt.figure()
-    plt.title(f"K-band channels bias against Rosenkranz 24\nVital I (roof / Joyhat / {tag})")
+    plt.title(f"K-band channels bias against Rosenkranz 24\nVital I (roof / Joyhat / {tag})\nnumber of sondes: "+str(n_roof))
     plt.plot(np.arange(1,8), [-0.5]*7, color="red", linestyle="dashed")
     plt.plot(np.arange(1,8), [0.5]*7, color="red", linestyle="dashed")
     plt.plot(np.arange(1,8), [0]*7, color="black")
@@ -251,7 +251,7 @@ def bias_plot_by_R24(ds, tag="any tag", out=""):
     
     # New bias plot roof v:
     plt.figure()
-    plt.title(f"V-band channels bias against Rosenkranz 24\nVital I (roof / Joyhat / {tag})")
+    plt.title(f"V-band channels bias against Rosenkranz 24\nVital I (roof / Joyhat / {tag})\nnumber of sondes: "+str(n_roof))
     plt.plot(np.arange(8,15), [-0.5]*7, color="red", linestyle="dashed")
     plt.plot(np.arange(8,15), [0.5]*7, color="red", linestyle="dashed")
     plt.plot(np.arange(8,15), [0]*7, color="black")
@@ -299,16 +299,10 @@ def create_data_avail_plot(ds, tag="any tag", out=""):
     
     for i, variable in enumerate(obs):
 
-        #############################
-        # Zeros are not sorted out!!!
-        # ARMS-gb is shown to be available!!!
         nan_indx = np.invert(np.isnan(ds[variable].mean(dim="frequency").values))
         availability[i,nan_indx] = 1.  
         zero_indx = ds[variable].mean(dim="frequency").values == 0.
         availability[i,zero_indx] = 0.   
-        ##################
-        # print("bool_indx: ", bool_indx) 
-        # print("availability: ", availability)
     
     fig, ax = plt.subplots(figsize=(25, 8))
     # Plot colored grid
@@ -336,16 +330,22 @@ def create_data_avail_plot(ds, tag="any tag", out=""):
     # Label axes
     ax.set_yticks(range(n_obs))
     ax.set_yticklabels([obs[i] for i in range(n_obs)])
-    ax.set_xticks(range(0, n_time, 5))
     ax.set_xlabel("Radiosonde number")
+    time_strings = pd.to_datetime(ds["time"].values).strftime('%d. Aug -  %H:%M')
+    ax.set_xticks(ticks=range(len(time_strings)), labels=time_strings,\
+        rotation=90)
 
-    plt.title("Data availability Vital I zenith by sonde no ("+tag+")")
+    # caculate sonde number:
+    n_sondes = np.count_nonzero(np.mean(availability, axis=0) == 1)
+    
+    plt.title("Data availability Vital I zenith by sonde no ("+tag+")\n\
+        number of usable sondes: "+str(n_sondes))
     plt.colorbar(cax, label="Availability")
     # plt.tight_layout()
 
     plt.savefig(out+tag+"data_availability.png", dpi=300, bbox_inches='tight')
     plt.close("all")
-    return
+    return n_sondes
 
 ##############################################################################
 
@@ -570,9 +570,25 @@ def bias_by_channel(ds, var, ref_var):
 
 ##############################################################################
 
-def std_by_channel(ds, var):
-    std_array = ds[var].std(dim="time", skipna=True).values
-    return std_array
+def std_by_channel(ds, var, ref_var):
+    # Equation taken from SHi et al. 2024 preprint / 2025
+    std_array = []
+    for i in range(len(ds["frequency"].values)):
+        deviation = ds[var].values[:, i] -ds[ref_var].values[:,i]
+        avg = np.sqrt(np.nansum((ds[var].values[:, i] -\
+            ds[ref_var].values[:,i])**2)/len(ds["time"]))
+        std = np.sqrt(np.nansum((deviation-avg)**2)/len(ds["time"]))
+        std_array.append(std)
+    return np.array(std_array)
+    
+##############################################################################
+
+def rmse_by_channel(ds, var, ref_var):
+    rmse_array = []
+    for i in range(len(ds["frequency"].values)):
+        rmse_array.append(np.sqrt(np.nansum((ds[var].values[:, i] -\
+            ds[ref_var].values[:,i])**2)/len(ds["time"])))
+    return np.array(rmse_array)
 
 ##############################################################################
 
@@ -601,14 +617,14 @@ def create_statistics_dataframe(ds, tag ="any tag", outdir="~/PhD_data/"):
     
     if "yard" in tag:
         for var in yard_vars :
-            df_bias[var+"_bias"] = bias_by_channel(ds, var, yard_reference)
-            df_std[var+"_std"] = std_by_channel(ds, var)
-            df_rmse[var+"_rmse"] = df_bias[var+"_bias"]+df_std[var+"_std"]
+            df_bias[var+"_bias"] = bias_by_channel(ds_yard, var, yard_reference)
+            df_std[var+"_std"] = std_by_channel(ds_yard, var, yard_reference)
+            df_rmse[var+"_rmse"] = rmse_by_channel(ds_yard, var, yard_reference)
     if "roof" in tag:
         for var in roof_vars:
-            df_bias[var+"_bias"] = bias_by_channel(ds, var, roof_reference)
-            df_std[var+"_std"] = std_by_channel(ds, var)
-            df_rmse[var+"_rmse"] = df_bias[var+"_bias"]+df_std[var+"_std"]
+            df_bias[var+"_bias"] = bias_by_channel(ds_roof, var, roof_reference)
+            df_std[var+"_std"] = std_by_channel(ds_roof, var, roof_reference)
+            df_rmse[var+"_rmse"] = rmse_by_channel(ds_roof, var, roof_reference)
 
     df = df_bias.join(df_std).join(df_rmse)
     df.to_csv(outdir+tag+"statistics_viatl_I.csv")
@@ -629,9 +645,9 @@ def IWV_channel_plots(var_np, ref_var_np, iwv_var_np, lwp_var_np,\
     # std_comp = np.sqrt(np.mean((ref_var_np - var_np - bias_by_channel)**2, axis=1))
     # rmse_comp = bias_comp+std_comp
     
-    print("*********************")
-    print("bias_comp: ", bias_comp)
-    print("iwv_var_np: ", iwv_var_np)
+    # print("*********************")
+    # print("bias_comp: ", bias_comp)
+    # print("iwv_var_np: ", iwv_var_np)
     
     ############
     # Bias:
