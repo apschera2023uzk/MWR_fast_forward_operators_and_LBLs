@@ -316,75 +316,75 @@ def all_plots_of_ds(reduced_ds, tag=""):
     # 5th Block all against LBL:
     # 5.1 Joyhat:
     plot_tb_scatter_per_channel(reduced_ds["TBs_joyhat"].values,\
-        reduced_ds["TBs_R17_cropped"].values,\
+        reduced_ds["TBs_R24_cropped"].values,\
         ds["frequency"].values, output_dir, 
-        label_rs="RPG HATPRO 'Joyhat'", label_mwr="R17 cropped",\
+        label_rs="RPG HATPRO 'Joyhat'", label_mwr="R24 cropped",\
         campaign_name="Vital I",tag=tag)
     plot_tb_scatter_all_channels(reduced_ds["TBs_joyhat"].values,\
-        reduced_ds["TBs_R17_cropped"].values,\
+        reduced_ds["TBs_R24_cropped"].values,\
         ds["frequency"].values, output_dir, 
-        label_rs="RPG HATPRO 'Joyhat'", label_mwr="R17 cropped",\
+        label_rs="RPG HATPRO 'Joyhat'", label_mwr="R24 cropped",\
         campaign_name="Vital I",tag=tag, folder="LBL_Joyhat/")
 
     # 5.2 Hamhat:
     plot_tb_scatter_per_channel(reduced_ds["TBs_hamhat"].values,\
-        reduced_ds["TBs_R17_cropped"].values,\
+        reduced_ds["TBs_R24_cropped"].values,\
         ds["frequency"].values, output_dir, 
-        label_rs="RPG HATPRO 'Hamhat'", label_mwr="R17 cropped",\
+        label_rs="RPG HATPRO 'Hamhat'", label_mwr="R24 cropped",\
         campaign_name="Vital I",tag=tag)
     plot_tb_scatter_all_channels(reduced_ds["TBs_hamhat"].values,\
-        reduced_ds["TBs_R17_cropped"].values,\
+        reduced_ds["TBs_R24_cropped"].values,\
         ds["frequency"].values, output_dir, 
-        label_rs="RPG HATPRO 'Hamhat'", label_mwr="R17 cropped",\
+        label_rs="RPG HATPRO 'Hamhat'", label_mwr="R24 cropped",\
         campaign_name="Vital I",tag=tag, folder="Hamhat_LBL/")
 
     # 5.3 RTTOV-gb
     plot_tb_scatter_per_channel(reduced_ds["TBs_RTTOV_gb"].values,\
-        reduced_ds["TBs_R17_cropped"].values,\
+        reduced_ds["TBs_R24_cropped"].values,\
         ds["frequency"].values, output_dir, 
-        label_rs="RTTOV-gb uncropped CSV", label_mwr="R17 cropped",\
+        label_rs="RTTOV-gb uncropped CSV", label_mwr="R24 cropped",\
         campaign_name="Vital I",tag=tag)
     plot_tb_scatter_all_channels(reduced_ds["TBs_RTTOV_gb"].values,\
-        reduced_ds["TBs_R17_cropped"].values,\
+        reduced_ds["TBs_R24_cropped"].values,\
         ds["frequency"].values, output_dir, 
-        label_rs="RTTOV-gb uncropped CSV", label_mwr="R17 cropped",\
+        label_rs="RTTOV-gb uncropped CSV", label_mwr="R24 cropped",\
         campaign_name="Vital I",tag=tag, folder="RTTOV_LBL/")
         
     # 6th Block all against LBL uncropped:
     # 5.1 Joyhat:
     plot_tb_scatter_per_channel(reduced_ds["TBs_joyhat"].values,\
-        reduced_ds["TBs_R17"].values,\
+        reduced_ds["TBs_R24"].values,\
         ds["frequency"].values, output_dir, 
-        label_rs="RPG HATPRO 'Joyhat'", label_mwr="R17 uncropped",\
+        label_rs="RPG HATPRO 'Joyhat'", label_mwr="R24 uncropped",\
         campaign_name="Vital I",tag=tag)
     plot_tb_scatter_all_channels(reduced_ds["TBs_joyhat"].values,\
-        reduced_ds["TBs_R17"].values,\
+        reduced_ds["TBs_R24"].values,\
         ds["frequency"].values, output_dir, 
-        label_rs="RPG HATPRO 'Joyhat'", label_mwr="R17 uncropped",\
+        label_rs="RPG HATPRO 'Joyhat'", label_mwr="R24 uncropped",\
         campaign_name="Vital I",tag=tag, folder="LBL_Joyhat/")
 
     # 5.2 Hamhat:
     plot_tb_scatter_per_channel(reduced_ds["TBs_hamhat"].values,\
-        reduced_ds["TBs_R17"].values,\
+        reduced_ds["TBs_R24"].values,\
         ds["frequency"].values, output_dir, 
-        label_rs="RPG HATPRO 'Hamhat'", label_mwr="R17 uncropped",\
+        label_rs="RPG HATPRO 'Hamhat'", label_mwr="R24 uncropped",\
         campaign_name="Vital I",tag=tag)
     plot_tb_scatter_all_channels(reduced_ds["TBs_hamhat"].values,\
-        reduced_ds["TBs_R17"].values,\
+        reduced_ds["TBs_R24"].values,\
         ds["frequency"].values, output_dir, 
-        label_rs="RPG HATPRO 'Hamhat'", label_mwr="R17 uncropped",\
+        label_rs="RPG HATPRO 'Hamhat'", label_mwr="R24 uncropped",\
         campaign_name="Vital I",tag=tag, folder="Hamhat_LBL/")
 
     # 5.3 RTTOV-gb
     plot_tb_scatter_per_channel(reduced_ds["TBs_RTTOV_gb"].values,\
-        reduced_ds["TBs_R17"].values,\
+        reduced_ds["TBs_R24"].values,\
         ds["frequency"].values, output_dir, 
-        label_rs="RTTOV-gb uncropped CSV", label_mwr="R17 uncropped",\
+        label_rs="RTTOV-gb uncropped CSV", label_mwr="R24 uncropped",\
         campaign_name="Vital I",tag=tag)
     plot_tb_scatter_all_channels(reduced_ds["TBs_RTTOV_gb"].values,\
-        reduced_ds["TBs_R17"].values,\
+        reduced_ds["TBs_R24"].values,\
         ds["frequency"].values, output_dir, 
-        label_rs="RTTOV-gb uncropped CSV", label_mwr="R17 uncropped",\
+        label_rs="RTTOV-gb uncropped CSV", label_mwr="R24 uncropped",\
         campaign_name="Vital I",tag=tag, folder="RTTOV_LBL/")
         
     # 7th block RTTOV-gb from NetCDF
@@ -414,16 +414,16 @@ def all_plots_of_ds(reduced_ds, tag=""):
         label_rs="RTTOV-gb (cropped_nc)", label_mwr="RPG HATPRO 'Joyhat'",\
         campaign_name="Vital I",tag=tag, folder="RTTOV_Joyhat/")
         
-    # 7.1.3 R17:
+    # 7.1.3 R24:
     plot_tb_scatter_per_channel(reduced_ds["TBs_RTTOV_gb_nc_cropped"].values,\
-        reduced_ds["TBs_R17_cropped"].values,\
+        reduced_ds["TBs_R24_cropped"].values,\
         ds["frequency"].values, output_dir, 
-        label_rs="RTTOV-gb (cropped_nc)", label_mwr="R17 cropped",\
+        label_rs="RTTOV-gb (cropped_nc)", label_mwr="R24 cropped",\
         campaign_name="Vital I",tag=tag)
     plot_tb_scatter_all_channels(reduced_ds["TBs_RTTOV_gb_nc_cropped"].values,\
-        reduced_ds["TBs_R17_cropped"].values,\
+        reduced_ds["TBs_R24_cropped"].values,\
         ds["frequency"].values, output_dir, 
-        label_rs="RTTOV-gb (cropped_nc)", label_mwr="R17 cropped",\
+        label_rs="RTTOV-gb (cropped_nc)", label_mwr="R24 cropped",\
         campaign_name="Vital I",tag=tag, folder="RTTOV_LBL/")
     
     # 7.2 uncropped:
@@ -451,16 +451,16 @@ def all_plots_of_ds(reduced_ds, tag=""):
         label_rs="RTTOV-gb (uncropped_nc)", label_mwr="RPG HATPRO 'Joyhat'",\
         campaign_name="Vital I",tag=tag+"_uncropped", folder="RTTOV_Joyhat/")
     
-    # 7.2.3 R17:
+    # 7.2.3 R24:
     plot_tb_scatter_per_channel(reduced_ds["TBs_RTTOV_gb_nc"].values,\
-        reduced_ds["TBs_R17"].values,\
+        reduced_ds["TBs_R24"].values,\
         ds["frequency"].values, output_dir, 
-        label_rs="RTTOV-gb (uncropped_nc)", label_mwr="R17 uncropped",\
+        label_rs="RTTOV-gb (uncropped_nc)", label_mwr="R24 uncropped",\
         campaign_name="Vital I",tag=tag)
     plot_tb_scatter_all_channels(reduced_ds["TBs_RTTOV_gb_nc"].values,\
-        reduced_ds["TBs_R17"].values,\
+        reduced_ds["TBs_R24"].values,\
         ds["frequency"].values, output_dir, 
-        label_rs="RTTOV-gb (uncropped_nc)", label_mwr="R17 uncropped",\
+        label_rs="RTTOV-gb (uncropped_nc)", label_mwr="R24 uncropped",\
         campaign_name="Vital I",tag=tag, folder="RTTOV_LBL/")
         
     # 8. ARMS-gb uncropped:
@@ -486,16 +486,16 @@ def all_plots_of_ds(reduced_ds, tag=""):
         ds["frequency"].values, output_dir, 
         label_rs="ARMS-gb (uncropped_nc)", label_mwr="RPG HATPRO 'Joyhat'",\
         campaign_name="Vital I",tag=tag+"_uncropped", folder="ARMS_Joyhat/")
-    # 8.3 R17:
+    # 8.3 R24:
     plot_tb_scatter_per_channel(reduced_ds["TBs_ARMS_gb"].values,\
-        reduced_ds["TBs_R17"].values,\
+        reduced_ds["TBs_R24"].values,\
         ds["frequency"].values, output_dir, 
-        label_rs="ARMS-gb (uncropped_nc)", label_mwr="R17 uncropped",\
+        label_rs="ARMS-gb (uncropped_nc)", label_mwr="R24 uncropped",\
         campaign_name="Vital I",tag=tag)
     plot_tb_scatter_all_channels(reduced_ds["TBs_ARMS_gb"].values,\
-        reduced_ds["TBs_R17"].values,\
+        reduced_ds["TBs_R24"].values,\
         ds["frequency"].values, output_dir, 
-        label_rs="ARMS-gb (uncropped_nc)", label_mwr="R17 uncropped",\
+        label_rs="ARMS-gb (uncropped_nc)", label_mwr="R24 uncropped",\
         campaign_name="Vital I",tag=tag, folder="ARMS_LBL/")
     # 8.4 RTTOV-gb:
     plot_tb_scatter_per_channel(reduced_ds["TBs_RTTOV_gb_nc"].values,\
@@ -532,16 +532,16 @@ def all_plots_of_ds(reduced_ds, tag=""):
         ds["frequency"].values, output_dir, 
         label_rs="ARMS-gb (cropped_nc)", label_mwr="RPG HATPRO 'Joyhat'",\
         campaign_name="Vital I", tag=tag+"_cropped", folder="ARMS_Joyhat/")
-    # 9.3: R17
+    # 9.3: R24
     plot_tb_scatter_per_channel(reduced_ds["TBs_ARMS_gb_cropped"].values,\
-        reduced_ds["TBs_R17"].values,\
+        reduced_ds["TBs_R24"].values,\
         ds["frequency"].values, output_dir, 
-        label_rs="ARMS-gb (cropped_nc)", label_mwr="R17 uncropped",\
+        label_rs="ARMS-gb (cropped_nc)", label_mwr="R24 uncropped",\
         campaign_name="Vital I", tag=tag)
     plot_tb_scatter_all_channels(reduced_ds["TBs_ARMS_gb_cropped"].values,\
-        reduced_ds["TBs_R17"].values,\
+        reduced_ds["TBs_R24"].values,\
         ds["frequency"].values, output_dir, 
-        label_rs="ARMS-gb (cropped_nc)", label_mwr="R17 uncropped",\
+        label_rs="ARMS-gb (cropped_nc)", label_mwr="R24 uncropped",\
         campaign_name="Vital I", tag=tag, folder="ARMS_LBL/")
     # 9.4: RTTOV-gb
     plot_tb_scatter_per_channel(reduced_ds["TBs_RTTOV_gb_nc"].values,\
@@ -566,13 +566,13 @@ def divide2roof_and_yard_sets(ds):
         "TBs_R03", "TBs_R16", "TBs_R19",\
         "TBs_R98", "TBs_R19SD",\
         "TBs_R20", "TBs_R20SD", "TBs_hamhat",\
-        "TBs_RTTOV_gb_nc", "TBs_ARMS_gb", "TBs_R17"]
+        "TBs_RTTOV_gb_nc", "TBs_ARMS_gb", "TBs_R24"]
     # ,
     roof_variables = ["TBs_RTTOV_gb_cropped",\
         "TBs_R24_cropped", "TBs_R03_cropped", "TBs_R16_cropped",\
         "TBs_R19_cropped", "TBs_R98_cropped", "TBs_R19SD_cropped",\
         "TBs_R20_cropped", "TBs_R20SD_cropped", "TBs_joyhat",\
-        "TBs_RTTOV_gb_nc_cropped", "TBs_ARMS_gb_cropped","TBs_R17_cropped"]
+        "TBs_RTTOV_gb_nc_cropped", "TBs_ARMS_gb_cropped","TBs_R24_cropped"]
     
     ds_yard = ds[yard_variables]
     ds_roof = ds[roof_variables]
@@ -863,7 +863,7 @@ def create_bias_plot_of_all_mods(ds, tag="any tag", out=""):
 
 def create_data_avail_plot(ds, tag="any tag", out=""):
     # make data availability plot for all dates:
-    obs = ["TBs_RTTOV_gb", "TBs_hamhat", "TBs_joyhat", "TBs_R17", "TBs_ARMS_gb"]
+    obs = ["TBs_RTTOV_gb", "TBs_hamhat", "TBs_joyhat", "TBs_R24", "TBs_ARMS_gb"]
     # prtlib; rttov-gb; hamhat; joyhat; potentially arms-gb
     # => cropped versions extra?
     
@@ -945,15 +945,15 @@ if __name__ == "__main__":
     #create_data_avail_plot(ds_zen_clear, tag="clear_sky",\
     #    out=os.path.expanduser("~/PhD_plots/availability/"))
     all_plots_of_ds(ds_zen_clear, tag=" clear_sky ")
-    create_bias_plot_of_all_mods(ds_zen_clear, tag=" clear_sky ",\
-        out=args.output2)
+    #create_bias_plot_of_all_mods(ds_zen_clear, tag=" clear_sky ",\
+    #    out=args.output2)
 
     print("Processing all sky zenith...")
     #create_data_avail_plot(ds_zen_all, tag="all_sky",\
     #    out=os.path.expanduser("~/PhD_plots/availability/"))
     all_plots_of_ds(ds_zen_all, tag=" all_sky ")
-    create_bias_plot_of_all_mods(ds_zen_all, tag=" all_sky ",\
-        out=args.output2)
+    #create_bias_plot_of_all_mods(ds_zen_all, tag=" all_sky ",\
+    #    out=args.output2)
 
 
 

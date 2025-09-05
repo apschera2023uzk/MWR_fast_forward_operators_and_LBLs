@@ -589,6 +589,36 @@ def rmse_by_channel(ds, var, ref_var):
         rmse_array.append(np.sqrt(np.nansum((ds[var].values[:, i] -\
             ds[ref_var].values[:,i])**2)/len(ds["time"])))
     return np.array(rmse_array)
+    
+##############################################################################
+
+def bias_by_time(ds, var, ref_var):
+    bias_array = ds.mean(dim="frequency",\
+        skipna=True)[ref_var].values[:]-ds.mean(dim="frequency",\
+        skipna=True)[var].values
+    return bias_array
+
+##############################################################################
+
+def std_by_time(ds, var, ref_var):
+    # Equation taken from SHi et al. 2024 preprint / 2025
+    std_array = []
+    for i in range(len(ds["time"].values)):
+        deviation = ds[var].values[i,:] -ds[ref_var].values[i,:]
+        avg = np.sqrt(np.nansum((ds[var].values[i,:] -\
+            ds[ref_var].values[i,:])**2)/len(ds["frequency"]))
+        std = np.sqrt(np.nansum((deviation-avg)**2)/len(ds["frequency"]))
+        std_array.append(std)
+    return np.array(std_array)
+    
+##############################################################################
+
+def rmse_by_time(ds, var, ref_var):
+    rmse_array = []
+    for i in range(len(ds["time"].values)):
+        rmse_array.append(np.sqrt(np.nansum((ds[var].values[i,:] -\
+            ds[ref_var].values[i,:])**2)/len(ds["frequency"])))
+    return np.array(rmse_array)
 
 ##############################################################################
 
@@ -633,22 +663,41 @@ def create_statistics_dataframe(ds, tag ="any tag", outdir="~/PhD_data/"):
     
 ##############################################################################
 
-def IWV_channel_plots(var_np, ref_var_np, iwv_var_np, lwp_var_np,\
+def IWV_channel_plots(ds,\
         vartag="None", outdir="", tag=None):
-    # error vs. IWV scatterplot...    
-    bias_by_channel = var_np - ref_var_np
-    std_by_channel = np.std(var_np, axis=0)
-    rmse_by_channel = bias_by_channel + std_by_channel
-    
-    # For now plot them together:
-    bias_comp = np.mean(bias_by_channel, axis=1)
-    # std_comp = np.sqrt(np.mean((ref_var_np - var_np - bias_by_channel)**2, axis=1))
-    # rmse_comp = bias_comp+std_comp
-    
-    # print("*********************")
-    # print("bias_comp: ", bias_comp)
-    # print("iwv_var_np: ", iwv_var_np)
-    
+
+    yard_reference = "TBs_R24"
+    yard_vars = ["TBs_RTTOV_gb", "TBs_hamhat", "TBs_ARMS_gb"]
+    roof_reference = "TBs_R24_cropped"
+    roof_vars = ["TBs_RTTOV_gb_cropped", "TBs_joyhat", "TBs_ARMS_gb_cropped"]
+        
+    if "yard" in tag:
+        bias_comp = bias_by_time(ds, vartag, yard_reference)
+        std_comp = std_by_time(ds, vartag, yard_reference)
+        rmse_comp = rmse_by_time(ds, vartag, yard_reference)
+        lwp_var_np = ds["LWP_hamhat"].values
+        iwv_var_np = ds["IWV_hamhat"].values
+        '''
+        print("yard shape: ", np.shape(iwv_var_np))
+        print("yard shape: ", np.shape(lwp_var_np))
+        print("bias shape: ", np.shape(bias_comp))
+        print("std shape: ", np.shape(std_comp))
+        print("rmse shape: ", np.shape(rmse_comp))
+        '''
+    if "roof" in tag:
+        bias_comp = bias_by_time(ds, vartag, roof_reference)
+        std_comp = std_by_time(ds, vartag, roof_reference)
+        rmse_comp = rmse_by_time(ds, vartag, roof_reference)
+        lwp_var_np = ds["LWP_joyhat"].values[:,0]
+        iwv_var_np = ds["IWV_joyhat"].values[:,0]
+        '''
+        print("roof shape: ", np.shape(iwv_var_np)) # 30
+        print("roof shape: ", np.shape(lwp_var_np))
+        print("bias shape: ", np.shape(bias_comp))
+        print("std shape: ", np.shape(std_comp))
+        print("rmse shape: ", np.shape(rmse_comp))
+        '''
+        
     ############
     # Bias:
     # Plot IWV: 
@@ -662,12 +711,11 @@ def IWV_channel_plots(var_np, ref_var_np, iwv_var_np, lwp_var_np,\
     # Plot LWP: 
     plt.figure(figsize=(10,10))
     plt.title("Bias of "+vartag+" by LWP - "+tag)
-    plt.scatter( lwp_var_np, bias_comp, marker="X")
+    plt.scatter(lwp_var_np, bias_comp, marker="X")
     plt.ylabel("Bias in K")
     plt.xlabel("LWP [kg m-2]")
     plt.savefig(outdir+vartag+"bias_by_LWP.png")
 
-    '''
     ############
     # Std:
     # Plot IWV: 
@@ -703,7 +751,7 @@ def IWV_channel_plots(var_np, ref_var_np, iwv_var_np, lwp_var_np,\
     plt.ylabel("RMSE in K")
     plt.xlabel("LWP [kg m-2]")
     plt.savefig(outdir+vartag+"rmse_by_LWP.png") 
-    '''
+
     ###########
     # But also by channel? slopes or correlations as one plot?
     ###########
@@ -743,19 +791,13 @@ def error_by_IWV_or_LWP(ds, tag =" any tag ", outdir="/home/aki/PhD_plots/IWV_LW
     if "yard" in tag:
         for var in yard_vars:
             # print("VAR: ", var)
-            IWV_channel_plots(ds_yard[var].values[indices], \
-	        ds_yard[yard_reference].values[indices],\
-	        ds_yard["IWV_hamhat"].values[indices],\
-	        ds_yard["LWP_hamhat"].values[indices],\
+            IWV_channel_plots(ds_yard.isel(time=indices),\
 	        vartag=var, outdir=outdir, tag=tag)
 	 
     if "roof" in tag: 
         for var in roof_vars:
             # print("VAR: ", var)
-            IWV_channel_plots(ds_roof[var].values[indices], \
-	        ds_roof[roof_reference].values[indices],\
-	        ds_roof["IWV_joyhat"].values[indices,0],\
-	        ds_roof["LWP_joyhat"].values[indices,0],\
+            IWV_channel_plots(ds_roof.isel(time=indices),\
 	        vartag=var, outdir=outdir, tag=tag)
 
     return 0
