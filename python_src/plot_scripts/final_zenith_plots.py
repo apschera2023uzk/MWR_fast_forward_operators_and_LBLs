@@ -171,7 +171,7 @@ def bias_plot_by_R24(ds, tag="any tag", out=""):
                 color=colors[i])                                                        
     plt.ylim(-3,3)
     plt.legend(loc='lower right', fontsize=9)
-    plt.savefig(out+tag+"All_channels_yard.png")
+    plt.savefig(out+tag+"All_channels_yard.png", dpi=600 , bbox_inches="tight")
 
     # New bias plot yard:
     plt.figure()
@@ -190,7 +190,7 @@ def bias_plot_by_R24(ds, tag="any tag", out=""):
                 color=colors[i])                                                       
     plt.ylim(-3,3)
     plt.legend(loc='lower right', fontsize=9)
-    plt.savefig(out+tag+"K-band_yard.png")
+    plt.savefig(out+tag+"K-band_yard.png", dpi=600 , bbox_inches="tight")
     
     # New bias plot yard:
     plt.figure()
@@ -209,7 +209,7 @@ def bias_plot_by_R24(ds, tag="any tag", out=""):
                 color=colors[i])
     plt.ylim(-3,3)
     plt.legend(loc='lower right', fontsize=9)
-    plt.savefig(out+tag+"V-Band_yard.png")
+    plt.savefig(out+tag+"V-Band_yard.png", dpi=600 , bbox_inches="tight")
     
     # New bias plot roof all:
     plt.figure()
@@ -228,7 +228,7 @@ def bias_plot_by_R24(ds, tag="any tag", out=""):
                 color=colors[i])                                                       
     plt.ylim(-3,3)
     plt.legend(loc='lower right', fontsize=9)
-    plt.savefig(out+tag+"All_channels_roof.png")
+    plt.savefig(out+tag+"All_channels_roof.png", dpi=600 , bbox_inches="tight")
 
     # New bias plot roof k:
     plt.figure()
@@ -247,7 +247,7 @@ def bias_plot_by_R24(ds, tag="any tag", out=""):
                 color=colors[i])                                                         
     plt.ylim(-3,3)
     plt.legend(loc='lower right', fontsize=9)
-    plt.savefig(out+tag+"K-band_roof.png")
+    plt.savefig(out+tag+"K-band_roof.png", dpi=600 , bbox_inches="tight")
     
     # New bias plot roof v:
     plt.figure()
@@ -266,7 +266,7 @@ def bias_plot_by_R24(ds, tag="any tag", out=""):
                 color=colors[i])                                                        
     plt.ylim(-3,3)
     plt.legend(loc='lower right', fontsize=9)
-    plt.savefig(out+tag+"V-Band_roof.png")    
+    plt.savefig(out+tag+"V-Band_roof.png", dpi=600 , bbox_inches="tight")
     plt.close("all")
     
     return 0
@@ -343,7 +343,8 @@ def create_data_avail_plot(ds, tag="any tag", out=""):
     plt.colorbar(cax, label="Availability")
     # plt.tight_layout()
 
-    plt.savefig(out+tag+"data_availability.png", dpi=300, bbox_inches='tight')
+    plt.savefig(out+tag+"data_availability.png", dpi=600 ,\
+        bbox_inches="tight")
     plt.close("all")
     return n_sondes
 
@@ -420,7 +421,7 @@ def create_single_sonde_TSI_plot(ds, tag="any tag", out="",\
         # print(out+tag+str(timestep)[0:16]+"TSI_and_single_sonde.png")
         plt.savefig(out+"TSI_1_sonde/"+tag+str(timestep)[0:16]+\
                     "TSI_1sonde_allchans_roof.png",\
-                    dpi=300, bbox_inches='tight')
+                    dpi=600 , bbox_inches="tight")
         plt.close("all")
         
         # K-band roof
@@ -447,7 +448,7 @@ def create_single_sonde_TSI_plot(ds, tag="any tag", out="",\
         # print(out+tag+str(timestep)[0:16]+"TSI_and_single_sonde.png")
         plt.savefig(out+"TSI_1_sonde/"+tag+str(timestep)[0:16]+\
                     "TSI_1sonde_Kband_roof.png",\
-                    dpi=300, bbox_inches='tight')
+                    dpi=600 , bbox_inches="tight")
         plt.close("all")
         
         # V-band roof
@@ -474,7 +475,7 @@ def create_single_sonde_TSI_plot(ds, tag="any tag", out="",\
         # print(out+tag+str(timestep)[0:16]+"TSI_and_single_sonde.png")
         plt.savefig(out+"TSI_1_sonde/"+tag+str(timestep)[0:16]+\
                     "TSI_1sonde_Vband_roof.png",\
-                    dpi=300, bbox_inches='tight')
+                    dpi=600 , bbox_inches="tight")
         plt.close("all")
 
         # 14 channels yard:
@@ -501,7 +502,7 @@ def create_single_sonde_TSI_plot(ds, tag="any tag", out="",\
         # print(out+tag+str(timestep)[0:16]+"TSI_and_single_sonde.png")
         plt.savefig(out+"TSI_1_sonde/"+tag+str(timestep)[0:16]+\
                     "TSI_1sonde_allchans_yard.png",\
-                    dpi=300, bbox_inches='tight')
+                    dpi=600 , bbox_inches="tight")
         plt.close("all")
         
         # K-band yard:
@@ -528,7 +529,7 @@ def create_single_sonde_TSI_plot(ds, tag="any tag", out="",\
         # print(out+tag+str(timestep)[0:16]+"TSI_and_single_sonde.png")
         plt.savefig(out+"TSI_1_sonde/"+tag+str(timestep)[0:16]+\
                     "TSI_1sonde_K-band_yard.png",\
-                    dpi=300, bbox_inches='tight')
+                    dpi=600 , bbox_inches="tight")
         plt.close("all")
         
         # V-band yard:
@@ -555,7 +556,7 @@ def create_single_sonde_TSI_plot(ds, tag="any tag", out="",\
         # print(out+tag+str(timestep)[0:16]+"TSI_and_single_sonde.png")
         plt.savefig(out+"TSI_1_sonde/"+tag+str(timestep)[0:16]+\
                     "TSI_1sonde_V-band_yard.png",\
-                    dpi=300, bbox_inches='tight')
+                    dpi=600 , bbox_inches="tight")
         plt.close("all")
         
     return 0
@@ -706,7 +707,7 @@ def IWV_channel_plots(ds,\
     plt.scatter(iwv_var_np, bias_comp, marker="X")
     plt.ylabel("Bias in K")
     plt.xlabel("IWV [kg m-2]")
-    plt.savefig(outdir+vartag+"bias_by_IWV.png")
+    plt.savefig(outdir+vartag+"bias_by_IWV.png",dpi=600 , bbox_inches="tight")
     
     # Plot LWP: 
     plt.figure(figsize=(10,10))
@@ -714,7 +715,7 @@ def IWV_channel_plots(ds,\
     plt.scatter(lwp_var_np, bias_comp, marker="X")
     plt.ylabel("Bias in K")
     plt.xlabel("LWP [kg m-2]")
-    plt.savefig(outdir+vartag+"bias_by_LWP.png")
+    plt.savefig(outdir+vartag+"bias_by_LWP.png",dpi=600 , bbox_inches="tight")
 
     ############
     # Std:
@@ -724,7 +725,7 @@ def IWV_channel_plots(ds,\
     plt.scatter(iwv_var_np, std_comp)
     plt.ylabel("Std in K")
     plt.xlabel("IWV [kg m-2]")
-    plt.savefig(outdir+vartag+"std_by_IWV.png")
+    plt.savefig(outdir+vartag+"std_by_IWV.png",dpi=600 , bbox_inches="tight")
     
     # Plot LWP: 
     plt.figure(figsize=(10,10))
@@ -732,7 +733,7 @@ def IWV_channel_plots(ds,\
     plt.scatter(lwp_var_np, std_comp)
     plt.ylabel("Std in K")
     plt.xlabel("LWP [kg m-2]")
-    plt.savefig(outdir+vartag+"std_by_LWP.png")
+    plt.savefig(outdir+vartag+"std_by_LWP.png",dpi=600 , bbox_inches="tight")
     
     ############
     # RMSE:
@@ -742,7 +743,7 @@ def IWV_channel_plots(ds,\
     plt.scatter(iwv_var_np, rmse_comp)
     plt.ylabel("RMSE in K")
     plt.xlabel("IWV [kg m-2]")
-    plt.savefig(outdir+vartag+"rmse_by_IWV.png")
+    plt.savefig(outdir+vartag+"rmse_by_IWV.png",dpi=600 , bbox_inches="tight")
     
     # Plot LWP: 
     plt.figure(figsize=(10,10))
@@ -750,7 +751,7 @@ def IWV_channel_plots(ds,\
     plt.scatter(lwp_var_np, rmse_comp)
     plt.ylabel("RMSE in K")
     plt.xlabel("LWP [kg m-2]")
-    plt.savefig(outdir+vartag+"rmse_by_LWP.png") 
+    plt.savefig(outdir+vartag+"rmse_by_LWP.png",dpi=600 , bbox_inches="tight")
 
     ###########
     # But also by channel? slopes or correlations as one plot?

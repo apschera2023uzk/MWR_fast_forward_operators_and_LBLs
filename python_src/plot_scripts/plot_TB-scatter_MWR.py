@@ -108,7 +108,7 @@ def plot_tb_scatter_per_channel(rs_all, mwr_all, frequencies, output_dir,
         plt.tight_layout()
 
         filename = f"{output_dir}single_channel/{folder}scatter_{label_rs}_vs_{label_mwr}_ch{ch+1:02d}_{frequencies[ch]:.2f}GHz_{tag}.png"
-        plt.savefig(filename)
+        plt.savefig(filename,dpi=600 , bbox_inches="tight")
         plt.close()
 
 ##############################################################################
@@ -164,7 +164,7 @@ def plot_tb_scatter_all_channels(rs_all, mwr_all, frequencies, output_dir,
     plt.gca().set_aspect('equal', adjustable='box')
     plt.tight_layout()
     filename = f"{output_dir}{folder}scatter_{label_rs}_vs_{label_mwr}_K-Band_{frequencies[ch]:.2f}GHz_{tag}.png"
-    plt.savefig(filename)
+    plt.savefig(filename,dpi=600 , bbox_inches="tight")
     plt.close()
 
     # Only V-Band
@@ -212,7 +212,7 @@ def plot_tb_scatter_all_channels(rs_all, mwr_all, frequencies, output_dir,
     plt.gca().set_aspect('equal', adjustable='box')
     plt.tight_layout()
     filename = f"{output_dir}{folder}scatter_{label_rs}_vs_{label_mwr}_V-Band_{frequencies[ch]:.2f}GHz_{tag}.png"
-    plt.savefig(filename)
+    plt.savefig(filename,dpi=600 , bbox_inches="tight")
     plt.close()
 
     # All channels
@@ -258,7 +258,7 @@ def plot_tb_scatter_all_channels(rs_all, mwr_all, frequencies, output_dir,
     plt.gca().set_aspect('equal', adjustable='box')
     plt.tight_layout()
     filename = f"{output_dir}{folder}scatter_{label_rs}_vs_{label_mwr}_all_chans_GHz_{tag}.png"
-    plt.savefig(filename)
+    plt.savefig(filename,dpi=600 , bbox_inches="tight")
     plt.close()
 
 ##############################################################################
@@ -646,7 +646,7 @@ def create_bias_plot_of_all_mods(ds, tag="any tag", out=""):
              skipna=True)[var].values-mean_by_channel_roof)))
     plt.ylim(-3,3)
     plt.legend(loc='lower right', fontsize=9)
-    plt.savefig(out+tag+"K_bias_roof.png")
+    plt.savefig(out+tag+"K_bias_roof.png",dpi=600 , bbox_inches="tight")
     
     #2.1.2
     plt.figure()
@@ -669,7 +669,7 @@ def create_bias_plot_of_all_mods(ds, tag="any tag", out=""):
              skipna=True)[var].values-mean_by_channel_roof)))
     plt.ylim(-3,3)
     plt.legend(loc='lower right', fontsize=9)
-    plt.savefig(out+tag+"V_bias_roof.png")
+    plt.savefig(out+tag+"V_bias_roof.png",dpi=600 , bbox_inches="tight")
     plt.close("all")
     
     # 2.2.1
@@ -693,7 +693,7 @@ def create_bias_plot_of_all_mods(ds, tag="any tag", out=""):
              skipna=True)[var].values-mean_by_channel_yard)))
     plt.ylim(-3,3)
     plt.legend(loc='lower right', fontsize=9)
-    plt.savefig(out+tag+"K_bias_yard.png")
+    plt.savefig(out+tag+"K_bias_yard.png",dpi=600 , bbox_inches="tight")
 
     # 2.2.2
     plt.figure()
@@ -716,7 +716,7 @@ def create_bias_plot_of_all_mods(ds, tag="any tag", out=""):
              skipna=True)[var].values-mean_by_channel_yard)))
     plt.ylim(-3,3)
     plt.legend(loc='lower right', fontsize=9)
-    plt.savefig(out+tag+"V_bias_yard.png")
+    plt.savefig(out+tag+"V_bias_yard.png",dpi=600 , bbox_inches="tight")
     plt.close("all")
     
     # 3.1 combined bias plot roof+yard K:
@@ -746,7 +746,7 @@ def create_bias_plot_of_all_mods(ds, tag="any tag", out=""):
                  label=f"TBs_Joyhat_MWR",  color=colors[-1])          
     plt.ylim(-3,3)
     plt.legend(loc='lower right', fontsize=9)
-    plt.savefig(out+tag+"K_bias_combined.png")
+    plt.savefig(out+tag+"K_bias_combined.png",dpi=600 , bbox_inches="tight")
 
     ##########################
     # Add anything on ARMS-gb here? Following lines?
@@ -775,7 +775,7 @@ def create_bias_plot_of_all_mods(ds, tag="any tag", out=""):
                  label=f"TBs_Joyhat_MWR",  color=colors[-1])
     plt.ylim(-3,3)
     plt.legend(loc='lower right', fontsize=9)
-    plt.savefig(out+tag+"V_bias_combined.png")
+    plt.savefig(out+tag+"V_bias_combined.png",dpi=600 , bbox_inches="tight")
     
     # 3.3 Plot yard / roof difference:
     plt.figure()
@@ -787,7 +787,7 @@ def create_bias_plot_of_all_mods(ds, tag="any tag", out=""):
                  label=f"Yard roof difference",  color=colors[0])      
     plt.ylim(-3,3)
     plt.legend(loc='lower right', fontsize=9)
-    plt.savefig(out+tag+"K_bias_yard_roof_diff.png")
+    plt.savefig(out+tag+"K_bias_yard_roof_diff.png",dpi=600 , bbox_inches="tight")
     
     # 3.4 Plot yard / roof difference:
     plt.figure()
@@ -799,7 +799,7 @@ def create_bias_plot_of_all_mods(ds, tag="any tag", out=""):
                  label=f"Yard roof difference",  color=colors[0])      
     plt.ylim(-3,3)
     plt.legend(loc='lower right', fontsize=9)
-    plt.savefig(out+tag+"V_bias_yard_roof_diff.png")
+    plt.savefig(out+tag+"V_bias_yard_roof_diff.png",dpi=600 , bbox_inches="tight")
     
     # 4.1 RTTOV-gb_variants K:
     plt.figure()
@@ -827,7 +827,7 @@ def create_bias_plot_of_all_mods(ds, tag="any tag", out=""):
        label=f"RTTOV-gb_crop_nc",  color=colors[3], marker="X") 
     plt.ylim(-3,3)
     plt.legend(loc='lower right', fontsize=9)
-    plt.savefig(out+tag+"K_bias_combined_RTTOVs.png")
+    plt.savefig(out+tag+"K_bias_combined_RTTOVs.png",dpi=600 , bbox_inches="tight")
         
     # 4.2 RTTOV-gb_variants V:    
     plt.figure()
@@ -854,7 +854,7 @@ def create_bias_plot_of_all_mods(ds, tag="any tag", out=""):
        label=f"RTTOV-gb_crop_nc",  color=colors[3], marker="X") 
     plt.ylim(-3,3)
     plt.legend(loc='lower right', fontsize=9)
-    plt.savefig(out+tag+"V_bias_combined_RTTOVs.png")
+    plt.savefig(out+tag+"V_bias_combined_RTTOVs.png",dpi=600 , bbox_inches="tight")
     plt.close("all")
     
     return 0
@@ -909,7 +909,7 @@ def create_data_avail_plot(ds, tag="any tag", out=""):
     plt.colorbar(cax, label="Availability")
     plt.tight_layout()
 
-    plt.savefig(out+tag+"data_availability.png")
+    plt.savefig(out+tag+"data_availability.png",dpi=600 , bbox_inches="tight")
     plt.close("all")
     return
 

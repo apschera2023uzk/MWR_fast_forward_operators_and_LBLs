@@ -41,16 +41,27 @@ def parse_arguments():
 
 ##############################################################################
 
-def clausius_clapeyron(temp_celsius):
+def clausius_clapeyron_liq(temp_celsius):
     # Sättigungsdampfdruck für eine Temperatur in °C
     # es returned in Pa
-    es = 610.78 * np.exp(2.5e6 / 462 * (1/273.15 - 1/(273.15+temp_celsius)))
-    return es
+    # https://en.wikipedia.org/wiki/Latent_heat - enthalpiewerte
+    L = 2.5e6
+    esl = 610.78 * np.exp(L / 462 * (1/273.15 - 1/(273.15+temp_celsius)))
+    return esl
+    
+##############################################################################
+
+def clausius_clapeyron_ice(temp_celsius):
+    # Sättigungsdampfdruck für eine Temperatur in °C
+    # es returned in Pa
+    L_s = 2.840e6
+    esi = 610.78 * np.exp(L_s / 462 * (1/273.15 - 1/(273.15+temp_celsius)))
+    return esi
 
 ##############################################################################
 
 def rh2mixing_ratio(RH=70, abs_T=273.15+15, p=101325):
-    es = clausius_clapeyron(abs_T-273.15)
+    es = clausius_clapeyron_liq(abs_T-273.15)
     e = es * RH / 100
     mue = 0.622
     q = (mue*e) / (p-0.3777*e)
@@ -59,7 +70,9 @@ def rh2mixing_ratio(RH=70, abs_T=273.15+15, p=101325):
 
 ##############################################################################
 
-def read_radiosonde_nc_arms(file="/home/aki/PhD_data/Vital_I/radiosondes/20240805_102936.nc", crop=0):
+def read_radiosonde_nc_arms(file=\
+        "/home/aki/PhD_data/Vital_I/radiosondes/20240805_102936.nc",\
+         crop=0):
     # Bodenlevel ist bei Index -1 - Umkehr der Profile!
     
     if file==None:
@@ -91,7 +104,7 @@ def read_radiosonde_nc_arms(file="/home/aki/PhD_data/Vital_I/radiosondes/2024080
         print("Unusually high crop value: ",crop)
         
     if max_index<150:
-        return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan
+        return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan
         
     # Thinning pattern:
     inds = np.r_[crop:100:15,
@@ -111,26 +124,33 @@ def read_radiosonde_nc_arms(file="/home/aki/PhD_data/Vital_I/radiosondes/2024080
     for rh_lev, t_lev, p_lev in zip (rh, t_array, p_array):
         m_array.append(rh2mixing_ratio(RH=rh_lev, abs_T=t_lev, p=p_lev*100))
     ppmv_array = np.array(m_array) * (28.9644e6 / 18.0153)
+    z_array = ds["Height"].values
     
     height_in_km = ds["Height"].values[0]/1000
     deg_lat = ds["Latitude"].values[0]
-    
-    return length_value, p_array, t_array, ppmv_array, height_in_km, deg_lat, m_array 
+
+    return length_value, p_array, t_array, ppmv_array, height_in_km, deg_lat,\
+       m_array, z_array, rh
 
 ##############################################################################
 
-def add_clim2profiles(p_array, t_array, ppmv_array, m_array):
+def add_clim2profiles(p_array, t_array, ppmv_array, m_array, z_array, rh):
     # 2nd Add upper extrapolation of profile by climatology:
     # Kombiniere beide ProfileXXX
     p_threshold = np.nanmin(p_array)
     z, p, d, t, md = atmp.gl_atm(atm=1) # midlatitude summer!
     gkg = ppmv2gkg(md[:, atmp.H2O], atmp.H2O)
+    rhs_clim = mr2rh(p, t, gkg)[0] / 100
     mask = p_threshold>np.array(p)
     
     p_array = np.concatenate([p_array, np.array(p)[mask]])
     t_array = np.concatenate([t_array ,np.array(t)[mask]])
     m_array = np.concatenate([m_array , np.array(gkg)[mask]])
-    return p_array[::-1], t_array[::-1], ppmv_array[::-1], m_array[::-1]
+    z_array = np.concatenate([z_array , np.array(z)[mask]])
+    rh = np.concatenate([rh , np.array(rhs_clim)[mask]])
+    ppmv_array = np.concatenate([ppmv_array , np.array(md[:, atmp.H2O])[mask]])
+    return p_array[::-1], t_array[::-1], ppmv_array[::-1], m_array[::-1],\
+        z_array[::-1], rh[::-1]
 
 ##############################################################################
 
@@ -143,9 +163,46 @@ def derive_date_from_nc_name(file):
 
 ##############################################################################
 
+def derive_cloud_features(p_array, t_array, ppmv_array, m_array,\
+        z_array, rh):
+    # Follow Nandan et al., 2022
+    # min_rh, max_rh, inter_rh:
+    below_2km = (92,95,84)
+    two2sixkm = (90,93,82)
+    six2twelvekm = (88,90,78)
+    above_12km = (75,80,70)
+    
+    #######
+    # 1) the conversion of RH with respect to liquid water to RH 
+    # with respect to ice at temperatures below 0 ◦ C; 2)
+    for i, temp in enumerate(t_array):
+        if temp < 273.15:
+            rh[i] = rh[i] *  clausius_clapeyron_liq(temp-273.15)/\
+                clausius_clapeyron_ice(temp-273.15) # rhl * esl / esi
+   
+    ##########
+    # 2) the base of the lowest moist layer is determined as 
+    # the level at which RH exceeds the min-RH corresponding to this level;
+    # base_index = 
+    for i, temp in enumerate(t_array):
+        print(i, temp)
+    
+
+    # 3) above the base of the moist layer continuous levels with 
+    # RH over the corresponding min-RH are treated as the same layer;
+
+
+    # LWC(z) kg/kg; and IWC probably different units for PyRTlib...
+    # Column water and ice: g m-2
+    # cloud base heights and cloud top heights...
+
+    return 0
+
+##############################################################################
+
 def summarize_many_profiles(pattern=\
                     "/home/aki/PhD_data/Vital_I/radiosondes/202408*_*.nc",\
-                    crop=False):
+                    crop=False, sza_float =0.):
     # Bodenlevel ist bei Index -1 - Umkehr der Profile!
     
     files = glob.glob(pattern)
@@ -157,17 +214,23 @@ def summarize_many_profiles(pattern=\
     level_pressures = np.empty((137, n))
     level_temperatures = np.empty((137, n))
     level_wvs = np.empty((137, n))
+    level_ppmvs = np.empty((137, n))
+    level_liq = np.empty((137, n))
+    level_z = np.empty((137, n))
+    level_rhs = np.empty((137, n))
     times = np.empty([n])
     srf_altitude = np.empty([n])
-    sza = [0.]*n
+    sza = [sza_float]*n
     
     for i, file in enumerate(files):
         if crop:
-            length_value, p_array, t_array, ppmv_array, height_in_km, deg_lat,\
-                m_array = read_radiosonde_nc_arms(file=file, crop=7)
+            length_value, p_array, t_array, ppmv_array, height_in_km,\
+                deg_lat, m_array, z_array, rh =\
+                read_radiosonde_nc_arms(file=file, crop=7)
         else:
-            length_value, p_array, t_array, ppmv_array, height_in_km, deg_lat,\
-                m_array = read_radiosonde_nc_arms(file=file)
+            length_value, p_array, t_array, ppmv_array, height_in_km,\
+                deg_lat, m_array, z_array, rh =\
+                read_radiosonde_nc_arms(file=file)
         profile_indices.append(i)
         if length_value<50:
             srf_temps[i] = 320
@@ -180,14 +243,26 @@ def summarize_many_profiles(pattern=\
             srf_altitude[i] = 0.5
             continue
         
-        p_array, t_array, ppmv_array, m_array = add_clim2profiles(\
-                                    p_array, t_array, ppmv_array, m_array)
+        p_array, t_array, ppmv_array, m_array, z_array, rh = add_clim2profiles(\
+                                    p_array, t_array, ppmv_array,\
+                                    m_array, z_array, rh)
+                                    
+        derive_cloud_features(p_array, t_array, ppmv_array, m_array, z_array, rh)
+        
+        #################
+        break
+        ##################
+                                    
         # p in hPa as in other inputs!
         # mixing ratio in g/kg
         level_pressures[:,i] = p_array[-137:]
         level_temperatures[:,i] = t_array[-137:]
         level_wvs[:,i] = m_array[-137:]*1000 # convert kg/kg to g/kg
         datetime_np = derive_date_from_nc_name(file)
+        level_ppmvs[:,i] =ppmv_array[-137:]
+        level_liq[:,i] =np.array([0]*137)
+        level_z[:,i] = z_array[-137:]
+        level_rhs[:,i] = rh[-137:]
         
         srf_pressures[i] = p_array[-1]
         srf_temps[i] = t_array[-1]
@@ -196,13 +271,15 @@ def summarize_many_profiles(pattern=\
         srf_altitude[i] = height_in_km
         
     return profile_indices, level_pressures, level_temperatures, level_wvs,\
-        srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times
+        srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times,\
+        level_ppmvs, level_liq, level_z, level_rhs
 
 ##############################################################################
 
 def write_armsgb_input_nc(profile_indices, level_pressures,
-        level_temperatures, level_wvs,\
-        srf_pressures, srf_temps, srf_wvs, srf_altitude, sza,\
+        level_temperatures, level_wvs,level_ppmvs, level_liq,level_z,\
+        srf_pressures, srf_temps, srf_wvs,\
+        srf_altitude, sza,\
         times ,outifle="blub.nc"):
 
     # Ermitteln der Dimensionen
@@ -212,6 +289,9 @@ def write_armsgb_input_nc(profile_indices, level_pressures,
     level_pressures = np.array(level_pressures, dtype=np.float32)
     level_temperatures = np.array(level_temperatures, dtype=np.float32)
     level_wvs = np.array(level_wvs, dtype=np.float32)
+    level_ppmvs = np.array(level_ppmvs, dtype=np.float32)
+    level_liq = np.array(level_liq, dtype=np.float32)
+    level_z = np.array(level_z, dtype=np.float32)
     srf_pressures = np.array(srf_pressures, dtype=np.float32)
     srf_temps = np.array(srf_temps, dtype=np.float32)
     srf_wvs = np.array(srf_wvs, dtype=np.float32)
@@ -228,25 +308,18 @@ def write_armsgb_input_nc(profile_indices, level_pressures,
 
     ds = xr.Dataset(
         data_vars={
-            # Dimensionsgrößen
-            # "channel_number":       (("n_Channels",), np.squeeze(np.array(np.arange(n_channels), dtype=np.int32))),
-            # "Times_Number":         (("n_Times",), np.squeeze(np.array([times]))),
-            # "Levels_Number":        (("n_Levels",), np.squeeze(np.array([range(n_levels)], dtype=np.int32))),
-            # "Profiles_Number":      (("n_Profiles",), np.squeeze(np.array([profile_indices], dtype=np.int32)),
-            
-            ##########
             # Okay dieser Code-Block hat meinen Segfault error gelöst:
             "Times_Number": ("N_Data", np.array([n_times], dtype=np.int32)),
             "Levels_Number": ("N_Data", np.array([n_levels], dtype=np.int32)),
             "Profiles_Number": ("N_Data", np.array([n_profiles], dtype=np.int32)),
             
-            
             # Profilebenen
             "Level_Pressure":       (("N_Levels", "N_Profiles"), level_pressures),
-            # ValueError: conflicting sizes for dimension 'n_Levels': length 137 on 'Level_Pressure' and length 1 on
-            
             "Level_Temperature":    (("N_Levels", "N_Profiles"), level_temperatures),
             "Level_H2O":            (("N_Levels", "N_Profiles"), level_wvs),
+            "Level_ppmvs":          (("N_Levels", "N_Profiles"), level_ppmvs),
+            "Level_Liquid":         (("N_Levels", "N_Profiles"), level_liq),
+            "Level_z":              (("N_Levels", "N_Profiles"), level_z),
             'Level_O3':             (("N_Levels", "N_Profiles"), level_o3s),
 
             # Oberflächenparameter
@@ -281,11 +354,45 @@ def write_armsgb_input_nc(profile_indices, level_pressures,
         }
     )
 
+    # Add units:
+    ds["Level_Pressure"].attrs["units"] = "hPa"
+    ds["Level_Temperature"].attrs["units"] = "K"
+    ds["Level_H2O"].attrs["units"] = "g/kg"
+    ds["Level_ppmvs"].attrs["units"] = "ppmv"
+    ###############
+    # Füge auch relative humidity als Variable dieser Funktion ein!
+    # Edit here:
+    ds["Level_Liquid"].attrs["units"] = "None - kg/kg"
+    ##################
+    ds["Level_z"].attrs["units"] = "m"
+
+    
     # Schreibe die NetCDF-Datei
     ds.to_netcdf(outifle, format="NETCDF4_CLASSIC")
 
     return 0
 
+##############################################################################
+
+def write_combined_input_prof_file(t_array, ppmv_array,length_value,\
+        p_array, liquid_array, height_in_km=0., deg_lat=50.,\
+        filename="prof_plev.dat", zenith_angle=0.):
+    with open(filename, "w") as file:
+        # print("pressure levels: ", length_value)
+        for value in p_array:
+            file.write(f"{value:8.4f}\n")  # eingerückt, 4 Nachkommastellen
+        for value in t_array:
+            file.write(f"{value:6.3f}\n")  # eingerückt, 4 Nachkommastellen
+        for value in ppmv_array:
+            file.write(f"{value:9.4f}\n")  # eingerückt, 4 Nachkommastellen
+        for value in liquid_array:
+            file.write(f"{0.:12.6E}\n")  # eingerückt, 4 Nachkommastellen
+        file.write(f"{t_array[-1]:10.4f}{p_array[-1]:10.2f}\n")
+        file.write(f"{height_in_km:6.1f}{deg_lat:6.1f}\n")
+        file.write(f"{zenith_angle:6.1f}\n")
+        
+        return 0
+        
 ##############################################################################
 # 3rd: Main code:
 ##############################################################################
@@ -293,23 +400,26 @@ def write_armsgb_input_nc(profile_indices, level_pressures,
 if __name__=="__main__":
     args = parse_arguments()
     h_km_vital = 0.092
+    sza_float = 0.
     # h_km_vital_crop = 0.112
     
     # Uncropped:
     profile_indices, level_pressures, level_temperatures, level_wvs,\
-        srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times =\
-        summarize_many_profiles()
+        srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times,\
+        level_ppmvs, level_liq, level_z, level_rhs =\
+        summarize_many_profiles(sza_float=sza_float)
     srf_altitude = np.array([h_km_vital]*len(srf_altitude,))
     write_armsgb_input_nc(profile_indices, level_pressures,\
-        level_temperatures, level_wvs,\
+        level_temperatures, level_wvs, level_ppmvs, level_liq,level_z,\
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times ,\
         outifle=args.output1)
         
     # Cropped version:
     profile_indices, level_pressures, level_temperatures, level_wvs,\
-        srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times =\
-        summarize_many_profiles(crop=True)
+        srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times,\
+        level_ppmvs, level_liq, level_z, level_rhs =\
+        summarize_many_profiles(crop=True,sza_float=sza_float)
     write_armsgb_input_nc(profile_indices, level_pressures,\
-        level_temperatures, level_wvs,\
+        level_temperatures, level_wvs,level_ppmvs, level_liq,level_z,\
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times ,\
         outifle=args.output2)
