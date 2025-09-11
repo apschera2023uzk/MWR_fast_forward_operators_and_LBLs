@@ -76,7 +76,7 @@ def read_radiosonde_nc_arms(file=\
     # Bodenlevel ist bei Index -1 - Umkehr der Profile!
     
     if file==None:
-        return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan
+        return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan, np.nan
     ds = xr.open_dataset(file)
     max_index = np.nanargmax(ds["Height"].values)
     
@@ -104,7 +104,7 @@ def read_radiosonde_nc_arms(file=\
         print("Unusually high crop value: ",crop)
         
     if max_index<150:
-        return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan
+        return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan, np.nan
         
     # Thinning pattern:
     inds = np.r_[crop:100:15,
@@ -119,12 +119,12 @@ def read_radiosonde_nc_arms(file=\
     length_value = len(t_array )
     p_array = ds["Pressure"].isel(Time=inds).values
     rh = ds["Humidity"].isel(Time=inds).values
+    z_array = ds["Height"].isel(Time=inds).values
 
     m_array = []
     for rh_lev, t_lev, p_lev in zip (rh, t_array, p_array):
         m_array.append(rh2mixing_ratio(RH=rh_lev, abs_T=t_lev, p=p_lev*100))
     ppmv_array = np.array(m_array) * (28.9644e6 / 18.0153)
-    z_array = ds["Height"].values
     
     height_in_km = ds["Height"].values[0]/1000
     deg_lat = ds["Latitude"].values[0]
@@ -146,7 +146,7 @@ def add_clim2profiles(p_array, t_array, ppmv_array, m_array, z_array, rh):
     p_array = np.concatenate([p_array, np.array(p)[mask]])
     t_array = np.concatenate([t_array ,np.array(t)[mask]])
     m_array = np.concatenate([m_array , np.array(gkg)[mask]])
-    z_array = np.concatenate([z_array , np.array(z)[mask]])
+    z_array = np.concatenate([z_array , np.array(z*1000)[mask]])
     rh = np.concatenate([rh , np.array(rhs_clim)[mask]])
     ppmv_array = np.concatenate([ppmv_array , np.array(md[:, atmp.H2O])[mask]])
     return p_array[::-1], t_array[::-1], ppmv_array[::-1], m_array[::-1],\
@@ -162,6 +162,54 @@ def derive_date_from_nc_name(file):
     return datetime_np
 
 ##############################################################################
+    
+def calc_lwc(tops, bases, p_array, t_array, ppmv_array, m_array,\
+        z_array, rh, cloud_bools):
+    ####
+    # Chakraborty & Maitra 2011  / Nandan et al. 2022:
+    cp = 1003.5 # J /kg / K == 1.003 J / g / K
+    L = 334944 # J / kg == 80 cal / gm
+    R_L = 287.06 # J / kg / K
+    gamma_d = 9.76e-3 # K/m
+    gamma_s = 6.5e-3 # K/m    
+    lwc_kg_m3 = np.array([0.]*len(t_array))
+    lwc_kg_kg = np.array([0.]*len(t_array))
+    for i, (base, top) in enumerate(zip(bases,tops)):
+        z_index_top = np.nanargmin(abs(z_array-top))
+        z_index_base = np.nanargmin(abs(z_array-base))
+        if t_array[z_index_base]>273.15 and t_array[z_index_top]>273.15:
+            print("Water cloud")
+            print("Indices: ", z_index_base, z_index_top)
+            for j in range(z_index_top,z_index_base):
+                rho = p_array[j]*100 / R_L / t_array[j] # Ergebnis realistisch kg m-3
+                dz = z_array[j-1] - z_array[j] # ergab soweit auch Sinn..
+                lwc_ad = rho * cp / L * (gamma_d - gamma_s) * dz
+                print("lwc_ad: ", lwc_ad)
+                print("z levels: ", z_array[j-1] , z_array[j])
+                dh = z_array[j] - base
+                print("Height above base: ", dh)
+                lwc = lwc_ad * (1.239 - 0.145*np.log(dh)) # kg m-3
+                print("lwc: ", lwc) 
+                lwc_kg_m3[j] = lwc           
+        elif t_array[z_index_base]<233.15 and t_array[z_index_top]<233.15:
+            print("Ice cloud")
+        elif t_array[z_index_base]>233.15 and t_array[z_index_top]<273.15:
+            print("Mixed phase cloud")                    
+        else:
+            print("Phase determination error!")
+
+    # Ich brauche: profil kg/kg 
+    # Dafür wäre IWC profil noch nice...
+    
+    # Ich brauche LWP und IWP
+    lwp = np.abs(np.sum(lwc_kg_m3 * np.gradient(z_array)))  # [kg/m²]
+    # Was macht man mit mixed phase???
+    
+    print("LWP: ", lwp, "kg m -2")
+        
+    return lwc_kg_m3, lwc_kg_kg
+
+##############################################################################
 
 def derive_cloud_features(p_array, t_array, ppmv_array, m_array,\
         z_array, rh):
@@ -171,6 +219,15 @@ def derive_cloud_features(p_array, t_array, ppmv_array, m_array,\
     two2sixkm = (90,93,82)
     six2twelvekm = (88,90,78)
     above_12km = (75,80,70)
+    bases = []
+    tops = []
+    
+    #####################
+    #rh[100:110] = 100
+    #rh[110:114] = 100
+    #rh[114:117] = 100
+    #rh[149:152] = 100
+    #######################
     
     #######
     # 1) the conversion of RH with respect to liquid water to RH 
@@ -181,20 +238,146 @@ def derive_cloud_features(p_array, t_array, ppmv_array, m_array,\
                 clausius_clapeyron_ice(temp-273.15) # rhl * esl / esi
    
     ##########
-    # 2) the base of the lowest moist layer is determined as 
-    # the level at which RH exceeds the min-RH corresponding to this level;
-    # base_index = 
-    for i, temp in enumerate(t_array):
-        print(i, temp)
+    # 2-4: Find RHs above RH_min (preliminary layers):
+    cloud_bools = np.array([False]*len(z_array))
+    in_cloud = False
+    for i, (temp, z) in enumerate(zip(t_array, z_array)):
+        # print(i,temp,z, rh[i])
+        if z<2000:
+            if rh[i]>below_2km[0]:
+                cloud_bools[i] = True
+                if not in_cloud:
+                    tops.append(z)
+                in_cloud = True
+            else:
+                if in_cloud:
+                    bases.append(z)
+                in_cloud = False
+        elif 2000<z<6000:
+            if rh[i]>two2sixkm[0]:
+                cloud_bools[i] = True
+                if not in_cloud:
+                    tops.append(z)
+                in_cloud = True
+            else:
+                if in_cloud:
+                    bases.append(z)
+                in_cloud = False
+        elif 6000<z<12000:
+            if rh[i]>six2twelvekm[0]:
+                cloud_bools[i] = True
+                if not in_cloud:
+                    tops.append(z)
+                in_cloud = True
+            else:
+                if in_cloud:
+                    bases.append(z)
+                in_cloud = False
+        elif 12000<z:
+            if rh[i]>above_12km[0]:
+                cloud_bools[i] = True
+                if not in_cloud:
+                    tops.append(z)
+                in_cloud = True
+            else:
+                if in_cloud:
+                    bases.append(z)
+                in_cloud = False
+          
+    #print("after 4  tops: ", tops)    
+    #print("after 4  bases: ", bases)     
+    ####
+    # 5) Remove cloudbases below 500 m if thickness < 400 m:
+    new_tops = tops
+    new_bases = bases
+    for i, (base, top) in enumerate(zip(bases,tops)):
+        if base<500 and abs(base-top)<400:
+            new_bases.pop(i)
+            new_tops.pop(i)
+            z_index_top = np.nanargmin(abs(z_array-top))
+            z_index_base = np.nanargmin(abs(z_array-base))
+            cloud_bools[z_index_top:z_index_base] = False
+            
+         
+    ###
+    # 6 ) RH_max reached within cloud layer? => discard else!
+        if base<2000:
+            z_index_top = np.nanargmin(abs(z_array-top))
+            z_index_base = np.nanargmin(abs(z_array-base))
+            if not np.any(below_2km[1] < rh[z_index_top:z_index_base]):
+                cloud_bools[z_index_top:z_index_base] = False
+                new_bases.pop(i)
+                new_tops.pop(i)
+        elif 2000<base<6000:
+            z_index_top = np.nanargmin(abs(z_array-top))
+            z_index_base = np.nanargmin(abs(z_array-base))
+            if not np.any(two2sixkm[1] < rh[z_index_top:z_index_base]):
+                cloud_bools[z_index_top:z_index_base] = False
+                new_bases.pop(i)
+                new_tops.pop(i)   
+        elif 6000<base<12000:
+            z_index_top = np.nanargmin(abs(z_array-top))
+            z_index_base = np.nanargmin(abs(z_array-base))
+            if not np.any(six2twelvekm[1] < rh[z_index_top:z_index_base]):
+                cloud_bools[z_index_top:z_index_base] = False
+                new_bases.pop(i)
+                new_tops.pop(i)         
+        elif 12000<base:
+            z_index_top = np.nanargmin(abs(z_array-top))
+            z_index_base = np.nanargmin(abs(z_array-base))
+            if not np.any(above_12km[1]  < rh[z_index_top:z_index_base]):
+                cloud_bools[z_index_top:z_index_base] = False
+                new_bases.pop(i)
+                new_tops.pop(i)           
     
+        ###
+        # 7) Connect layers, with a gap of less than 300 m:
+        if base<2000:
+            rh_inter = below_2km[2]
+        elif 2000<base<6000:
+            rh_inter = two2sixkm[2]
+        elif 6000<base<12000:
+            rh_inter = six2twelvekm[2]
+        elif 12000<base:
+            rh_inter = above_12km[2]           
+        if i!=0:
+           z_index_base = np.nanargmin(abs(z_array-bases[i-1]))
+           z_index_top = np.nanargmin(abs(z_array-top))
+           if abs(bases[i-1]-top)<300 or\
+                   np.nanmin(rh[z_index_base:z_index_top-1])>rh_inter:               
+               cloud_bools[z_index_base:z_index_top-1] = True
+               new_bases.pop(i-1)
+               new_tops.pop(i)
+               
+    #print("after 5, 6, 7  tops: ", new_tops)    
+    #print("after 5, 6 ,7  bases: ", new_bases) 
+                   
+    tops = new_tops
+    bases = new_bases
+    for i, (base, top) in enumerate(zip(new_bases,new_tops)):               
+        ####
+        # 8) Cloud thickness below 100 m:
+        if abs(base-top)<100:
+            bases.pop(i)
+            tops.pop(i)
+            z_index_top = np.nanargmin(abs(z_array-top))
+            z_index_base = np.nanargmin(abs(z_array-base))     
+            cloud_bools[z_index_top:z_index_base] = False
+                      
+    # cloud base heights and cloud top heights...XXXX
+    #print("after 8  tops: ", tops)    
+    #print("after 8  bases: ", bases)    
 
-    # 3) above the base of the moist layer continuous levels with 
-    # RH over the corresponding min-RH are treated as the same layer;
+    ####
+    # Lets get LWC and IWC:
+    lwc_kg_m3, lwc_kg_kg = calc_lwc(tops, bases, p_array, t_array,\
+        ppmv_array, m_array,\
+        z_array, rh, cloud_bools)
 
 
     # LWC(z) kg/kg; and IWC probably different units for PyRTlib...
     # Column water and ice: g m-2
-    # cloud base heights and cloud top heights...
+    
 
     return 0
 
@@ -250,7 +433,7 @@ def summarize_many_profiles(pattern=\
         derive_cloud_features(p_array, t_array, ppmv_array, m_array, z_array, rh)
         
         #################
-        break
+        # break
         ##################
                                     
         # p in hPa as in other inputs!
@@ -277,7 +460,7 @@ def summarize_many_profiles(pattern=\
 ##############################################################################
 
 def write_armsgb_input_nc(profile_indices, level_pressures,
-        level_temperatures, level_wvs,level_ppmvs, level_liq,level_z,\
+        level_temperatures, level_wvs,level_ppmvs, level_liq, level_z,\
         srf_pressures, srf_temps, srf_wvs,\
         srf_altitude, sza,\
         times ,outifle="blub.nc"):
@@ -409,9 +592,11 @@ if __name__=="__main__":
         level_ppmvs, level_liq, level_z, level_rhs =\
         summarize_many_profiles(sza_float=sza_float)
     srf_altitude = np.array([h_km_vital]*len(srf_altitude,))
-    write_armsgb_input_nc(profile_indices, level_pressures,\
-        level_temperatures, level_wvs, level_ppmvs, level_liq,level_z,\
-        srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times ,\
+    write_armsgb_input_nc(profile_indices, level_pressures,
+        level_temperatures, level_wvs,level_ppmvs, level_liq, level_z,\
+        srf_pressures, srf_temps, srf_wvs,\
+        srf_altitude, sza,\
+        times ,\
         outifle=args.output1)
         
     # Cropped version:
@@ -419,7 +604,9 @@ if __name__=="__main__":
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times,\
         level_ppmvs, level_liq, level_z, level_rhs =\
         summarize_many_profiles(crop=True,sza_float=sza_float)
-    write_armsgb_input_nc(profile_indices, level_pressures,\
-        level_temperatures, level_wvs,level_ppmvs, level_liq,level_z,\
-        srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times ,\
+    write_armsgb_input_nc(profile_indices, level_pressures,
+        level_temperatures, level_wvs,level_ppmvs, level_liq, level_z,\
+        srf_pressures, srf_temps, srf_wvs,\
+        srf_altitude, sza,\
+        times ,\
         outifle=args.output2)
