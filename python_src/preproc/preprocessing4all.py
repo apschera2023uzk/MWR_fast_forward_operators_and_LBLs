@@ -178,19 +178,14 @@ def calc_lwc(tops, bases, p_array, t_array, ppmv_array, m_array,\
         z_index_top = np.nanargmin(abs(z_array-top))
         z_index_base = np.nanargmin(abs(z_array-base))
         if t_array[z_index_base]>273.15 and t_array[z_index_top]>273.15:
-            print("Water cloud")
-            print("Indices: ", z_index_base, z_index_top)
             for j in range(z_index_top,z_index_base):
                 rho = p_array[j]*100 / R_L / t_array[j] # Ergebnis realistisch kg m-3
                 dz = z_array[j-1] - z_array[j] # ergab soweit auch Sinn..
                 lwc_ad = rho * cp / L * (gamma_d - gamma_s) * dz
-                print("lwc_ad: ", lwc_ad)
-                print("z levels: ", z_array[j-1] , z_array[j])
                 dh = z_array[j] - base
-                print("Height above base: ", dh)
                 lwc = lwc_ad * (1.239 - 0.145*np.log(dh)) # kg m-3
-                print("lwc: ", lwc) 
-                lwc_kg_m3[j] = lwc           
+                lwc_kg_m3[j] = lwc          
+                lwc_kg_kg[j] = lwc / rho
         elif t_array[z_index_base]<233.15 and t_array[z_index_top]<233.15:
             print("Ice cloud")
         elif t_array[z_index_base]>233.15 and t_array[z_index_top]<273.15:
@@ -198,16 +193,14 @@ def calc_lwc(tops, bases, p_array, t_array, ppmv_array, m_array,\
         else:
             print("Phase determination error!")
 
-    # Ich brauche: profil kg/kg 
+    ##################
     # Dafür wäre IWC profil noch nice...
-    
-    # Ich brauche LWP und IWP
-    lwp = np.abs(np.sum(lwc_kg_m3 * np.gradient(z_array)))  # [kg/m²]
+    # Ich brauche IWP
     # Was macht man mit mixed phase???
     
-    print("LWP: ", lwp, "kg m -2")
+    lwp = np.abs(np.sum(lwc_kg_m3 * np.gradient(z_array)))  # [kg/m²]
         
-    return lwc_kg_m3, lwc_kg_kg
+    return lwc_kg_m3, lwc_kg_kg, lwp_kg_m2
 
 ##############################################################################
 
@@ -370,8 +363,8 @@ def derive_cloud_features(p_array, t_array, ppmv_array, m_array,\
 
     ####
     # Lets get LWC and IWC:
-    lwc_kg_m3, lwc_kg_kg = calc_lwc(tops, bases, p_array, t_array,\
-        ppmv_array, m_array,\
+    lwc_kg_m3, lwc_kg_kg, lwp_kg_m2 =\
+        calc_lwc(tops, bases, p_array, t_array, ppmv_array, m_array,\
         z_array, rh, cloud_bools)
 
 
