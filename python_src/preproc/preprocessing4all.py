@@ -11,6 +11,7 @@ import argparse
 import os
 import xarray as xr
 import numpy as np
+import pandas as pd
 import glob
 import sys
 sys.path.append('/home/aki/pyrtlib')
@@ -70,27 +71,71 @@ def rh2mixing_ratio(RH=70, abs_T=273.15+15, p=101325):
 
 ##############################################################################
 
+def running_mean_from_arrays(inds, z_array, any_array):
+    new_array = []
+    ind_max = len(inds)
+    for i, ind in enumerate(inds):
+        if i==0:
+            new_array.append(any_array[inds[i]])
+        elif i==(ind_max-1):
+            new_array.append(any_array[inds[i]])
+        else:
+            lower = int((ind+inds[i-1])/2)
+            upper = int((ind+inds[i+1])/2)
+            val = np.nanmean(any_array[lower:upper])
+            new_array.append(val)
+    return np.array(new_array)
+
+##############################################################################
+
 def read_radiosonde_nc_arms(file=\
         "/home/aki/PhD_data/Vital_I/radiosondes/20240805_102936.nc",\
          crop=0):
-    # Bodenlevel ist bei Index -1 - Umkehr der Profile!
     
     if file==None:
         return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan, np.nan
     ds = xr.open_dataset(file)
-    max_index = np.nanargmax(ds["Height"].values)
+    #######################
+    if "Height" in ds.data_vars:
+        height_var = "Height"
+        height_in_km = ds[height_var].values[0]/1000
+        t_var = "Temperature"
+        p_var = "Pressure"
+        h_var = "Humidity"
+        p_factor = 1.
+        deg_lat = ds["Latitude"].values[0]
+    elif "zg" in ds.data_vars:
+        height_var = "zg"
+        height_in_km = ds["zsl_start"].values/1000
+        # Geopotential!!!
+        t_var = "ta"
+        p_var = "pa"
+        h_var = "hur"
+        deg_lat = ds["lat"].values[0]
+        p_factor = 100.
+    elif "zsl" in ds.data_vars:
+        height_var = "zsl"
+        height_in_km = ds["zsl_start"].values/1000
+        # Geopotential!!!
+        t_var = "ta"
+        p_var = "pa"
+        h_var = "hur"
+        deg_lat = ds["lat"].values[0]
+        p_factor = 100.
+
+    # 3 Fangen Profile auch in Höhge an? 
+    max_index = np.nanargmax(ds[height_var].values)
+    index3000 = np.nanargmin(abs(ds[height_var].values-3000))
     
    # Or just find 132 m height:
     if crop > 0:
-        crop = np.nanargmin(abs(ds["Height"].values -132))
-        print("Found crop in NetCDF: ", crop)
-        # print("crop: ", crop)
+        crop = np.nanargmin(abs(ds[height_var].values -132))
         
     # AccRate / Height change crop:
     if crop == 0:
-        old_h = ds["Height"].values[0]
+        old_h = ds[height_var].values[0]
         for i in range(100):
-            current_h = ds["Height"].values[i]
+            current_h = ds[height_var].values[i]
             if abs(current_h-old_h)<0.3:
                 if i!=0:
                     crop +=1
@@ -105,32 +150,134 @@ def read_radiosonde_nc_arms(file=\
         
     if max_index<150:
         return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan, np.nan
+    elif ds[height_var].values[max_index]<3000:
+        return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan, np.nan
         
     # Thinning pattern:
-    inds = np.r_[crop:100:15,
-             100:500:15,
-             500:1000:20,
-             1000:1500:25,
-             1500:2500:25,
-             2500:max_index:50]
+    datapoints_bl = 75
+    datapoints_ft = 100
+    increment_bl = int(index3000/datapoints_bl)
+    increment_ft = int((max_index-index3000)/datapoints_ft)
+    inds = np.r_[crop:index3000:increment_bl, index3000:max_index:increment_ft]
     inds = np.unique(inds)
-        
-    t_array = ds["Temperature"].isel(Time=inds).values
+    # print("dz: (BL)", 3000/datapoints_bl)
+    # print("dz FT:", (ds["Height"].values[max_index]- 3000)/datapoints_ft)
+    
+    ####
+    # Create running mean:
+    if "Height" in ds.data_vars:
+        z_array = ds[height_var].isel(Time=inds).values
+    elif "zg" in ds.data_vars or "zsl" in ds.data_vars:
+        z_array = ds[height_var].isel(time=inds).values
+    t_array = running_mean_from_arrays(inds, ds[height_var].values,\
+        ds[t_var].values)
+    p_array = running_mean_from_arrays(inds, ds[height_var].values,\
+        ds[p_var].values/p_factor)
+    rh = running_mean_from_arrays(inds, ds[height_var].values,\
+        ds[h_var].values)
     length_value = len(t_array )
-    p_array = ds["Pressure"].isel(Time=inds).values
-    rh = ds["Humidity"].isel(Time=inds).values
-    z_array = ds["Height"].isel(Time=inds).values
+        
+        
+    print("ds[p_var].values[-5:]", ds[p_var].values[-5:])
+    print("ds[p_var].values[:5]", ds[p_var].values[:5])
+    #####################
+    print("p_array[-5:]: ", p_array[-5:])
+    print("p_array[:5]: ", p_array[:5])
+    
+    print("ds[height_var].values[-5:]", ds[height_var].values[-5:])
+    print("ds[height_var].values[:5]", ds[height_var].values[:5])
+    #####################
+    print("z_array[-5:]: ", z_array[-5:])
+    print("z_array[:5]: ", z_array[:5])
+        
+        
+    m_array = []
+    for rh_lev, t_lev, p_lev in zip (rh, t_array, p_array):
+        m_array.append(rh2mixing_ratio(RH=rh_lev, abs_T=t_lev, p=p_lev*100))
+    ppmv_array = np.array(m_array) * (28.9644e6 / 18.0153)
+
+    return length_value, p_array, t_array, ppmv_array, height_in_km, deg_lat,\
+       m_array, z_array, rh
+       
+##############################################################################
+
+def read_radiosonde_txt(file=\
+        "/home/aki/PhD_data/Socles/radiosondes/2021072106/'SOUNDING DATA'/20210721060020068041_Profile.txt",\
+         crop=0):
+    # Bodenlevel ist bei Index -1 - Umkehr der Profile!
+    
+    if file==None:
+        return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan, np.nan      
+    df = pd.read_table(file, encoding_errors="ignore", engine='python',\
+        skiprows=20,\
+        skipfooter=10, header=None , names=["Time", "P", "T", "Hu", "Ws",\
+        "Wd", "Long.", "Lat.", "Alt", "Geopot","Rs","Elevation",\
+        "Azimuth", "Range"])
+    max_index = np.nanargmax(df["Alt"].values)
+    index3000 = np.nanargmin(abs(df["Alt"].values-3000))
+    
+   # Or just find 132 m height:
+    if crop > 0:
+        crop = np.nanargmin(abs(df["Alt"].values -132))
+        # print("Found crop in NetCDF: ", crop)
+        # print("crop: ", crop)
+        
+    # AccRate / Height change crop:
+    if crop == 0:
+        old_h = df["Alt"].values[0]
+        for i in range(100):
+            current_h = df["Alt"].values[i]
+            if abs(current_h-old_h)<0.3:
+                if i!=0:
+                    crop +=1
+            else:
+                break
+            old_h = current_h
+        if crop > 0:
+            print("Crop due to same height in NC: ", crop)
+        
+    if crop > 8:
+        print("Unusually high crop value: ",crop)
+        
+    if max_index<150:
+        return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan, np.nan
+    elif df["Alt"].values[max_index]<3000:
+        return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan, np.nan
+        
+    # Thinning pattern:
+    datapoints_bl = 75
+    datapoints_ft = 100
+    increment_bl = int(index3000/datapoints_bl)
+    increment_ft = int((max_index-index3000)/datapoints_ft)
+    inds = np.r_[crop:index3000:increment_bl, index3000:max_index:increment_ft]
+    inds = np.unique(inds)
+    
+    ####
+    # Create running mean:
+    z_array = df["Alt"].iloc[inds].values
+    t_array = running_mean_from_arrays(inds,df["Alt"].values,\
+        df["T"].values+ 273.15)
+    p_array = running_mean_from_arrays(inds,df["Alt"].values,\
+        df["P"].values)
+    rh = running_mean_from_arrays(inds,df["Alt"].values,\
+        df["Hu"].values)
+    length_value = len(t_array )
+
+    #####################
+    print("p_array[-5:]: ", p_array[-5:])
+    print("p_array[:5]: ", p_array[:5])
 
     m_array = []
     for rh_lev, t_lev, p_lev in zip (rh, t_array, p_array):
         m_array.append(rh2mixing_ratio(RH=rh_lev, abs_T=t_lev, p=p_lev*100))
     ppmv_array = np.array(m_array) * (28.9644e6 / 18.0153)
     
-    height_in_km = ds["Height"].values[0]/1000
-    deg_lat = ds["Latitude"].values[0]
+    height_in_km = df["Alt"].values[0]/1000
+    deg_lat = df["Lat."].values[0]
 
     return length_value, p_array, t_array, ppmv_array, height_in_km, deg_lat,\
        m_array, z_array, rh
+
 
 ##############################################################################
 
@@ -154,10 +301,19 @@ def add_clim2profiles(p_array, t_array, ppmv_array, m_array, z_array, rh):
 
 ##############################################################################
 
-def derive_date_from_nc_name(file):
-    string = file.split("/")[-1].split(".")[0]
-    datestring = string[:4]+"-"+string[4:6]+"-"+string[6:8]+"T"+\
-        string[9:11]+":"+string[11:13]+":"+string[13:15]
+def derive_date_from_file_name(file):
+    if "sups_rao_sonde00" in file or "fval" in file:
+        string = file.split("/")[-1].split(".")[0].split("_")[-1]
+        datestring = string[:4]+"-"+string[4:6]+"-"+string[6:8]+"T"+\
+            string[8:10]+":"+string[10:12]+":"+string[12:14]
+    elif ".nc" in file:
+        string = file.split("/")[-1].split(".")[0]
+        datestring = string[:4]+"-"+string[4:6]+"-"+string[6:8]+"T"+\
+            string[9:11]+":"+string[11:13]+":"+string[13:15]
+    elif "Profile.txt" in file:
+        string = file.split("/")[-1].split(".")[0]
+        datestring = string[:4]+"-"+string[4:6]+"-"+string[6:8]+"T"+\
+            string[8:10]+":"+string[10:12]+":"+string[12:14]        
     datetime_np = np.datetime64(datestring)
     return datetime_np
 
@@ -182,14 +338,27 @@ def calc_lwc(tops, bases, p_array, t_array, ppmv_array, m_array,\
                 rho = p_array[j]*100 / R_L / t_array[j] # Ergebnis realistisch kg m-3
                 dz = z_array[j-1] - z_array[j] # ergab soweit auch Sinn..
                 lwc_ad = rho * cp / L * (gamma_d - gamma_s) * dz
-                dh = z_array[j] - base
+                dh = z_array[j] - base # abs entfernt
                 lwc = lwc_ad * (1.239 - 0.145*np.log(dh)) # kg m-3
+                if lwc<0:
+                    lwc = 0
                 lwc_kg_m3[j] = lwc          
                 lwc_kg_kg[j] = lwc / rho
         elif t_array[z_index_base]<233.15 and t_array[z_index_top]<233.15:
-            print("Ice cloud")
+            pass
+            # print("Ice cloud")
         elif t_array[z_index_base]>233.15 and t_array[z_index_top]<273.15:
-            print("Mixed phase cloud")                    
+            # print("Mixed phase cloud")       
+            for j in range(z_index_top,z_index_base):
+                rho = p_array[j]*100 / R_L / t_array[j] # Ergebnis realistisch kg m-3
+                dz = z_array[j-1] - z_array[j] # ergab soweit auch Sinn..
+                lwc_ad = rho * cp / L * (gamma_d - gamma_s) * dz
+                dh = z_array[j] - base
+                lwc = lwc_ad * (1.239 - 0.145*np.log(dh)) # kg m-3
+                if lwc<0:
+                    lwc = 0
+                lwc_kg_m3[j] = lwc          
+                lwc_kg_kg[j] = lwc / rho             
         else:
             print("Phase determination error!")
 
@@ -197,8 +366,9 @@ def calc_lwc(tops, bases, p_array, t_array, ppmv_array, m_array,\
     # Dafür wäre IWC profil noch nice...
     # Ich brauche IWP
     # Was macht man mit mixed phase???
+    ###################
     
-    lwp = np.abs(np.sum(lwc_kg_m3 * np.gradient(z_array)))  # [kg/m²]
+    lwp_kg_m2 = np.abs(np.sum(lwc_kg_m3 * np.gradient(z_array)))  # [kg/m²]
         
     return lwc_kg_m3, lwc_kg_kg, lwp_kg_m2
 
@@ -215,13 +385,6 @@ def derive_cloud_features(p_array, t_array, ppmv_array, m_array,\
     bases = []
     tops = []
     
-    #####################
-    #rh[100:110] = 100
-    #rh[110:114] = 100
-    #rh[114:117] = 100
-    #rh[149:152] = 100
-    #######################
-    
     #######
     # 1) the conversion of RH with respect to liquid water to RH 
     # with respect to ice at temperatures below 0 ◦ C; 2)
@@ -235,7 +398,6 @@ def derive_cloud_features(p_array, t_array, ppmv_array, m_array,\
     cloud_bools = np.array([False]*len(z_array))
     in_cloud = False
     for i, (temp, z) in enumerate(zip(t_array, z_array)):
-        # print(i,temp,z, rh[i])
         if z<2000:
             if rh[i]>below_2km[0]:
                 cloud_bools[i] = True
@@ -277,54 +439,66 @@ def derive_cloud_features(p_array, t_array, ppmv_array, m_array,\
                     bases.append(z)
                 in_cloud = False
           
-    #print("after 4  tops: ", tops)    
-    #print("after 4  bases: ", bases)     
+    # print("after 4  tops: ", tops)    
+    # print("after 4  bases: ", bases)     
     ####
     # 5) Remove cloudbases below 500 m if thickness < 400 m:
-    new_tops = tops
-    new_bases = bases
-    for i, (base, top) in enumerate(zip(bases,tops)):
-        if base<500 and abs(base-top)<400:
-            new_bases.pop(i)
-            new_tops.pop(i)
-            z_index_top = np.nanargmin(abs(z_array-top))
-            z_index_base = np.nanargmin(abs(z_array-base))
+    # New version:
+    valid_indices = [i for i, (base, top) in enumerate(zip(bases, tops))\
+        if not (base < 500 and abs(base-top) < 400)]
+    new_bases = [bases[i] for i in valid_indices]
+    new_tops = [tops[i] for i in valid_indices]
+    for i in range(len(bases)):
+        if i not in valid_indices:
+            z_index_top = np.nanargmin(abs(z_array-tops[i]))
+            z_index_base = np.nanargmin(abs(z_array-bases[i]))
             cloud_bools[z_index_top:z_index_base] = False
-            
-         
+    
     ###
     # 6 ) RH_max reached within cloud layer? => discard else!
+    to_remove_base = []
+    to_remove_top = []      
+    tops = new_tops
+    bases = new_bases
+    for i, (base, top) in enumerate(zip(bases,tops)):
         if base<2000:
             z_index_top = np.nanargmin(abs(z_array-top))
             z_index_base = np.nanargmin(abs(z_array-base))
             if not np.any(below_2km[1] < rh[z_index_top:z_index_base]):
                 cloud_bools[z_index_top:z_index_base] = False
-                new_bases.pop(i)
-                new_tops.pop(i)
+                to_remove_base.append(i)
+                to_remove_top.append(i)
         elif 2000<base<6000:
             z_index_top = np.nanargmin(abs(z_array-top))
             z_index_base = np.nanargmin(abs(z_array-base))
             if not np.any(two2sixkm[1] < rh[z_index_top:z_index_base]):
                 cloud_bools[z_index_top:z_index_base] = False
-                new_bases.pop(i)
-                new_tops.pop(i)   
+                to_remove_base.append(i)
+                to_remove_top.append(i)
         elif 6000<base<12000:
             z_index_top = np.nanargmin(abs(z_array-top))
             z_index_base = np.nanargmin(abs(z_array-base))
             if not np.any(six2twelvekm[1] < rh[z_index_top:z_index_base]):
                 cloud_bools[z_index_top:z_index_base] = False
-                new_bases.pop(i)
-                new_tops.pop(i)         
+                to_remove_base.append(i)
+                to_remove_top.append(i)      
         elif 12000<base:
             z_index_top = np.nanargmin(abs(z_array-top))
             z_index_base = np.nanargmin(abs(z_array-base))
             if not np.any(above_12km[1]  < rh[z_index_top:z_index_base]):
                 cloud_bools[z_index_top:z_index_base] = False
-                new_bases.pop(i)
-                new_tops.pop(i)           
-    
-        ###
-        # 7) Connect layers, with a gap of less than 300 m:
+                to_remove_base.append(i)
+                to_remove_top.append(i)      
+    for i in sorted(to_remove_base, reverse=True):
+        bases.pop(i)
+    for i in sorted(to_remove_top, reverse=True):
+        tops.pop(i)
+        
+    ###
+    # 7) Connect layers, with a gap of less than 300 m:
+    to_remove_base = []
+    to_remove_top = []       
+    for i, (base, top) in enumerate(zip(bases,tops)):      
         if base<2000:
             rh_inter = below_2km[2]
         elif 2000<base<6000:
@@ -336,30 +510,39 @@ def derive_cloud_features(p_array, t_array, ppmv_array, m_array,\
         if i!=0:
            z_index_base = np.nanargmin(abs(z_array-bases[i-1]))
            z_index_top = np.nanargmin(abs(z_array-top))
-           if abs(bases[i-1]-top)<300 or\
-                   np.nanmin(rh[z_index_base:z_index_top-1])>rh_inter:               
+           if 1==abs(z_index_base-z_index_top):
+               if rh[z_index_base]>rh_inter:  
+                   cloud_bools[z_index_base] = True
+                   to_remove_base.append(i-1)
+                   to_remove_top.append(i)                   
+           elif abs(bases[i-1]-top)<300 or\
+                   np.nanmin(rh[z_index_base:z_index_top-1])>rh_inter:    
                cloud_bools[z_index_base:z_index_top-1] = True
-               new_bases.pop(i-1)
-               new_tops.pop(i)
-               
-    #print("after 5, 6, 7  tops: ", new_tops)    
-    #print("after 5, 6 ,7  bases: ", new_bases) 
-                   
-    tops = new_tops
-    bases = new_bases
-    for i, (base, top) in enumerate(zip(new_bases,new_tops)):               
+               to_remove_base.append(i-1)
+               to_remove_top.append(i)               
+    for i in sorted(to_remove_base, reverse=True):
+        bases.pop(i)
+    for i in sorted(to_remove_top, reverse=True):
+        tops.pop(i)
+        
+    # step 8: 
+    to_remove_base = []
+    to_remove_top = []   
+    for i, (base, top) in enumerate(zip(bases,tops)):               
         ####
         # 8) Cloud thickness below 100 m:
         if abs(base-top)<100:
-            bases.pop(i)
-            tops.pop(i)
+            to_remove_base.append(i)
+            to_remove_top.append(i)
+            # new_bases.pop(i)
+            # new_tops.pop(i)
             z_index_top = np.nanargmin(abs(z_array-top))
             z_index_base = np.nanargmin(abs(z_array-base))     
             cloud_bools[z_index_top:z_index_base] = False
-                      
-    # cloud base heights and cloud top heights...XXXX
-    #print("after 8  tops: ", tops)    
-    #print("after 8  bases: ", bases)    
+    for i in sorted(to_remove_base, reverse=True):
+        bases.pop(i)
+    for i in sorted(to_remove_top, reverse=True):
+        tops.pop(i)
 
     ####
     # Lets get LWC and IWC:
@@ -367,18 +550,20 @@ def derive_cloud_features(p_array, t_array, ppmv_array, m_array,\
         calc_lwc(tops, bases, p_array, t_array, ppmv_array, m_array,\
         z_array, rh, cloud_bools)
 
+    # print("tops: ", tops )
+    # print("bases: ", bases )
 
     # LWC(z) kg/kg; and IWC probably different units for PyRTlib...
     # Column water and ice: g m-2
     
 
-    return 0
+    return lwc_kg_m3, lwc_kg_kg, lwp_kg_m2
 
 ##############################################################################
 
 def summarize_many_profiles(pattern=\
                     "/home/aki/PhD_data/Vital_I/radiosondes/202408*_*.nc",\
-                    crop=False, sza_float =0.):
+                    crop=False, sza_float =0., n_levels=137):
     # Bodenlevel ist bei Index -1 - Umkehr der Profile!
     
     files = glob.glob(pattern)
@@ -387,58 +572,71 @@ def summarize_many_profiles(pattern=\
     srf_pressures = np.empty([n])
     srf_temps = np.empty([n])
     srf_wvs = np.empty([n])
-    level_pressures = np.empty((137, n))
-    level_temperatures = np.empty((137, n))
-    level_wvs = np.empty((137, n))
-    level_ppmvs = np.empty((137, n))
-    level_liq = np.empty((137, n))
-    level_z = np.empty((137, n))
-    level_rhs = np.empty((137, n))
+    level_pressures = np.empty((n_levels, n))
+    level_temperatures = np.empty((n_levels, n))
+    level_wvs = np.empty((n_levels, n))
+    level_ppmvs = np.empty((n_levels, n))
+    level_liq = np.empty((n_levels, n))
+    level_z = np.empty((n_levels, n))
+    level_rhs = np.empty((n_levels, n))
     times = np.empty([n])
     srf_altitude = np.empty([n])
     sza = [sza_float]*n
     
     for i, file in enumerate(files):
+        print(i, file)
+        datetime_np = derive_date_from_file_name(file)
         if crop:
-            length_value, p_array, t_array, ppmv_array, height_in_km,\
-                deg_lat, m_array, z_array, rh =\
-                read_radiosonde_nc_arms(file=file, crop=7)
+            if ".nc" in file:
+                length_value, p_array, t_array, ppmv_array, height_in_km,\
+                    deg_lat, m_array, z_array, rh =\
+                    read_radiosonde_nc_arms(file=file, crop=7)
+            elif "Profile.txt" in file:
+                length_value, p_array, t_array, ppmv_array, height_in_km,\
+                    deg_lat, m_array, z_array, rh =\
+                    read_radiosonde_txt(file=file, crop=7)
         else:
-            length_value, p_array, t_array, ppmv_array, height_in_km,\
-                deg_lat, m_array, z_array, rh =\
-                read_radiosonde_nc_arms(file=file)
+            if ".nc" in file:
+                length_value, p_array, t_array, ppmv_array, height_in_km,\
+                    deg_lat, m_array, z_array, rh =\
+                    read_radiosonde_nc_arms(file=file)
+            elif "Profile.txt" in file:
+                length_value, p_array, t_array, ppmv_array, height_in_km,\
+                    deg_lat, m_array, z_array, rh =\
+                    read_radiosonde_txt(file=file)                
         profile_indices.append(i)
-        if length_value<50:
-            srf_temps[i] = 320
-            level_pressures[:,i] = np.array([1000]*137)
-            level_temperatures[:,i] = np.array([320]*137)
-            level_wvs[:,i] = np.array([8.]*137)
-            srf_pressures[i] = 1000
-            srf_temps[i] = 320
-            srf_wvs[i] = 8
-            srf_altitude[i] = 0.5
+        if length_value<170:
+            srf_temps[i] = np.nan
+            level_pressures[:,i] = np.array([np.nan]*n_levels)
+            level_temperatures[:,i] = np.array([np.nan]*n_levels)
+            level_wvs[:,i] = np.array([np.nan]*n_levels)
+            srf_pressures[i] = np.nan
+            srf_temps[i] = np.nan
+            srf_wvs[i] = np.nan
+            srf_altitude[i] = np.nan
             continue
         
+        # Add climatology at top to fill profiles:
         p_array, t_array, ppmv_array, m_array, z_array, rh = add_clim2profiles(\
                                     p_array, t_array, ppmv_array,\
                                     m_array, z_array, rh)
                                     
-        derive_cloud_features(p_array, t_array, ppmv_array, m_array, z_array, rh)
-        
-        #################
-        # break
-        ##################
-                                    
+        # derive liquid water content:
+        lwc_kg_m3, lwc_kg_kg, lwp_kg_m2 = derive_cloud_features(\
+            p_array, t_array, ppmv_array, m_array, z_array, rh)
+       
         # p in hPa as in other inputs!
         # mixing ratio in g/kg
-        level_pressures[:,i] = p_array[-137:]
-        level_temperatures[:,i] = t_array[-137:]
-        level_wvs[:,i] = m_array[-137:]*1000 # convert kg/kg to g/kg
-        datetime_np = derive_date_from_nc_name(file)
-        level_ppmvs[:,i] =ppmv_array[-137:]
-        level_liq[:,i] =np.array([0]*137)
-        level_z[:,i] = z_array[-137:]
-        level_rhs[:,i] = rh[-137:]
+        level_pressures[:,i] = p_array[-n_levels:]
+        level_temperatures[:,i] = t_array[-n_levels:]
+        level_wvs[:,i] = m_array[-n_levels:]*1000 # convert kg/kg to g/kg
+        level_ppmvs[:,i] =ppmv_array[-n_levels:]
+        level_liq[:,i] = lwc_kg_kg[-n_levels:] # np.array([0]*n_levels)
+        level_z[:,i] = z_array[-n_levels:]
+        level_rhs[:,i] = rh[-n_levels:]
+        
+        ###############
+        # break
         
         srf_pressures[i] = p_array[-1]
         srf_temps[i] = t_array[-1]
@@ -447,16 +645,17 @@ def summarize_many_profiles(pattern=\
         srf_altitude[i] = height_in_km
         
     return profile_indices, level_pressures, level_temperatures, level_wvs,\
-        srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times,\
-        level_ppmvs, level_liq, level_z, level_rhs
+        srf_pressures, srf_temps, srf_wvs, srf_altitude, sza,\
+        times, level_ppmvs, level_liq, level_z, level_rhs
 
 ##############################################################################
 
 def write_armsgb_input_nc(profile_indices, level_pressures,
         level_temperatures, level_wvs,level_ppmvs, level_liq, level_z,\
+        level_rhs,\
         srf_pressures, srf_temps, srf_wvs,\
         srf_altitude, sza,\
-        times ,outifle="blub.nc"):
+        times ,outifle="blub.nc", n_levels=137):
 
     # Ermitteln der Dimensionen
     n_levels, n_profiles = level_pressures.shape
@@ -468,6 +667,7 @@ def write_armsgb_input_nc(profile_indices, level_pressures,
     level_ppmvs = np.array(level_ppmvs, dtype=np.float32)
     level_liq = np.array(level_liq, dtype=np.float32)
     level_z = np.array(level_z, dtype=np.float32)
+    level_rhs = np.array(level_rhs, dtype=np.float32)
     srf_pressures = np.array(srf_pressures, dtype=np.float32)
     srf_temps = np.array(srf_temps, dtype=np.float32)
     srf_wvs = np.array(srf_wvs, dtype=np.float32)
@@ -497,12 +697,13 @@ def write_armsgb_input_nc(profile_indices, level_pressures,
             "Level_Liquid":         (("N_Levels", "N_Profiles"), level_liq),
             "Level_z":              (("N_Levels", "N_Profiles"), level_z),
             'Level_O3':             (("N_Levels", "N_Profiles"), level_o3s),
+            "Level_RH":              (("N_Levels", "N_Profiles"), level_rhs),
 
             # Oberflächenparameter
             "times":                (("N_Times"), times),
-            "Obs_Surface_Pressure": (("N_Times",), srf_pressures[profile_indices]),
-            "Obs_Temperature_2M":   (("N_Times",), srf_temps[profile_indices]),
-            "Obs_H2O_2M":           (("N_Times",), srf_wvs[profile_indices]),
+            "Obs_Surface_Pressure": (("N_Times",), srf_pressures),
+            "Obs_Temperature_2M":   (("N_Times",), srf_temps),
+            "Obs_H2O_2M":           (("N_Times",), srf_wvs),
             "Surface_Pressure":     (("N_Profiles",), srf_pressures),
             "Temperature_2M":       (("N_Profiles",), srf_temps),
             "H2O_2M":               (("N_Profiles",), srf_wvs),
@@ -535,26 +736,26 @@ def write_armsgb_input_nc(profile_indices, level_pressures,
     ds["Level_Temperature"].attrs["units"] = "K"
     ds["Level_H2O"].attrs["units"] = "g/kg"
     ds["Level_ppmvs"].attrs["units"] = "ppmv"
-    ###############
-    # Füge auch relative humidity als Variable dieser Funktion ein!
-    # Edit here:
-    ds["Level_Liquid"].attrs["units"] = "None - kg/kg"
-    ##################
+    ds["Level_Liquid"].attrs["units"] = "kg/kg"
+    ds["Level_RH"].attrs["units"] = "%"
     ds["Level_z"].attrs["units"] = "m"
-
+    
+    # print("***********************")
+    # print(ds["Times_Number"])
+    # print(ds["Profiles_Number"])
     
     # Schreibe die NetCDF-Datei
-    ds.to_netcdf(outifle, format="NETCDF4_CLASSIC")
+    # ds.to_netcdf(outifle, format="NETCDF4_CLASSIC")
 
-    return 0
+    return ds
 
 ##############################################################################
 
+'''
 def write_combined_input_prof_file(t_array, ppmv_array,length_value,\
         p_array, liquid_array, height_in_km=0., deg_lat=50.,\
         filename="prof_plev.dat", zenith_angle=0.):
     with open(filename, "w") as file:
-        # print("pressure levels: ", length_value)
         for value in p_array:
             file.write(f"{value:8.4f}\n")  # eingerückt, 4 Nachkommastellen
         for value in t_array:
@@ -568,7 +769,7 @@ def write_combined_input_prof_file(t_array, ppmv_array,length_value,\
         file.write(f"{zenith_angle:6.1f}\n")
         
         return 0
-        
+'''        
 ##############################################################################
 # 3rd: Main code:
 ##############################################################################
@@ -577,29 +778,112 @@ if __name__=="__main__":
     args = parse_arguments()
     h_km_vital = 0.092
     sza_float = 0.
+    n_levels = 180
     # h_km_vital_crop = 0.112
-    
-    # Uncropped:
-    profile_indices, level_pressures, level_temperatures, level_wvs,\
+
+    # Read FESSTVaL 1 RAO:
+    profile_indices1, level_pressures, level_temperatures, level_wvs,\
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times,\
         level_ppmvs, level_liq, level_z, level_rhs =\
-        summarize_many_profiles(sza_float=sza_float)
-    srf_altitude = np.array([h_km_vital]*len(srf_altitude,))
-    write_armsgb_input_nc(profile_indices, level_pressures,
+        summarize_many_profiles(pattern=\
+        "/home/aki/PhD_data/FESSTVaL_14GB/radiosondes/RAO/sups_rao_sonde00_l1_any_v00_*.nc",\
+             sza_float=sza_float,n_levels=n_levels)  
+    ds_fesst_rao = write_armsgb_input_nc(profile_indices1, level_pressures,\
         level_temperatures, level_wvs,level_ppmvs, level_liq, level_z,\
+        level_rhs,\
         srf_pressures, srf_temps, srf_wvs,\
         srf_altitude, sza,\
         times ,\
-        outifle=args.output1)
+        outifle=args.output1,n_levels=n_levels)
+
+    # Read FESSTVaL 2 UHH:
+    profile_indices2, level_pressures, level_temperatures, level_wvs,\
+        srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times,\
+        level_ppmvs, level_liq, level_z, level_rhs =\
+        summarize_many_profiles(pattern=\
+        "/home/aki/PhD_data/FESSTVaL_14GB/radiosondes/UHH/fval_uhh_sonde00_l1_any_v00_*.nc",\
+             sza_float=sza_float,n_levels=n_levels) 
+    profile_indices2 = np.array(profile_indices2) + len(profile_indices1)  
+    ds_fesst_uhh = write_armsgb_input_nc(profile_indices2, level_pressures,\
+        level_temperatures, level_wvs,level_ppmvs, level_liq, level_z,\
+        level_rhs,\
+        srf_pressures, srf_temps, srf_wvs,\
+        srf_altitude, sza,\
+        times ,\
+        outifle=args.output1,n_levels=n_levels)
+            
+    # Read FESSTVaL 2 UzK:
+    profile_indices3, level_pressures, level_temperatures, level_wvs,\
+        srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times,\
+        level_ppmvs, level_liq, level_z, level_rhs =\
+        summarize_many_profiles(pattern=\
+        "/home/aki/PhD_data/FESSTVaL_14GB/radiosondes/UzK/fval_uzk*.nc",\
+             sza_float=sza_float,n_levels=n_levels)  
+    profile_indices3 = np.array(profile_indices3) + len(profile_indices2)
+    ds_fesst_uzk = write_armsgb_input_nc(profile_indices3, level_pressures,\
+        level_temperatures, level_wvs,level_ppmvs, level_liq, level_z,\
+        level_rhs,\
+        srf_pressures, srf_temps, srf_wvs,\
+        srf_altitude, sza,\
+        times ,\
+        outifle=args.output1,n_levels=n_levels)            
         
+    # Read in Socles
+    profile_indices4, level_pressures, level_temperatures, level_wvs,\
+        srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times,\
+        level_ppmvs, level_liq, level_z, level_rhs =\
+        summarize_many_profiles(pattern=\
+        "/home/aki/PhD_data/Socles/radiosondes/202*/SOUNDING DATA/*_Profile.txt",\
+             sza_float=sza_float,n_levels=n_levels)
+    profile_indices4 = np.array(profile_indices4) + len(profile_indices3) 
+    ds_socles = write_armsgb_input_nc(profile_indices4, level_pressures,\
+        level_temperatures, level_wvs,level_ppmvs, level_liq, level_z,\
+        level_rhs,\
+        srf_pressures, srf_temps, srf_wvs,\
+        srf_altitude, sza,\
+        times ,\
+        outifle=args.output1 ,n_levels=n_levels)  
+        
+    # Uncropped:
+    profile_indices5, level_pressures, level_temperatures, level_wvs,\
+        srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times,\
+        level_ppmvs, level_liq, level_z, level_rhs =\
+        summarize_many_profiles(sza_float=sza_float,n_levels=n_levels)
+    srf_altitude = np.array([h_km_vital]*len(srf_altitude,))
+    profile_indices5 = np.array(profile_indices5) + len(profile_indices4)     
+    ds_vital_uncrop = write_armsgb_input_nc(profile_indices5, level_pressures,\
+        level_temperatures, level_wvs,level_ppmvs, level_liq, level_z,\
+        level_rhs,\
+        srf_pressures, srf_temps, srf_wvs,\
+        srf_altitude, sza,\
+        times ,\
+        outifle=args.output1,n_levels=n_levels)
+        
+    ####
+    # New dataset:
+    ds_list = [ds_fesst_rao, ds_fesst_uhh,ds_fesst_uzk,ds_socles,\
+        ds_vital_uncrop]    
+    new_ds = xr.concat(ds_list , dim="N_Profiles")
+    
+    print(new_ds)
+    print(new_ds["times"].values)
+    print(len(new_ds["times"]))
+                
+    '''
     # Cropped version:
     profile_indices, level_pressures, level_temperatures, level_wvs,\
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times,\
         level_ppmvs, level_liq, level_z, level_rhs =\
-        summarize_many_profiles(crop=True,sza_float=sza_float)
-    write_armsgb_input_nc(profile_indices, level_pressures,
+        summarize_many_profiles(crop=True,sza_float=sza_float,n_levels=n_levels)
+    ds_vital_cropped = write_armsgb_input_nc(profile_indices, level_pressures,\
         level_temperatures, level_wvs,level_ppmvs, level_liq, level_z,\
+        level_rhs,\
         srf_pressures, srf_temps, srf_wvs,\
         srf_altitude, sza,\
         times ,\
-        outifle=args.output2)
+        outifle=args.output2,n_levels=n_levels)
+    '''
+        
+
+        
+
