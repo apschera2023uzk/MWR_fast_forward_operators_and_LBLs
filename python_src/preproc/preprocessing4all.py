@@ -598,11 +598,11 @@ def nearest_ele4elevation(ele_values, azi_values, ele_times,\
 ##############################################################################
     
 def derive_elevation_index(ds_bl, elevation):
-    print("Input ele: ",elevation)
+    # print("Input ele: ",elevation)
     for index, ele in enumerate(ds_bl["ele"].values):
         if abs(ele-elevation)<0.05:
-            print("Output ele: ", ele)
-            print("Output Index: ", index)
+            # print("Output ele: ", ele)
+            # print("Output Index: ", index)
             return index
     return None
 
@@ -616,7 +616,7 @@ def get_tbs_from_l1(l1_files, datetime_np, elevations=elevations,\
         
         if "BL" in file:
             ds_bl = xr.open_dataset(file)
-            print("Opened BL for file: ", file)     
+            # print("Opened BL for file: ", file)     
             for i,elevation in enumerate(elevations):
                 ele_index = derive_elevation_index(ds_bl, elevation)
                 if ele_index==None:
@@ -625,16 +625,25 @@ def get_tbs_from_l1(l1_files, datetime_np, elevations=elevations,\
                     time_diffs = np.abs(ds_bl["time"].values - datetime_np)
                     min_idx = time_diffs.argmin()
                     tbs[ele_index,0, :] = ds_bl["tb"].values[min_idx,ele_index,:]
-                    print("TBs found BL: ", ds_bl["tb"].values[min_idx,ele_index,:])
+                    # print("TBs found BL: ", ds_bl["tb"].values[min_idx,ele_index,:])
+        elif "MWR_1C01" in file:
+            # print("Found MWR_1C_File!", file)
+            ds_c1 = xr.open_dataset(file)
+            for i,elevation in enumerate(elevations):
+                for j,azi in enumerate(azimuths):
+                    time_idx = nearest_ele4elevation(ds_c1["elevation_angle"].values,\
+                        ds_c1["azimuth_angle"].values,\
+                        ds_c1["time"].values, elevation,azi, datetime_np)
+                    if time_idx==None:
+                        pass
+                    else:
+                        tbs[i,j, :] = ds_c1["tb"].values[time_idx,:]
+                        # print("TBs found MWR: ", ds_c1["tb"].values[time_idx,:])
         else: 
             ds_mwr = xr.open_dataset(file)
-            print("Opened MWR for file: ", file)
+            # print("Opened MWR for file: ", file)
             for i,elevation in enumerate(elevations):
-                # Elevation has here dimension time...
-                # ele_index = derive_elevation_index(ds_mwr, elevation)
-                # if ele_index==None:
-                #     continue
-                # else:
+                # 
                 for j,azi in enumerate(azimuths):
                     time_idx = nearest_ele4elevation(ds_mwr["ele"].values,\
                         ds_mwr["azi"].values,\
@@ -643,7 +652,7 @@ def get_tbs_from_l1(l1_files, datetime_np, elevations=elevations,\
                         pass
                     else:
                         tbs[i,j, :] = ds_mwr["tb"].values[time_idx,:]
-                        print("TBs found MWR: ", ds_mwr["tb"].values[time_idx,:])
+                        # print("TBs found MWR: ", ds_mwr["tb"].values[time_idx,:])
     return tbs
 
 ##############################################################################
@@ -692,28 +701,25 @@ def get_mwr_data(datetime_np, mwrs):
     if "joyhat" in mwrs:
         joy_files = glob.glob(joyhat_pattern)
         files = [file for file in joy_files if datestring in file]   
-        l1_files = [file for file in files if "l1" in file]   
-        l2_files = [file for file in files if "l2" in file] 
+        l1_files = [file for file in files if "1C01" in file]   
+        l2_files = [file for file in files if "single" in file] 
+        tbs_joyhat = get_tbs_from_l1(l1_files, datetime_np)
     else:
         tbs_joyhat = np.full((10, 72, 14), np.nan)
     if "hamhat" in mwrs:
         ham_files = glob.glob(hamhat_pattern)
         files = [file for file in ham_files if datestring in file]   
-        l1_files = [file for file in files if "l1" in file]   
-        l2_files = [file for file in files if "l2" in file] 
+        l1_files = [file for file in files if "1C01" in file]   
+        l2_files = [file for file in files if "single" in file] 
+        tbs_hamhat = get_tbs_from_l1(l1_files, datetime_np)
     else:
         tbs_hamhat = np.full((10, 72, 14), np.nan)
         
     # Then jsut read l1-files for now
     # TBs of shape: (elevation x azimuth x n_chans) , for one timestep
     
-    
-    
-    return tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat
-'''
-imensions:               (N_Levels: 180, time: 532, Crop: 2, N_Channels: 14,
-                           elevation_angle: 10, azimuth_angle: 72)
-'''
+    return tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat, tbs_joyhat,\
+        tbs_hamhat
 
 ##############################################################################
 
@@ -734,6 +740,8 @@ def summarize_many_profiles(pattern=\
     tbs_foghat = np.full((n, 10, 72, 14), np.nan)
     tbs_sunhat = np.full((n, 10, 72, 14), np.nan)
     tbs_tophat = np.full((n, 10, 72, 14), np.nan)
+    tbs_joyhat = np.full((n, 10, 72, 14), np.nan)
+    tbs_hamhat = np.full((n, 10, 72, 14), np.nan)    
     level_pressures = np.empty((n_levels, n,2))
     level_temperatures = np.empty((n_levels, n,2))
     level_wvs = np.empty((n_levels, n,2))
@@ -752,7 +760,8 @@ def summarize_many_profiles(pattern=\
         profile_indices.append(i)
         datetime_np = derive_date_from_file_name(file)
         ##################
-        tbs_dwdhat1, tbs_foghat1,tbs_sunhat1,tbs_tophat1 =\
+        tbs_dwdhat1, tbs_foghat1,tbs_sunhat1,tbs_tophat1, tbs_joyhat1,\
+        tbs_hamhat1 =\
             get_mwr_data(datetime_np, mwrs)
         times[i] = datetime_np
         if crop:
@@ -802,6 +811,8 @@ def summarize_many_profiles(pattern=\
             tbs_foghat[i,:,:,:] = tbs_foghat1
             tbs_sunhat[i,:,:,:] = tbs_sunhat1
             tbs_tophat[i,:,:,:] = tbs_tophat1
+            tbs_joyhat[i,:,:,:] = tbs_joyhat1
+            tbs_hamhat[i,:,:,:] = tbs_hamhat1            
             ##########
         else:
             #################
@@ -858,6 +869,8 @@ def summarize_many_profiles(pattern=\
         tbs_foghat[i,:,:,:] = tbs_foghat1
         tbs_sunhat[i,:,:,:] = tbs_sunhat1
         tbs_tophat[i,:,:,:] = tbs_tophat1
+        tbs_joyhat[i,:,:,:] = tbs_joyhat1
+        tbs_hamhat[i,:,:,:] = tbs_hamhat1         
         level_pressures[:,i,0] = p_array[-n_levels:]
         level_temperatures[:,i,0] = t_array[-n_levels:]
         level_wvs[:,i,0] = m_array[-n_levels:]*1000 # convert kg/kg to g/kg
@@ -880,7 +893,8 @@ def summarize_many_profiles(pattern=\
     return profile_indices, level_pressures, level_temperatures, level_wvs,\
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza,\
         times, level_ppmvs, level_liq, level_z, level_rhs, level_ice,\
-        tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat
+        tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat, tbs_joyhat,\
+        tbs_hamhat
 
 ##############################################################################
 
@@ -988,7 +1002,8 @@ def produce_dataset(profile_indices, level_pressures,
         srf_pressures, srf_temps, srf_wvs,\
         srf_altitude, sza,\
         times, level_ice,\
-        tbs_dwdhat, tbs_foghat, tbs_sunhat ,tbs_tophat,\
+        tbs_dwdhat, tbs_foghat, tbs_sunhat ,tbs_tophat, tbs_joyhat,\
+        tbs_hamhat,\
         outifle="blub.nc", n_levels=137,\
         campaign="any_camp",\
         location="any_location", elevations=elevations, azimuths=azimuths):
@@ -1001,6 +1016,8 @@ def produce_dataset(profile_indices, level_pressures,
     tbs_foghat = np.array(tbs_foghat, dtype=np.float32)
     tbs_sunhat = np.array(tbs_sunhat, dtype=np.float32)
     tbs_tophat = np.array(tbs_tophat, dtype=np.float32)
+    tbs_joyhat = np.array(tbs_joyhat, dtype=np.float32)
+    tbs_hamhat = np.array(tbs_hamhat, dtype=np.float32)    
     level_pressures = np.array(level_pressures, dtype=np.float32)
     level_temperatures = np.array(level_temperatures, dtype=np.float32)
     level_wvs = np.array(level_wvs, dtype=np.float32)
@@ -1035,6 +1052,10 @@ def produce_dataset(profile_indices, level_pressures,
                                      "azimuth","N_Channels"), tbs_sunhat),
             "TBs_tophat":           (("time","elevation",\
                                      "azimuth","N_Channels"), tbs_tophat),
+            "TBs_joyhat":           (("time","elevation",\
+                                     "azimuth","N_Channels"), tbs_joyhat),
+            "TBs_hamhat":           (("time","elevation",\
+                                     "azimuth","N_Channels"), tbs_hamhat),
             "Level_Pressure":       (("N_Levels", "time","Crop"), level_pressures),
             "Level_Temperature":    (("N_Levels", "time","Crop"), level_temperatures),
             "Level_H2O":            (("N_Levels", "time","Crop"), level_wvs),
@@ -1123,7 +1144,8 @@ if __name__=="__main__":
     profile_indices1, level_pressures, level_temperatures, level_wvs,\
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times,\
         level_ppmvs, level_liq, level_z, level_rhs, level_ice,\
-        tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat =\
+        tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat, tbs_joyhat,\
+        tbs_hamhat =\
         summarize_many_profiles(pattern=\
         "/home/aki/PhD_data/FESSTVaL_14GB/radiosondes/RAO/sups_rao_sonde00_l1_any_v00_*.nc",\
              sza_float=sza_float,n_levels=n_levels, mwrs="dwdhat/foghat") 
@@ -1133,7 +1155,8 @@ if __name__=="__main__":
         srf_pressures, srf_temps, srf_wvs,\
         srf_altitude, sza,\
         times ,level_ice,\
-        tbs_dwdhat, tbs_foghat, tbs_sunhat,tbs_tophat,\
+        tbs_dwdhat, tbs_foghat, tbs_sunhat,tbs_tophat, tbs_joyhat,\
+        tbs_hamhat,\
         outifle=args.output1,n_levels=n_levels, campaign="FESSTVaL_RAO",\
         location="RAO_Lindenberg")
 
@@ -1142,7 +1165,8 @@ if __name__=="__main__":
     profile_indices2, level_pressures, level_temperatures, level_wvs,\
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times,\
         level_ppmvs, level_liq, level_z, level_rhs, level_ice,\
-        tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat =\
+        tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat, tbs_joyhat,\
+        tbs_hamhat =\
         summarize_many_profiles(pattern=\
         "/home/aki/PhD_data/FESSTVaL_14GB/radiosondes/UHH/fval_uhh_sonde00_l1_any_v00_*.nc",\
              sza_float=sza_float,n_levels=n_levels, mwrs="dwdhat/foghat") 
@@ -1153,7 +1177,8 @@ if __name__=="__main__":
         srf_pressures, srf_temps, srf_wvs,\
         srf_altitude, sza,\
         times ,level_ice,\
-        tbs_dwdhat, tbs_foghat, tbs_sunhat,tbs_tophat,\
+        tbs_dwdhat, tbs_foghat, tbs_sunhat,tbs_tophat, tbs_joyhat,\
+        tbs_hamhat,\
         outifle=args.output1,n_levels=n_levels, campaign="FESSTVaL_UHH",\
         location="RAO_Lindenberg")
             
@@ -1162,7 +1187,8 @@ if __name__=="__main__":
     profile_indices3, level_pressures, level_temperatures, level_wvs,\
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times,\
         level_ppmvs, level_liq, level_z, level_rhs, level_ice,\
-        tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat =\
+        tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat, tbs_joyhat,\
+        tbs_hamhat =\
         summarize_many_profiles(pattern=\
         "/home/aki/PhD_data/FESSTVaL_14GB/radiosondes/UzK/fval_uzk*.nc",\
              sza_float=sza_float,n_levels=n_levels, mwrs="sunhat") 
@@ -1173,7 +1199,8 @@ if __name__=="__main__":
         srf_pressures, srf_temps, srf_wvs,\
         srf_altitude, sza,\
         times ,level_ice,\
-        tbs_dwdhat, tbs_foghat, tbs_sunhat,tbs_tophat,\
+        tbs_dwdhat, tbs_foghat, tbs_sunhat,tbs_tophat, tbs_joyhat,\
+        tbs_hamhat,\
         outifle=args.output1,n_levels=n_levels, campaign="FESSTVaL_UzK",\
         location="Falkenberg")  
         
@@ -1182,7 +1209,8 @@ if __name__=="__main__":
     profile_indices4, level_pressures, level_temperatures, level_wvs,\
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times,\
         level_ppmvs, level_liq, level_z, level_rhs, level_ice,\
-        tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat =\
+        tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat, tbs_joyhat,\
+        tbs_hamhat =\
         summarize_many_profiles(pattern=\
         "/home/aki/PhD_data/Socles/radiosondes/202*/SOUNDING DATA/*_Profile.txt",\
              sza_float=sza_float,n_levels=n_levels, mwrs="tophat") 
@@ -1193,7 +1221,8 @@ if __name__=="__main__":
         srf_pressures, srf_temps, srf_wvs,\
         srf_altitude, sza,\
         times ,level_ice,\
-        tbs_dwdhat, tbs_foghat, tbs_sunhat,tbs_tophat,\
+        tbs_dwdhat, tbs_foghat, tbs_sunhat,tbs_tophat, tbs_joyhat,\
+        tbs_hamhat,\
         outifle=args.output1 ,n_levels=n_levels, campaign="Socles",\
         location="JOYCE")
         
@@ -1202,7 +1231,8 @@ if __name__=="__main__":
     profile_indices5, level_pressures, level_temperatures, level_wvs,\
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times,\
         level_ppmvs, level_liq, level_z, level_rhs, level_ice,\
-        tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat =\
+        tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat, tbs_joyhat,\
+        tbs_hamhat =\
         summarize_many_profiles(sza_float=sza_float,n_levels=n_levels,\
         crop=True, mwrs="hamhat/joyhat") 
     # srf_altitude = np.array([h_km_vital]*len(srf_altitude))
@@ -1213,7 +1243,8 @@ if __name__=="__main__":
         srf_pressures, srf_temps, srf_wvs,\
         srf_altitude, sza,\
         times ,level_ice,\
-        tbs_dwdhat, tbs_foghat, tbs_sunhat,tbs_tophat,\
+        tbs_dwdhat, tbs_foghat, tbs_sunhat,tbs_tophat, tbs_joyhat,\
+        tbs_hamhat,\
         outifle=args.output1,n_levels=n_levels, campaign="Vital I",\
         location="JOYCE")
         
