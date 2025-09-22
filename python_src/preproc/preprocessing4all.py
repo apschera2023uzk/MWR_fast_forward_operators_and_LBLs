@@ -328,6 +328,8 @@ def calc_lwc(tops, bases, p_array, t_array, ppmv_array, m_array,\
     gamma_s = 6.5e-3 # K/m    
     lwc_kg_m3 = np.array([0.]*len(t_array))
     lwc_kg_kg = np.array([0.]*len(t_array))
+    iwc_kg_m3 = np.array([0.]*len(t_array))
+    iwc_kg_kg = np.array([0.]*len(t_array))
     for i, (base, top) in enumerate(zip(bases,tops)):
         z_index_top = np.nanargmin(abs(z_array-top))
         z_index_base = np.nanargmin(abs(z_array-base))
@@ -345,6 +347,16 @@ def calc_lwc(tops, bases, p_array, t_array, ppmv_array, m_array,\
         elif t_array[z_index_base]<233.15 and t_array[z_index_top]<233.15:
             pass
             # print("Ice cloud")
+            for j in range(z_index_top,z_index_base):
+                rho = p_array[j]*100 / R_L / t_array[j] # Ergebnis realistisch kg m-3
+                dz = z_array[j-1] - z_array[j] # ergab soweit auch Sinn..
+                iwc_ad = rho * cp / L * (gamma_d - gamma_s) * dz
+                dh = z_array[j] - base
+                iwc = iwc_ad * (1.239 - 0.145*np.log(dh)) # kg m-3
+                if iwc<0:
+                    iwc = 0
+                iwc_kg_m3[j] = iwc          
+                iwc_kg_kg[j] = iwc / rho  
         elif t_array[z_index_base]>233.15 and t_array[z_index_top]<273.15:
             # print("Mixed phase cloud")       
             for j in range(z_index_top,z_index_base):
@@ -367,8 +379,9 @@ def calc_lwc(tops, bases, p_array, t_array, ppmv_array, m_array,\
     ###################
     
     lwp_kg_m2 = np.abs(np.sum(lwc_kg_m3 * np.gradient(z_array)))  # [kg/m²]
+    iwp_kg_m2 = np.abs(np.sum(iwc_kg_m3 * np.gradient(z_array)))  # [kg/m²]
         
-    return lwc_kg_m3, lwc_kg_kg, lwp_kg_m2
+    return lwc_kg_m3, lwc_kg_kg, lwp_kg_m2, iwc_kg_m3, iwc_kg_kg, iwp_kg_m2
 
 ##############################################################################
 
@@ -544,47 +557,54 @@ def derive_cloud_features(p_array, t_array, ppmv_array, m_array,\
 
     ####
     # Lets get LWC and IWC:
-    lwc_kg_m3, lwc_kg_kg, lwp_kg_m2 =\
+    lwc_kg_m3, lwc_kg_kg, lwp_kg_m2,iwc_kg_m3, iwc_kg_kg, iwp_kg_m2 =\
         calc_lwc(tops, bases, p_array, t_array, ppmv_array, m_array,\
         z_array, rh, cloud_bools)
-
-    # print("tops: ", tops )
-    # print("bases: ", bases )
 
     # LWC(z) kg/kg; and IWC probably different units for PyRTlib...
     # Column water and ice: g m-2
     
 
-    return lwc_kg_m3, lwc_kg_kg, lwp_kg_m2
+    return lwc_kg_m3, lwc_kg_kg, lwp_kg_m2,iwc_kg_m3, iwc_kg_kg, iwp_kg_m2
 
 ##############################################################################
 
-def nearest_ele4elevation(ele_values, ele_times, target_elevation,datetime_np):
+def nearest_ele4elevation(ele_values, azi_values, ele_times,\
+        target_elevation,target_azi,datetime_np):
     # Boolean Maske für alle Stellen, an denen "ele" exakt target_elevation ist
     match_mask = (abs(ele_values-target_elevation)<0.05)
+    match_mask2 = (abs(azi_values-target_azi)<0.05)
+    final_mask = match_mask & match_mask2
 
-    if not match_mask.any():
+    if not final_mask.any():
         # Kein exakter Treffer
-        print("Kein Wert entspricht exakt elevation: ", target_elevation)
-        print("Ele values: ",ele_values)
+        # print("Kein Wert entspricht exakt Winkeln: ")
+        # print("Ele/Azi values: ",target_elevation, target_azi)
         nearest_idx = None
     else:
         # Zeitwerte, die zu den passenden Elevations gehören
-        candidate_times = ele_times[match_mask]
-        # Absoluter Zeitunterschied
-        print(candidate_times)
+        candidate_times = ele_times[final_mask]
         time_diffs = np.abs(candidate_times - datetime_np)
-        # Minimum bestimmen
         min_idx = time_diffs.argmin()
         nearest_time = candidate_times[min_idx]
 
-        # Den Wert am gefundenen Zeitpunkt auslesen
-        # Dabei muss der Index in der ursprünglichen DataArray-Position ermittelt werden
         candidate_indices = np.where(match_mask)[0]
         nearest_idx = candidate_indices[min_idx]
         nearest_value = ele_values[nearest_idx]
+        # print("Found TBs for angles: ")
+        # print("Ele/Azi values: ",target_elevation, target_azi)
     return nearest_idx
 
+##############################################################################
+    
+def derive_elevation_index(ds_bl, elevation):
+    print("Input ele: ",elevation)
+    for index, ele in enumerate(ds_bl["ele"].values):
+        if abs(ele-elevation)<0.05:
+            print("Output ele: ", ele)
+            print("Output Index: ", index)
+            return index
+    return None
 
 ##############################################################################
 
@@ -592,48 +612,40 @@ def get_tbs_from_l1(l1_files, datetime_np, elevations=elevations,\
         azimuths=azimuths): 
     tbs = np.full((10, 72, 14), np.nan)
     
-    ####
     for file in l1_files:
+        
         if "BL" in file:
             ds_bl = xr.open_dataset(file)
-            ########
+            print("Opened BL for file: ", file)     
+            for i,elevation in enumerate(elevations):
+                ele_index = derive_elevation_index(ds_bl, elevation)
+                if ele_index==None:
+                    continue
+                else:
+                    time_diffs = np.abs(ds_bl["time"].values - datetime_np)
+                    min_idx = time_diffs.argmin()
+                    tbs[ele_index,0, :] = ds_bl["tb"].values[min_idx,ele_index,:]
+                    print("TBs found BL: ", ds_bl["tb"].values[min_idx,ele_index,:])
         else: 
             ds_mwr = xr.open_dataset(file)
+            print("Opened MWR for file: ", file)
             for i,elevation in enumerate(elevations):
-                time_idx = nearest_ele4elevation(ds_mwr["ele"].values,\
-                    ds_mwr["time"].values, elevation,datetime_np)
-                if time_idx==None:
-                    pass
-                else:
-                    tbs[i,0, :] = ds_mwr["tb"].values[time_idx,:]
-                    
-                #####################
-                # Idee: Mache erst einen Schleifendurchlauf, um
-                # time- Indices der Elevationen zu findne
-                # Übertrage dann in einer zweiten Schleife die Werte.
-                # Ist ein merkwrüdiges Konzept mit den 2 Dateien für ein Instrument...    
-                    
-                print("dateime: ", datetime_np)
-                print("NEarest eklevation: ", ds_mwr["time"].values[time_idx])
-                print("elevation: ", elevation)
-                print("Elevation at Index: ",ds_mwr["ele"].values[time_idx])
-            
+                # Elevation has here dimension time...
+                # ele_index = derive_elevation_index(ds_mwr, elevation)
+                # if ele_index==None:
+                #     continue
+                # else:
+                for j,azi in enumerate(azimuths):
+                    time_idx = nearest_ele4elevation(ds_mwr["ele"].values,\
+                        ds_mwr["azi"].values,\
+                        ds_mwr["time"].values, elevation,azi, datetime_np)
+                    if time_idx==None:
+                        pass
+                    else:
+                        tbs[i,j, :] = ds_mwr["tb"].values[time_idx,:]
+                        print("TBs found MWR: ", ds_mwr["tb"].values[time_idx,:])
+    return tbs
 
-    return 0
-
-'''
-L1: 
-    azi                   (n_angle) float32 24B ...
-    ele                   (n_angle) float32 24B ...
-    tb                    (time, n_angle, n_freq) float32 32kB ...
-    tb_bias_estimate      (time, n_angle, n_freq) float32 32kB ...
-        ta                    (time) float32 376B ...
-    pa                    (time) float32 376B ...
-    hur                   (time) float32 376B ...
-        lat                   float32 4B ...
-    lon                   float32 4B ...
-    zsl                   float32 4B ...
-'''
 ##############################################################################
 
 def get_mwr_data(datetime_np, mwrs):
@@ -650,39 +662,54 @@ def get_mwr_data(datetime_np, mwrs):
         files = [file for file in dwd_files if datestring in file]   
         l1_files = [file for file in files if "l1" in file]   
         l2_files = [file for file in files if "l2" in file] 
-        get_tbs_from_l1(l1_files, datetime_np)
+        tbs_dwdhat = get_tbs_from_l1(l1_files, datetime_np)
+    else:
+        tbs_dwdhat = np.full((10, 72, 14), np.nan)
     if "foghat" in mwrs:
         fog_files = glob.glob(foghat_pattern)
         files = [file for file in fog_files if datestring in file]   
         l1_files = [file for file in files if "l1" in file]   
         l2_files = [file for file in files if "l2" in file] 
+        tbs_foghat = get_tbs_from_l1(l1_files, datetime_np)
+    else:
+        tbs_foghat = np.full((10, 72, 14), np.nan)
     if "sunhat" in mwrs:
         sun_files = glob.glob(sunhat_pattern)
         files = [file for file in sun_files if datestring in file]   
         l1_files = [file for file in files if "l1" in file]   
         l2_files = [file for file in files if "l2" in file] 
+        tbs_sunhat = get_tbs_from_l1(l1_files, datetime_np)
+    else:
+        tbs_sunhat = np.full((10, 72, 14), np.nan)        
     if "tophat" in mwrs:
         top_files = glob.glob(tophat_pattern)
         files = [file for file in top_files if datestring in file]   
         l1_files = [file for file in files if "l1" in file]   
         l2_files = [file for file in files if "l2" in file] 
+        tbs_tophat = get_tbs_from_l1(l1_files, datetime_np)
+    else:
+        tbs_tophat = np.full((10, 72, 14), np.nan)
     if "joyhat" in mwrs:
         joy_files = glob.glob(joyhat_pattern)
         files = [file for file in joy_files if datestring in file]   
         l1_files = [file for file in files if "l1" in file]   
         l2_files = [file for file in files if "l2" in file] 
+    else:
+        tbs_joyhat = np.full((10, 72, 14), np.nan)
     if "hamhat" in mwrs:
         ham_files = glob.glob(hamhat_pattern)
         files = [file for file in ham_files if datestring in file]   
         l1_files = [file for file in files if "l1" in file]   
         l2_files = [file for file in files if "l2" in file] 
+    else:
+        tbs_hamhat = np.full((10, 72, 14), np.nan)
         
     # Then jsut read l1-files for now
     # TBs of shape: (elevation x azimuth x n_chans) , for one timestep
     
     
     
-    return 0
+    return tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat
 '''
 imensions:               (N_Levels: 180, time: 532, Crop: 2, N_Channels: 14,
                            elevation_angle: 10, azimuth_angle: 72)
@@ -703,11 +730,16 @@ def summarize_many_profiles(pattern=\
     srf_pressures = np.empty([n,2])
     srf_temps = np.empty([n,2])
     srf_wvs = np.empty([n,2])
+    tbs_dwdhat = np.full((n,10, 72, 14), np.nan)
+    tbs_foghat = np.full((n, 10, 72, 14), np.nan)
+    tbs_sunhat = np.full((n, 10, 72, 14), np.nan)
+    tbs_tophat = np.full((n, 10, 72, 14), np.nan)
     level_pressures = np.empty((n_levels, n,2))
     level_temperatures = np.empty((n_levels, n,2))
     level_wvs = np.empty((n_levels, n,2))
     level_ppmvs = np.empty((n_levels, n,2))
     level_liq = np.empty((n_levels, n,2))
+    level_ice = np.empty((n_levels, n,2))
     level_z = np.empty((n_levels, n,2))
     level_rhs = np.empty((n_levels, n,2))
     srf_altitude = np.empty([n,2])
@@ -716,11 +748,12 @@ def summarize_many_profiles(pattern=\
     sza = [sza_float]*n
     
     for i, file in enumerate(files):
-        print(i, file)
+        # print(i, file)
         profile_indices.append(i)
         datetime_np = derive_date_from_file_name(file)
         ##################
-        get_mwr_data(datetime_np, mwrs)
+        tbs_dwdhat1, tbs_foghat1,tbs_sunhat1,tbs_tophat1 =\
+            get_mwr_data(datetime_np, mwrs)
         times[i] = datetime_np
         if crop:
             if ".nc" in file:
@@ -730,6 +763,7 @@ def summarize_many_profiles(pattern=\
             if length_value<170: 
                 level_ppmvs[:,i,1] =    np.array([np.nan]*n_levels)
                 level_liq[:,i,1] = np.array([np.nan]*n_levels)
+                level_ice[:,i,1] = np.array([np.nan]*n_levels)
                 level_z[:,i,1] = np.array([np.nan]*n_levels)
                 level_rhs[:,i,1] = np.array([np.nan]*n_levels)    
                 srf_temps[i,1] = np.nan
@@ -746,7 +780,8 @@ def summarize_many_profiles(pattern=\
                                     p_array, t_array, ppmv_array,\
                                     m_array, z_array, rh)                        
             # derive liquid water content:
-            lwc_kg_m3, lwc_kg_kg, lwp_kg_m2 = derive_cloud_features(\
+            lwc_kg_m3, lwc_kg_kg, lwp_kg_m2,iwc_kg_m3, iwc_kg_kg, iwp_kg_m2 =\
+                derive_cloud_features(\
                 p_array, t_array, ppmv_array, m_array, z_array, rh)
             #################
             # p in hPa as in other inputs!
@@ -756,12 +791,17 @@ def summarize_many_profiles(pattern=\
             level_wvs[:,i,1] = m_array[-n_levels:]*1000 # convert kg/kg to g/kg
             level_ppmvs[:,i,1] =ppmv_array[-n_levels:]
             level_liq[:,i,1] = lwc_kg_kg[-n_levels:] # np.array([0]*n_levels)
+            level_ice[:,i,1] = np.array([np.nan]*n_levels)
             level_z[:,i,1] = z_array[-n_levels:]
             level_rhs[:,i,1] = rh[-n_levels:]        
             srf_pressures[i,1] = p_array[-1]
             srf_temps[i,1] = t_array[-1]
             srf_wvs[i,1] = m_array[-1]        
             srf_altitude[i,1] = h_km_vital_crop
+            tbs_dwdhat[i,:,:,:] = tbs_dwdhat1
+            tbs_foghat[i,:,:,:] = tbs_foghat1
+            tbs_sunhat[i,:,:,:] = tbs_sunhat1
+            tbs_tophat[i,:,:,:] = tbs_tophat1
             ##########
         else:
             #################
@@ -772,6 +812,7 @@ def summarize_many_profiles(pattern=\
             level_wvs[:,i,1] = np.array([np.nan]*n_levels)
             level_ppmvs[:,i,1] =np.array([np.nan]*n_levels)
             level_liq[:,i,1] = np.array([np.nan]*n_levels)
+            level_ice[:,i,1] = np.array([np.nan]*n_levels)
             level_z[:,i,1] = np.array([np.nan]*n_levels)
             level_rhs[:,i,1] = np.array([np.nan]*n_levels)       
             srf_pressures[i,1] = np.nan
@@ -790,6 +831,7 @@ def summarize_many_profiles(pattern=\
         if length_value<170:
             level_ppmvs[:,i,0] =    np.array([np.nan]*n_levels)
             level_liq[:,i,0] = np.array([np.nan]*n_levels)
+            level_ice[:,i,0] = np.array([np.nan]*n_levels)
             level_z[:,i,0] = np.array([np.nan]*n_levels)
             level_rhs[:,i,0] = np.array([np.nan]*n_levels)    
             srf_temps[i,0] = np.nan
@@ -806,16 +848,22 @@ def summarize_many_profiles(pattern=\
                                     p_array, t_array, ppmv_array,\
                                     m_array, z_array, rh)                        
         # derive liquid water content:
-        lwc_kg_m3, lwc_kg_kg, lwp_kg_m2 = derive_cloud_features(\
-                p_array, t_array, ppmv_array, m_array, z_array, rh)     
+        lwc_kg_m3, lwc_kg_kg, lwp_kg_m2,iwc_kg_m3, iwc_kg_kg, iwp_kg_m2 =\
+            derive_cloud_features(\
+            p_array, t_array, ppmv_array, m_array, z_array, rh)     
         #################
         # p in hPa as in other inputs!
         # mixing ratio in g/kg
+        tbs_dwdhat[i,:,:,:] = tbs_dwdhat1
+        tbs_foghat[i,:,:,:] = tbs_foghat1
+        tbs_sunhat[i,:,:,:] = tbs_sunhat1
+        tbs_tophat[i,:,:,:] = tbs_tophat1
         level_pressures[:,i,0] = p_array[-n_levels:]
         level_temperatures[:,i,0] = t_array[-n_levels:]
         level_wvs[:,i,0] = m_array[-n_levels:]*1000 # convert kg/kg to g/kg
         level_ppmvs[:,i,0] =ppmv_array[-n_levels:]
         level_liq[:,i,0] = lwc_kg_kg[-n_levels:] # np.array([0]*n_levels)
+        level_ice[:,i,0] = iwc_kg_kg[-n_levels:]
         level_z[:,i,0] = z_array[-n_levels:]
         level_rhs[:,i,0] = rh[-n_levels:]        
         srf_pressures[i,0] = p_array[-1]
@@ -827,11 +875,12 @@ def summarize_many_profiles(pattern=\
             srf_altitude[i,0] = height_in_km
          
         ##########                                                                   
-        break
+        # break
     
     return profile_indices, level_pressures, level_temperatures, level_wvs,\
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza,\
-        times, level_ppmvs, level_liq, level_z, level_rhs
+        times, level_ppmvs, level_liq, level_z, level_rhs, level_ice,\
+        tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat
 
 ##############################################################################
 
@@ -938,18 +987,26 @@ def produce_dataset(profile_indices, level_pressures,
         level_rhs,\
         srf_pressures, srf_temps, srf_wvs,\
         srf_altitude, sza,\
-        times ,outifle="blub.nc", n_levels=137, campaign="any_camp",\
+        times, level_ice,\
+        tbs_dwdhat, tbs_foghat, tbs_sunhat ,tbs_tophat,\
+        outifle="blub.nc", n_levels=137,\
+        campaign="any_camp",\
         location="any_location", elevations=elevations, azimuths=azimuths):
 
     # Ermitteln der Dimensionen
     n_levels, n_profiles, n_crop = level_pressures.shape
 
     # Optional: Konvertiere Inputs in float32 falls nötig
+    tbs_dwdhat = np.array(tbs_dwdhat, dtype=np.float32)
+    tbs_foghat = np.array(tbs_foghat, dtype=np.float32)
+    tbs_sunhat = np.array(tbs_sunhat, dtype=np.float32)
+    tbs_tophat = np.array(tbs_tophat, dtype=np.float32)
     level_pressures = np.array(level_pressures, dtype=np.float32)
     level_temperatures = np.array(level_temperatures, dtype=np.float32)
     level_wvs = np.array(level_wvs, dtype=np.float32)
     level_ppmvs = np.array(level_ppmvs, dtype=np.float32)
     level_liq = np.array(level_liq, dtype=np.float32)
+    level_ice = np.array(level_ice, dtype=np.float32)
     level_z = np.array(level_z, dtype=np.float32)
     level_rhs = np.array(level_rhs, dtype=np.float32)
     srf_pressures = np.array(srf_pressures, dtype=np.float32)
@@ -970,11 +1027,20 @@ def produce_dataset(profile_indices, level_pressures,
         data_vars={
             
             # Profilebenen
+            "TBs_dwdhat":           (("time","elevation",\
+                                        "azimuth","N_Channels"), tbs_dwdhat),
+            "TBs_foghat":           (("time","elevation",\
+                                     "azimuth","N_Channels"), tbs_foghat),
+            "TBs_sunhat":           (("time","elevation",\
+                                     "azimuth","N_Channels"), tbs_sunhat),
+            "TBs_tophat":           (("time","elevation",\
+                                     "azimuth","N_Channels"), tbs_tophat),
             "Level_Pressure":       (("N_Levels", "time","Crop"), level_pressures),
             "Level_Temperature":    (("N_Levels", "time","Crop"), level_temperatures),
             "Level_H2O":            (("N_Levels", "time","Crop"), level_wvs),
             "Level_ppmvs":          (("N_Levels", "time","Crop"), level_ppmvs),
             "Level_Liquid":         (("N_Levels", "time","Crop"), level_liq),
+            "Level_Ice":            (("N_Levels", "time","Crop"), level_ice),
             "Level_z":              (("N_Levels", "time","Crop"), level_z),
             'Level_O3':             (("N_Levels", "time","Crop"), level_o3s),
             "Level_RH":              (("N_Levels", "time","Crop"), level_rhs),
@@ -1002,17 +1068,20 @@ def produce_dataset(profile_indices, level_pressures,
             "N_Channels": np.arange(n_channels),
             "time":    times,
             "N_Levels":   np.arange(n_levels),
-            "elevation_angle":   elevations,
-            "azimuth_angle":   azimuths,
+            "elevation":   elevations,
+            "azimuth":   azimuths,
         }
     )
 
     # Add units:
     ds["Level_Pressure"].attrs["units"] = "hPa"
+    ds["elevation"].attrs["units"] = "degree"
+    ds["azimuth"].attrs["units"] = "degree"
     ds["Level_Temperature"].attrs["units"] = "K"
     ds["Level_H2O"].attrs["units"] = "g/kg"
     ds["Level_ppmvs"].attrs["units"] = "ppmv"
     ds["Level_Liquid"].attrs["units"] = "kg/kg"
+    ds["Level_Ice"].attrs["units"] = "kg/kg"
     ds["Level_RH"].attrs["units"] = "%"
     ds["Level_z"].attrs["units"] = "m"
 
@@ -1053,7 +1122,8 @@ if __name__=="__main__":
     print("Processing FESSTVaL RAO:")
     profile_indices1, level_pressures, level_temperatures, level_wvs,\
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times,\
-        level_ppmvs, level_liq, level_z, level_rhs =\
+        level_ppmvs, level_liq, level_z, level_rhs, level_ice,\
+        tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat =\
         summarize_many_profiles(pattern=\
         "/home/aki/PhD_data/FESSTVaL_14GB/radiosondes/RAO/sups_rao_sonde00_l1_any_v00_*.nc",\
              sza_float=sza_float,n_levels=n_levels, mwrs="dwdhat/foghat") 
@@ -1062,7 +1132,8 @@ if __name__=="__main__":
         level_rhs,\
         srf_pressures, srf_temps, srf_wvs,\
         srf_altitude, sza,\
-        times ,\
+        times ,level_ice,\
+        tbs_dwdhat, tbs_foghat, tbs_sunhat,tbs_tophat,\
         outifle=args.output1,n_levels=n_levels, campaign="FESSTVaL_RAO",\
         location="RAO_Lindenberg")
 
@@ -1070,7 +1141,8 @@ if __name__=="__main__":
     print("Processing FESSTVaL UHH:")
     profile_indices2, level_pressures, level_temperatures, level_wvs,\
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times,\
-        level_ppmvs, level_liq, level_z, level_rhs =\
+        level_ppmvs, level_liq, level_z, level_rhs, level_ice,\
+        tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat =\
         summarize_many_profiles(pattern=\
         "/home/aki/PhD_data/FESSTVaL_14GB/radiosondes/UHH/fval_uhh_sonde00_l1_any_v00_*.nc",\
              sza_float=sza_float,n_levels=n_levels, mwrs="dwdhat/foghat") 
@@ -1080,7 +1152,8 @@ if __name__=="__main__":
         level_rhs,\
         srf_pressures, srf_temps, srf_wvs,\
         srf_altitude, sza,\
-        times ,\
+        times ,level_ice,\
+        tbs_dwdhat, tbs_foghat, tbs_sunhat,tbs_tophat,\
         outifle=args.output1,n_levels=n_levels, campaign="FESSTVaL_UHH",\
         location="RAO_Lindenberg")
             
@@ -1088,7 +1161,8 @@ if __name__=="__main__":
     print("Processing FESSTVaL UzK:")
     profile_indices3, level_pressures, level_temperatures, level_wvs,\
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times,\
-        level_ppmvs, level_liq, level_z, level_rhs =\
+        level_ppmvs, level_liq, level_z, level_rhs, level_ice,\
+        tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat =\
         summarize_many_profiles(pattern=\
         "/home/aki/PhD_data/FESSTVaL_14GB/radiosondes/UzK/fval_uzk*.nc",\
              sza_float=sza_float,n_levels=n_levels, mwrs="sunhat") 
@@ -1098,7 +1172,8 @@ if __name__=="__main__":
         level_rhs,\
         srf_pressures, srf_temps, srf_wvs,\
         srf_altitude, sza,\
-        times ,\
+        times ,level_ice,\
+        tbs_dwdhat, tbs_foghat, tbs_sunhat,tbs_tophat,\
         outifle=args.output1,n_levels=n_levels, campaign="FESSTVaL_UzK",\
         location="Falkenberg")  
         
@@ -1106,7 +1181,8 @@ if __name__=="__main__":
     print("Processing Socles:")
     profile_indices4, level_pressures, level_temperatures, level_wvs,\
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times,\
-        level_ppmvs, level_liq, level_z, level_rhs =\
+        level_ppmvs, level_liq, level_z, level_rhs, level_ice,\
+        tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat =\
         summarize_many_profiles(pattern=\
         "/home/aki/PhD_data/Socles/radiosondes/202*/SOUNDING DATA/*_Profile.txt",\
              sza_float=sza_float,n_levels=n_levels, mwrs="tophat") 
@@ -1116,7 +1192,8 @@ if __name__=="__main__":
         level_rhs,\
         srf_pressures, srf_temps, srf_wvs,\
         srf_altitude, sza,\
-        times ,\
+        times ,level_ice,\
+        tbs_dwdhat, tbs_foghat, tbs_sunhat,tbs_tophat,\
         outifle=args.output1 ,n_levels=n_levels, campaign="Socles",\
         location="JOYCE")
         
@@ -1124,7 +1201,8 @@ if __name__=="__main__":
     print("Processing Vital I:")
     profile_indices5, level_pressures, level_temperatures, level_wvs,\
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times,\
-        level_ppmvs, level_liq, level_z, level_rhs =\
+        level_ppmvs, level_liq, level_z, level_rhs, level_ice,\
+        tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat =\
         summarize_many_profiles(sza_float=sza_float,n_levels=n_levels,\
         crop=True, mwrs="hamhat/joyhat") 
     # srf_altitude = np.array([h_km_vital]*len(srf_altitude))
@@ -1134,7 +1212,8 @@ if __name__=="__main__":
         level_rhs,\
         srf_pressures, srf_temps, srf_wvs,\
         srf_altitude, sza,\
-        times ,\
+        times ,level_ice,\
+        tbs_dwdhat, tbs_foghat, tbs_sunhat,tbs_tophat,\
         outifle=args.output1,n_levels=n_levels, campaign="Vital I",\
         location="JOYCE")
         
