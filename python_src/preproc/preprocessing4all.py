@@ -18,6 +18,7 @@ import sys
 sys.path.append('/home/aki/pyrtlib')
 from pyrtlib.climatology import AtmosphericProfiles as atmp
 from pyrtlib.utils import ppmv2gkg, mr2rh
+from datetime import datetime
 
 elevations = np.array([90., 30, 19.2, 14.4, 11.4, 8.4,  6.6,  5.4, 4.8,  4.2])
 azimuths = np.arange(0.,355.1,5.) # Interpoliere dazwischen!
@@ -146,7 +147,7 @@ def read_radiosonde_nc_arms(file=\
     
     # 3 Fangen Profile auch in Höhge an? 
     max_index = np.nanargmax(ds[height_var].values)
-    index3000 = np.nanargmin(abs(ds[height_var].values-3000))
+    index3000 = np.nanargmin(abs(ds[height_var].values[:max_index]-3000))
     
    # Or just find 132 m height:
     if crop > 0:
@@ -170,19 +171,20 @@ def read_radiosonde_nc_arms(file=\
     if crop > 8:
         print("Unusually high crop value: ",crop)
         
-    if max_index<150:
+    if max_index<1000:
+        print("Low max index!!!")
         return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan, np.nan
-    elif ds[height_var].values[max_index]<3000:
+    elif np.nanmax(ds[height_var].values)<10000:
+        print("No 3000 m reached!")
         return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan, np.nan
         
     # Thinning pattern:
     datapoints_bl = 75
     datapoints_ft = 100
-    increment_bl = int(index3000/datapoints_bl)
-    increment_ft = int((max_index-index3000)/datapoints_ft)
+    increment_bl = int(np.ceil(index3000/datapoints_bl))
+    increment_ft = int(np.ceil((max_index-index3000)/datapoints_ft))
     inds = np.r_[crop:index3000:increment_bl, index3000:max_index:increment_ft]
     inds = np.unique(inds)
-    print("len(inds)", len(inds))
     # print("dz: (BL)", 3000/datapoints_bl)
     # print("dz FT:", (ds["Height"].values[max_index]- 3000)/datapoints_ft)
     
@@ -198,6 +200,8 @@ def read_radiosonde_nc_arms(file=\
         ds[p_var].values/p_factor)
     rh = running_mean_from_arrays(inds, ds[height_var].values,\
         ds[h_var].values)
+    if np.array(rh<=1.5).all():
+        rh=rh*100
     length_value = len(t_array )
         
     m_array = []
@@ -223,8 +227,8 @@ def read_radiosonde_txt(file=\
         "Wd", "Long.", "Lat.", "Alt", "Geopot","Rs","Elevation",\
         "Azimuth", "Range"])
     max_index = np.nanargmax(df["Alt"].values)
-    index3000 = np.nanargmin(abs(df["Alt"].values-3000))
-        
+    index3000 = np.nanargmin(abs(df["Alt"].values[:max_index]-3000))
+                
     # AccRate / Height change crop:
     if crop == 0:
         old_h = df["Alt"].values[0]
@@ -242,16 +246,18 @@ def read_radiosonde_txt(file=\
     if crop > 8:
         print("Unusually high crop value: ",crop)
         
-    if max_index<150:
+    if max_index<1000:
+        print("Low max index!!!")
         return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan, np.nan
-    elif df["Alt"].values[max_index]<3000:
+    elif np.nanmax(df["Alt"].values)<3000:
+        print("No 3000 value!")
         return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan, np.nan
         
     # Thinning pattern:
     datapoints_bl = 75
     datapoints_ft = 100
-    increment_bl = int(index3000/datapoints_bl)
-    increment_ft = int((max_index-index3000)/datapoints_ft)
+    increment_bl = int(np.ceil(index3000/datapoints_bl))
+    increment_ft = int(np.ceil((max_index-index3000)/datapoints_ft))
     inds = np.r_[crop:index3000:increment_bl, index3000:max_index:increment_ft]
     inds = np.unique(inds)
     
@@ -329,16 +335,26 @@ def calc_lwc(tops, bases, p_array, t_array, ppmv_array, m_array,\
     lwc_kg_m3 = np.array([0.]*len(t_array))
     lwc_kg_kg = np.array([0.]*len(t_array))
     iwc_kg_m3 = np.array([0.]*len(t_array))
-    iwc_kg_kg = np.array([0.]*len(t_array))
+    iwc_kg_kg = np.array([0.]*len(t_array))  
+    if len(tops) != len(bases):
+        print("WARNING: base and top number are deviating!")    
+        print("bases: " , bases)
+        print("tops: ", tops) 
     for i, (base, top) in enumerate(zip(bases,tops)):
         z_index_top = np.nanargmin(abs(z_array-top))
         z_index_base = np.nanargmin(abs(z_array-base))
         if t_array[z_index_base]>273.15 and t_array[z_index_top]>273.15:
+            # print("Water cloud")  
             for j in range(z_index_top,z_index_base):
                 rho = p_array[j]*100 / R_L / t_array[j] # Ergebnis realistisch kg m-3
                 dz = z_array[j-1] - z_array[j] # ergab soweit auch Sinn..
                 lwc_ad = rho * cp / L * (gamma_d - gamma_s) * dz
                 dh = z_array[j] - base # abs entfernt
+                '''
+                print("z_array[j]: ", z_array[j])
+                print("base: ", base)
+                print("dh: ", dh)           
+                '''     
                 lwc = lwc_ad * (1.239 - 0.145*np.log(dh)) # kg m-3
                 if lwc<0:
                     lwc = 0
@@ -352,6 +368,11 @@ def calc_lwc(tops, bases, p_array, t_array, ppmv_array, m_array,\
                 dz = z_array[j-1] - z_array[j] # ergab soweit auch Sinn..
                 iwc_ad = rho * cp / L * (gamma_d - gamma_s) * dz
                 dh = z_array[j] - base
+                '''
+                print("z_array[j]: ", z_array[j])
+                print("base: ", base)
+                print("dh: ", dh)
+                '''
                 iwc = iwc_ad * (1.239 - 0.145*np.log(dh)) # kg m-3
                 if iwc<0:
                     iwc = 0
@@ -364,6 +385,11 @@ def calc_lwc(tops, bases, p_array, t_array, ppmv_array, m_array,\
                 dz = z_array[j-1] - z_array[j] # ergab soweit auch Sinn..
                 lwc_ad = rho * cp / L * (gamma_d - gamma_s) * dz
                 dh = z_array[j] - base
+                '''
+                print("z_array[j]: ", z_array[j])
+                print("base: ", base)
+                print("dh: ", dh)        
+                '''        
                 lwc = lwc_ad * (1.239 - 0.145*np.log(dh)) # kg m-3
                 if lwc<0:
                     lwc = 0
@@ -448,10 +474,23 @@ def derive_cloud_features(p_array, t_array, ppmv_array, m_array,\
             else:
                 if in_cloud:
                     bases.append(z)
-                in_cloud = False
-          
+                in_cloud = False         
     # print("after 4  tops: ", tops)    
-    # print("after 4  bases: ", bases)     
+    # print("after 4  bases: ", bases)
+    ####################################
+    if len(tops) == len(bases)+1:
+        bases.append(z_array[-1])     
+    elif len(tops) != len(bases):
+        print("base and top number are deviating!")    
+        print("bases: " , bases)
+        print("tops: ", tops)        
+    elif len(tops)>=1 and len(bases)>=1:
+        if (0>(np.array(tops)-np.array(bases))).any():
+            print("Warning! Top lower than cloud base... Why?")
+            print("z_array:", z_array)
+            print("rh: ", rh)     
+    #################################
+            
     ####
     # 5) Remove cloudbases below 500 m if thickness < 400 m:
     # New version:
@@ -464,6 +503,9 @@ def derive_cloud_features(p_array, t_array, ppmv_array, m_array,\
             z_index_top = np.nanargmin(abs(z_array-tops[i]))
             z_index_base = np.nanargmin(abs(z_array-bases[i]))
             cloud_bools[z_index_top:z_index_base] = False
+    # print("after 5  tops: ", new_tops)    
+    # print("after 5  bases: ",new_bases)   
+
     
     ###
     # 6 ) RH_max reached within cloud layer? => discard else!
@@ -504,6 +546,8 @@ def derive_cloud_features(p_array, t_array, ppmv_array, m_array,\
         bases.pop(i)
     for i in sorted(to_remove_top, reverse=True):
         tops.pop(i)
+    # print("after 6  tops: ", tops)    
+    # print("after 6  bases: ",bases)   
         
     ###
     # 7) Connect layers, with a gap of less than 300 m:
@@ -535,7 +579,9 @@ def derive_cloud_features(p_array, t_array, ppmv_array, m_array,\
         bases.pop(i)
     for i in sorted(to_remove_top, reverse=True):
         tops.pop(i)
-        
+    # print("after 7  tops: ", tops)    
+    # print("after 7  bases: ",bases)   
+            
     # step 8: 
     to_remove_base = []
     to_remove_top = []   
@@ -554,6 +600,8 @@ def derive_cloud_features(p_array, t_array, ppmv_array, m_array,\
         bases.pop(i)
     for i in sorted(to_remove_top, reverse=True):
         tops.pop(i)
+    # print("after 8  tops: ", tops)    
+    # print("after 8  bases: ",bases)           
 
     ####
     # Lets get LWC and IWC:
@@ -577,9 +625,6 @@ def nearest_ele4elevation(ele_values, azi_values, ele_times,\
     final_mask = match_mask & match_mask2
 
     if not final_mask.any():
-        # Kein exakter Treffer
-        # print("Kein Wert entspricht exakt Winkeln: ")
-        # print("Ele/Azi values: ",target_elevation, target_azi)
         nearest_idx = None
     else:
         # Zeitwerte, die zu den passenden Elevations gehören
@@ -587,12 +632,28 @@ def nearest_ele4elevation(ele_values, azi_values, ele_times,\
         time_diffs = np.abs(candidate_times - datetime_np)
         min_idx = time_diffs.argmin()
         nearest_time = candidate_times[min_idx]
-
-        candidate_indices = np.where(match_mask)[0]
+        
+        # Derive time difference:
+        mwr_time = candidate_times[min_idx].astype('M8[us]').astype(datetime)
+        rs_time = datetime_np.astype('M8[us]').astype(datetime)
+        delta = mwr_time - rs_time
+        minutes_diff = delta.total_seconds() / 60
+        if minutes_diff>15:
+            print("Excluded due to huge time difference from scan!!")
+            nearest_idx = None
+        
+        # Deterime nearest index:
+        candidate_indices = np.where(final_mask)[0]
         nearest_idx = candidate_indices[min_idx]
+        
+        # Elevation check:
         nearest_value = ele_values[nearest_idx]
-        # print("Found TBs for angles: ")
-        # print("Ele/Azi values: ",target_elevation, target_azi)
+        nearest_value2 = azi_values[nearest_idx]
+        if abs(nearest_value-target_elevation)>0.05 or\
+                 (abs(nearest_value2-target_azi)>0.05):
+             print("WARNING: Azimuth or Elevation does not agree, as expected!")
+             print("Ele/Azi tagret values: ",target_elevation, target_azi)
+             print("Ele/Azi found values: ",nearest_value, nearest_value2)
     return nearest_idx
 
 ##############################################################################
@@ -723,6 +784,25 @@ def get_mwr_data(datetime_np, mwrs):
 
 ##############################################################################
 
+def check_units_physical_realism(p_array, t_array, ppmv_array,\
+                m_array, z_array, rh):
+    if (np.array(p_array)>1100).any() or (np.array(p_array)<0).any():
+        print("WARNING: Encoutered physically unrealistic value for p in hPa!!!")
+    if (np.array(t_array)>400).any() or (np.array(t_array)<0).any():
+        print("WARNING: Encoutered physically unrealistic value for T in K!!!")
+    if (np.array(rh)>115).any() or (np.array(rh)<0).any() or\
+            (not  (np.array(rh)>1.5).any()):
+        print("WARNING: Encoutered physically unrealistic value for RH in %!!!")
+    if (np.array(ppmv_array)>40000).any() or (np.array(ppmv_array)<0).any():
+        print("WARNING: Encoutered physically unrealistic value for WV in ppmv!!!")
+    if (np.array(z_array)>130000).any() or (np.array(z_array)<0).any():
+        print("WARNING: Encoutered physically unrealistic value for z in m!!!") 
+    if (np.array(m_array)>20).any() or (np.array(m_array)<0).any():
+        print("WARNING: Encoutered physically unrealistic value for mr in g/kg!!!")
+    return 0  
+
+##############################################################################
+
 def summarize_many_profiles(pattern=\
                     "/home/aki/PhD_data/Vital_I/radiosondes/202408*_*.nc",\
                     crop=False, sza_float =0., n_levels=137, mwrs=""):
@@ -756,10 +836,12 @@ def summarize_many_profiles(pattern=\
     sza = [sza_float]*n
     
     for i, file in enumerate(files):
-        # print(i, file)
+        print(i, file)
+        invalid_z = False
+        
         profile_indices.append(i)
         datetime_np = derive_date_from_file_name(file)
-        ##################
+        ###################
         tbs_dwdhat1, tbs_foghat1,tbs_sunhat1,tbs_tophat1, tbs_joyhat1,\
         tbs_hamhat1 =\
             get_mwr_data(datetime_np, mwrs)
@@ -769,8 +851,9 @@ def summarize_many_profiles(pattern=\
                 length_value, p_array, t_array, ppmv_array, height_in_km,\
                     deg_lat, m_array, z_array, rh =\
                     read_radiosonde_nc_arms(file=file, crop=7)
-            if length_value<170: 
-                level_ppmvs[:,i,1] =    np.array([np.nan]*n_levels)
+            if length_value<150:
+                invalid_z = True
+                level_ppmvs[:,i,1] = np.array([np.nan]*n_levels)
                 level_liq[:,i,1] = np.array([np.nan]*n_levels)
                 level_ice[:,i,1] = np.array([np.nan]*n_levels)
                 level_z[:,i,1] = np.array([np.nan]*n_levels)
@@ -785,9 +868,11 @@ def summarize_many_profiles(pattern=\
                 srf_altitude[i,1] = np.nan
                 continue                    
             # Add climatology at top to fill profiles:
+            check_units_physical_realism(p_array, t_array, ppmv_array,\
+                m_array, z_array, rh)       
             p_array, t_array, ppmv_array, m_array, z_array, rh = add_clim2profiles(\
                                     p_array, t_array, ppmv_array,\
-                                    m_array, z_array, rh)                        
+                                    m_array, z_array, rh)    
             # derive liquid water content:
             lwc_kg_m3, lwc_kg_kg, lwp_kg_m2,iwc_kg_m3, iwc_kg_kg, iwp_kg_m2 =\
                 derive_cloud_features(\
@@ -818,6 +903,7 @@ def summarize_many_profiles(pattern=\
             #################
             # p in hPa as in other inputs!
             # mixing ratio in g/kg
+            invalid_z = True
             level_pressures[:,i,1] = np.array([np.nan]*n_levels)
             level_temperatures[:,i,1] = np.array([np.nan]*n_levels)
             level_wvs[:,i,1] = np.array([np.nan]*n_levels)
@@ -839,7 +925,8 @@ def summarize_many_profiles(pattern=\
             length_value, p_array, t_array, ppmv_array, height_in_km,\
                     deg_lat, m_array, z_array, rh =\
                     read_radiosonde_txt(file=file)
-        if length_value<170:
+        if length_value<150:
+            invalid_z = True
             level_ppmvs[:,i,0] =    np.array([np.nan]*n_levels)
             level_liq[:,i,0] = np.array([np.nan]*n_levels)
             level_ice[:,i,0] = np.array([np.nan]*n_levels)
@@ -857,7 +944,7 @@ def summarize_many_profiles(pattern=\
         # Add climatology at top to fill profiles:
         p_array, t_array, ppmv_array, m_array, z_array, rh = add_clim2profiles(\
                                     p_array, t_array, ppmv_array,\
-                                    m_array, z_array, rh)                        
+                                    m_array, z_array, rh)              
         # derive liquid water content:
         lwc_kg_m3, lwc_kg_kg, lwp_kg_m2,iwc_kg_m3, iwc_kg_kg, iwp_kg_m2 =\
             derive_cloud_features(\
@@ -888,7 +975,7 @@ def summarize_many_profiles(pattern=\
             srf_altitude[i,0] = height_in_km
          
         ##########                                                                   
-        # break
+        # break           
     
     return profile_indices, level_pressures, level_temperatures, level_wvs,\
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza,\
@@ -907,7 +994,9 @@ def write_armsgb_input_nc(profile_indices, level_pressures,
 
     # Ermitteln der Dimensionen
     n_levels, n_profiles = level_pressures.shape
+    level_o3s = np.empty(np.shape(level_wvs))
 
+    '''
     # Optional: Konvertiere Inputs in float32 falls nötig
     level_pressures = np.array(level_pressures, dtype=np.float32)
     level_temperatures = np.array(level_temperatures, dtype=np.float32)
@@ -922,7 +1011,8 @@ def write_armsgb_input_nc(profile_indices, level_pressures,
     srf_altitude = np.array(srf_altitude, dtype=np.float32)
     sza = np.array(sza, dtype=np.float32)
     profile_indices = np.array(profile_indices, dtype=np.int32)
-    level_o3s = np.empty(np.shape(level_wvs))
+    
+    '''
 
     # Setze Dummy-Werte für Dimensionsgrößen
     n_times = len(profile_indices)
@@ -996,6 +1086,37 @@ def write_armsgb_input_nc(profile_indices, level_pressures,
     
 ##############################################################################
 
+def clean_dataset(ds):
+    exclude_times = []
+    
+    print("************************************************")
+    print("Campaign: ", ds["Campaign"].values[5])
+    
+    for i, timestamp in enumerate(ds["time"].values):
+        if np.isnan(ds["Level_z"].values[:,i,0]).any() and\
+                np.isnan(ds["Level_z"].values[:,i,1]).any():
+            exclude_times.append(timestamp)
+            # Neuer Erfolg: Nur UHH und Socles fallen vol raus!!!
+    
+    for timestamp in exclude_times:
+         ds = ds.sel(time=ds.time != timestamp)
+    
+    return ds
+
+##############################################################################
+
+def interpolate_azimuths(ds):    
+    # Joyhat & Foghat je 30 °:
+    
+    ds["TBs_foghat"] = ds["TBs_foghat"].isel(elevation=1)\
+        .interpolate_na(dim="azimuth", method="linear")
+    ds["TBs_joyhat"] = ds["TBs_joyhat"].isel(elevation=1)\
+        .interpolate_na(dim="azimuth", method="linear")
+    
+    return ds
+    
+##############################################################################
+
 def produce_dataset(profile_indices, level_pressures,
         level_temperatures, level_wvs,level_ppmvs, level_liq, level_z,\
         level_rhs,\
@@ -1010,30 +1131,7 @@ def produce_dataset(profile_indices, level_pressures,
 
     # Ermitteln der Dimensionen
     n_levels, n_profiles, n_crop = level_pressures.shape
-
-    # Optional: Konvertiere Inputs in float32 falls nötig
-    tbs_dwdhat = np.array(tbs_dwdhat, dtype=np.float32)
-    tbs_foghat = np.array(tbs_foghat, dtype=np.float32)
-    tbs_sunhat = np.array(tbs_sunhat, dtype=np.float32)
-    tbs_tophat = np.array(tbs_tophat, dtype=np.float32)
-    tbs_joyhat = np.array(tbs_joyhat, dtype=np.float32)
-    tbs_hamhat = np.array(tbs_hamhat, dtype=np.float32)    
-    level_pressures = np.array(level_pressures, dtype=np.float32)
-    level_temperatures = np.array(level_temperatures, dtype=np.float32)
-    level_wvs = np.array(level_wvs, dtype=np.float32)
-    level_ppmvs = np.array(level_ppmvs, dtype=np.float32)
-    level_liq = np.array(level_liq, dtype=np.float32)
-    level_ice = np.array(level_ice, dtype=np.float32)
-    level_z = np.array(level_z, dtype=np.float32)
-    level_rhs = np.array(level_rhs, dtype=np.float32)
-    srf_pressures = np.array(srf_pressures, dtype=np.float32)
-    srf_temps = np.array(srf_temps, dtype=np.float32)
-    srf_wvs = np.array(srf_wvs, dtype=np.float32)
-    srf_altitude = np.array(srf_altitude, dtype=np.float32)
-    sza = np.array(sza, dtype=np.float32)
-    profile_indices = np.array(profile_indices, dtype=np.int32)
-    level_o3s = np.empty(np.shape(level_wvs))
-
+    
     # Setze Dummy-Werte für Dimensionsgrößen
     n_times = len(profile_indices)
     n_channels = 14  # Beispielwert
@@ -1063,7 +1161,7 @@ def produce_dataset(profile_indices, level_pressures,
             "Level_Liquid":         (("N_Levels", "time","Crop"), level_liq),
             "Level_Ice":            (("N_Levels", "time","Crop"), level_ice),
             "Level_z":              (("N_Levels", "time","Crop"), level_z),
-            'Level_O3':             (("N_Levels", "time","Crop"), level_o3s),
+            # 'Level_O3':             (("N_Levels", "time","Crop"), level_o3s),
             "Level_RH":              (("N_Levels", "time","Crop"), level_rhs),
 
             # Oberflächenparameter
@@ -1077,7 +1175,7 @@ def produce_dataset(profile_indices, level_pressures,
             "Surface_Altitude":     (("time","Crop"), srf_altitude),
 
             # Zusätzliche Metadaten
-            "Profile_Index":        (("time",), profile_indices.astype(np.float64)),
+            "Profile_Index":        (("time",), profile_indices),
             "Campaign":        (("time",), [campaign]*len(times)),
             "Location":        (("time",), [location]*len(times)),   
         },
@@ -1106,6 +1204,9 @@ def produce_dataset(profile_indices, level_pressures,
     ds["Level_RH"].attrs["units"] = "%"
     ds["Level_z"].attrs["units"] = "m"
 
+    ds = clean_dataset(ds)
+    ds = interpolate_azimuths(ds)
+    
     return ds
 
 ##############################################################################
@@ -1137,7 +1238,6 @@ if __name__=="__main__":
     args = parse_arguments()
     sza_float = 0.
     n_levels = 180
-
 
     # Read FESSTVaL 1 RAO:
     print("Processing FESSTVaL RAO:")
@@ -1225,7 +1325,7 @@ if __name__=="__main__":
         tbs_hamhat,\
         outifle=args.output1 ,n_levels=n_levels, campaign="Socles",\
         location="JOYCE")
-        
+    
     # Uncropped:
     print("Processing Vital I:")
     profile_indices5, level_pressures, level_temperatures, level_wvs,\
@@ -1247,7 +1347,7 @@ if __name__=="__main__":
         tbs_hamhat,\
         outifle=args.output1,n_levels=n_levels, campaign="Vital I",\
         location="JOYCE")
-        
+   
     ####
     # New dataset:
     ds_list = [ds_fesst_rao, ds_fesst_uhh,ds_fesst_uzk,ds_socles,\
