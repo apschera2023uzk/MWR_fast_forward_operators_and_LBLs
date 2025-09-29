@@ -13,6 +13,7 @@ import os
 import xarray as xr
 import numpy as np
 import pandas as pd
+from scipy.interpolate import interp1d
 import glob
 import sys
 sys.path.append('/home/aki/pyrtlib')
@@ -638,7 +639,7 @@ def nearest_ele4elevation(ele_values, azi_values, ele_times,\
         rs_time = datetime_np.astype('M8[us]').astype(datetime)
         delta = mwr_time - rs_time
         minutes_diff = delta.total_seconds() / 60
-        if minutes_diff>15:
+        if minutes_diff>30:
             print("Excluded due to huge time difference from scan!!")
             nearest_idx = None
         
@@ -715,6 +716,105 @@ def get_tbs_from_l1(l1_files, datetime_np, elevations=elevations,\
                         tbs[i,j, :] = ds_mwr["tb"].values[time_idx,:]
                         # print("TBs found MWR: ", ds_mwr["tb"].values[time_idx,:])
     return tbs
+   
+##############################################################################
+
+def interpolate_preserve_old_points_fix(x_old, new_length):
+    total_new_points = new_length - len(x_old)
+    n_intervals = len(x_old) - 1
+    points_per_interval = total_new_points // n_intervals
+    remainder = total_new_points % n_intervals
+
+    x_new = []
+    for i in range(n_intervals):
+        
+        if i==0:
+            count = remainder + points_per_interval
+        else:
+            count = points_per_interval
+        segment = np.linspace(x_old[i], x_old[i+1], count+2)
+        
+        
+        # Punkte (bis auf letztes Intervall) ohne den letzten Punkt anhängen
+        if i < n_intervals - 1:
+            x_new.extend(segment[:-1])
+        else:
+            x_new.extend(segment)
+    x_new = np.sort(np.array(x_new))        
+    return np.array(x_new)
+
+####################################################################
+
+def interp2_180(x_array, y_array, x_new=None):
+    # if x_new is None:
+    x_new = interpolate_preserve_old_points_fix(x_array, 180)
+    interp_func = interp1d(x_array, y_array, kind='linear', fill_value="extrapolate")
+    y_new = interp_func(x_new)   
+    return x_new, y_new
+    
+##############################################################################
+
+def get_profs_from_l2(l2_files, datetime_np):
+    data = np.full((4,180), np.nan)
+    lwp, iwv = np.nan, np.nan
+
+    for file in l2_files:
+        if "single" in file:
+            ds = xr.open_dataset(file)
+            time_diffs = np.abs(ds["time"].values - datetime_np)
+            min_idx = time_diffs.argmin()
+            x_new, y_new = interp2_180(ds["height"].values,\
+                ds["temperature"].values[min_idx, :])
+            data[0,:] = x_new     
+            data[1,:] = y_new    
+            x_new, y_new = interp2_180(ds["height"].values,\
+                ds["absolute_humidity"].values[min_idx, :])       
+            data[3,:] = y_new   
+            lwp = ds["lwp"].values[min_idx]         
+            iwv = ds["iwv"].values[min_idx]       
+        if "mwr00_l2_ta_" in file:
+            ds = xr.open_dataset(file)
+            time_diffs = np.abs(ds["time"].values - datetime_np)
+            min_idx = time_diffs.argmin()
+            x_new, y_new = interp2_180(ds["height"].values,\
+                 ds["ta"].values[min_idx, :])
+            data[0,:] = x_new     
+            data[1,:] = y_new
+        elif "mwrBL00_l2_ta_" in file:
+            ds = xr.open_dataset(file)
+            time_diffs = np.abs(ds["time"].values - datetime_np)
+            min_idx = time_diffs.argmin()
+            x_new1, y_new = interp2_180(ds["height"].values,\
+                 ds["ta"].values[min_idx, :]) #, x_new=x_new)
+            data[2,:] = y_new            
+        elif "_hua_" in file:
+            ds = xr.open_dataset(file)
+            time_diffs = np.abs(ds["time"].values - datetime_np)
+            min_idx = time_diffs.argmin()
+            x_new2, y_new = interp2_180(ds["height"].values,\
+                 ds["hua"].values[min_idx, :]) #, x_new=x_new)
+            data[3,:] = y_new                 
+        elif "_prw_" in file:
+            ds = xr.open_dataset(file)
+            time_diffs = np.abs(ds["time"].values - datetime_np)
+            min_idx = time_diffs.argmin()
+            iwv = ds["prw"].values[min_idx] 
+            # All Water Vapor
+            # print(ds["prw"])             
+        elif "_clwvi_" in file:
+            ds = xr.open_dataset(file)
+            time_diffs = np.abs(ds["time"].values - datetime_np)
+            min_idx = time_diffs.argmin()
+            lwp = ds["clwvi"].values[min_idx]       
+            # print(ds["clwvi"])
+    
+    ######################
+    # Führt zu Fehler, wo keine Dateien vorhanden sind...
+    # Lief im übrigen für meiste dwdhat files ohne Fehler durch...
+    #if (x_new != x_new2).any():
+    #    print("Warning: inconsistent interpolation!")
+    
+    return data[:,::-1], lwp, iwv
 
 ##############################################################################
 
@@ -733,54 +833,75 @@ def get_mwr_data(datetime_np, mwrs):
         l1_files = [file for file in files if "l1" in file]   
         l2_files = [file for file in files if "l2" in file] 
         tbs_dwdhat = get_tbs_from_l1(l1_files, datetime_np)
+        dwd_profiles, lwp_dwd, iwv_dwd = get_profs_from_l2(l2_files, datetime_np)
     else:
         tbs_dwdhat = np.full((10, 72, 14), np.nan)
+        dwd_profiles = np.full((4,180), np.nan)
+        lwp_dwd, iwv_dwd = np.nan, np.nan
     if "foghat" in mwrs:
         fog_files = glob.glob(foghat_pattern)
         files = [file for file in fog_files if datestring in file]   
         l1_files = [file for file in files if "l1" in file]   
         l2_files = [file for file in files if "l2" in file] 
         tbs_foghat = get_tbs_from_l1(l1_files, datetime_np)
+        fog_profiles, lwp_fog, iwv_fog = get_profs_from_l2(l2_files, datetime_np)
     else:
         tbs_foghat = np.full((10, 72, 14), np.nan)
+        fog_profiles = np.full((4,180), np.nan)
+        lwp_fog, iwv_fog = np.nan, np.nan        
     if "sunhat" in mwrs:
         sun_files = glob.glob(sunhat_pattern)
         files = [file for file in sun_files if datestring in file]   
         l1_files = [file for file in files if "l1" in file]   
         l2_files = [file for file in files if "l2" in file] 
         tbs_sunhat = get_tbs_from_l1(l1_files, datetime_np)
+        sun_profiles, lwp_sun, iwv_sun = get_profs_from_l2(l2_files, datetime_np)
     else:
-        tbs_sunhat = np.full((10, 72, 14), np.nan)        
+        tbs_sunhat = np.full((10, 72, 14), np.nan)    
+        sun_profiles = np.full((4,180), np.nan)
+        lwp_sun, iwv_sun = np.nan, np.nan            
     if "tophat" in mwrs:
         top_files = glob.glob(tophat_pattern)
         files = [file for file in top_files if datestring in file]   
         l1_files = [file for file in files if "l1" in file]   
         l2_files = [file for file in files if "l2" in file] 
         tbs_tophat = get_tbs_from_l1(l1_files, datetime_np)
+        top_profiles, lwp_top, iwv_top = get_profs_from_l2(l2_files, datetime_np)
     else:
         tbs_tophat = np.full((10, 72, 14), np.nan)
+        top_profiles = np.full((4,180), np.nan)
+        lwp_top, iwv_top = np.nan, np.nan        
     if "joyhat" in mwrs:
         joy_files = glob.glob(joyhat_pattern)
         files = [file for file in joy_files if datestring in file]   
         l1_files = [file for file in files if "1C01" in file]   
         l2_files = [file for file in files if "single" in file] 
         tbs_joyhat = get_tbs_from_l1(l1_files, datetime_np)
+        joy_profiles, lwp_joy, iwv_joy = get_profs_from_l2(l2_files, datetime_np) 
     else:
         tbs_joyhat = np.full((10, 72, 14), np.nan)
+        joy_profiles = np.full((4,180), np.nan)
+        lwp_joy, iwv_joy = np.nan, np.nan        
     if "hamhat" in mwrs:
         ham_files = glob.glob(hamhat_pattern)
         files = [file for file in ham_files if datestring in file]   
         l1_files = [file for file in files if "1C01" in file]   
         l2_files = [file for file in files if "single" in file] 
         tbs_hamhat = get_tbs_from_l1(l1_files, datetime_np)
+        ham_profiles, lwp_ham, iwv_ham = get_profs_from_l2(l2_files, datetime_np)
     else:
         tbs_hamhat = np.full((10, 72, 14), np.nan)
+        ham_profiles = np.full((4,180), np.nan)
+        lwp_ham, iwv_ham = np.nan, np.nan        
         
     # Then jsut read l1-files for now
     # TBs of shape: (elevation x azimuth x n_chans) , for one timestep
+    integrals = [lwp_dwd, iwv_dwd, lwp_fog, iwv_fog, lwp_sun, iwv_sun,\
+        lwp_top, iwv_top, lwp_joy, iwv_joy,lwp_ham, iwv_ham ]
     
     return tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat, tbs_joyhat,\
-        tbs_hamhat
+        tbs_hamhat, dwd_profiles,fog_profiles, sun_profiles, top_profiles,\
+        joy_profiles, ham_profiles, integrals
 
 ##############################################################################
 
@@ -822,6 +943,26 @@ def summarize_many_profiles(pattern=\
     tbs_tophat = np.full((n, 10, 72, 14), np.nan)
     tbs_joyhat = np.full((n, 10, 72, 14), np.nan)
     tbs_hamhat = np.full((n, 10, 72, 14), np.nan)    
+    dwd_profiles = np.full((n, 4,180), np.nan)
+    fog_profiles= np.full((n, 4,180), np.nan)
+    sun_profiles= np.full((n, 4,180), np.nan)
+    top_profiles= np.full((n, 4,180), np.nan)
+    joy_profiles= np.full((n, 4,180), np.nan)
+    ham_profiles= np.full((n, 4,180), np.nan)
+    
+    lwps_dwd = np.full((n), np.nan)
+    lwps_fog = np.full((n), np.nan)
+    lwps_sun = np.full((n), np.nan)
+    lwps_top = np.full((n), np.nan)
+    lwps_joy = np.full((n), np.nan)
+    lwps_ham = np.full((n), np.nan)
+    iwvs_dwd = np.full((n), np.nan)
+    iwvs_fog = np.full((n), np.nan)
+    iwvs_sun = np.full((n), np.nan)
+    iwvs_top = np.full((n), np.nan)
+    iwvs_joy = np.full((n), np.nan)
+    iwvs_ham = np.full((n), np.nan)
+
     level_pressures = np.empty((n_levels, n,2))
     level_temperatures = np.empty((n_levels, n,2))
     level_wvs = np.empty((n_levels, n,2))
@@ -843,7 +984,8 @@ def summarize_many_profiles(pattern=\
         datetime_np = derive_date_from_file_name(file)
         ###################
         tbs_dwdhat1, tbs_foghat1,tbs_sunhat1,tbs_tophat1, tbs_joyhat1,\
-        tbs_hamhat1 =\
+        tbs_hamhat1, dwd_profiles1,fog_profiles1, sun_profiles1,\
+        top_profiles1, joy_profiles1, ham_profiles1, integrals =\
             get_mwr_data(datetime_np, mwrs)
         times[i] = datetime_np
         if crop:
@@ -897,8 +1039,26 @@ def summarize_many_profiles(pattern=\
             tbs_sunhat[i,:,:,:] = tbs_sunhat1
             tbs_tophat[i,:,:,:] = tbs_tophat1
             tbs_joyhat[i,:,:,:] = tbs_joyhat1
-            tbs_hamhat[i,:,:,:] = tbs_hamhat1            
-            ##########
+            tbs_hamhat[i,:,:,:] = tbs_hamhat1      
+            dwd_profiles[i,:,:] = dwd_profiles1
+            fog_profiles[i,:,:] = fog_profiles1
+            sun_profiles[i,:,:] = sun_profiles1
+            top_profiles[i,:,:] = top_profiles1
+            joy_profiles[i,:,:] = joy_profiles1
+            ham_profiles[i,:,:] = ham_profiles1   
+            
+            lwps_dwd[i] = integrals[0]
+            lwps_fog[i] = integrals[2]
+            lwps_sun[i] = integrals[4]
+            lwps_top[i] = integrals[6]
+            lwps_joy[i] = integrals[8]
+            lwps_ham[i] = integrals[10]
+            iwvs_dwd[i] = integrals[1]
+            iwvs_fog[i] = integrals[3]
+            iwvs_sun[i] = integrals[5]
+            iwvs_top[i] = integrals[7]
+            iwvs_joy[i] = integrals[9]
+            iwvs_ham[i] = integrals[11]
         else:
             #################
             # p in hPa as in other inputs!
@@ -958,6 +1118,24 @@ def summarize_many_profiles(pattern=\
         tbs_tophat[i,:,:,:] = tbs_tophat1
         tbs_joyhat[i,:,:,:] = tbs_joyhat1
         tbs_hamhat[i,:,:,:] = tbs_hamhat1         
+        dwd_profiles[i,:,:] = dwd_profiles1
+        fog_profiles[i,:,:] = fog_profiles1
+        sun_profiles[i,:,:] = sun_profiles1
+        top_profiles[i,:,:] = top_profiles1
+        joy_profiles[i,:,:] = joy_profiles1
+        ham_profiles[i,:,:] = ham_profiles1    
+        lwps_dwd[i] = integrals[0]
+        lwps_fog[i] = integrals[2]
+        lwps_sun[i] = integrals[4]
+        lwps_top[i] = integrals[6]
+        lwps_joy[i] = integrals[8]
+        lwps_ham[i] = integrals[10]
+        iwvs_dwd[i] = integrals[1]
+        iwvs_fog[i] = integrals[3]
+        iwvs_sun[i] = integrals[5]
+        iwvs_top[i] = integrals[7]
+        iwvs_joy[i] = integrals[9]
+        iwvs_ham[i] = integrals[11]               
         level_pressures[:,i,0] = p_array[-n_levels:]
         level_temperatures[:,i,0] = t_array[-n_levels:]
         level_wvs[:,i,0] = m_array[-n_levels:]*1000 # convert kg/kg to g/kg
@@ -981,7 +1159,10 @@ def summarize_many_profiles(pattern=\
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza,\
         times, level_ppmvs, level_liq, level_z, level_rhs, level_ice,\
         tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat, tbs_joyhat,\
-        tbs_hamhat
+        tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
+        joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
+        lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
+        iwvs_ham
 
 ##############################################################################
 
@@ -1124,7 +1305,10 @@ def produce_dataset(profile_indices, level_pressures,
         srf_altitude, sza,\
         times, level_ice,\
         tbs_dwdhat, tbs_foghat, tbs_sunhat ,tbs_tophat, tbs_joyhat,\
-        tbs_hamhat,\
+        tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
+        joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
+        lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
+        iwvs_ham,\
         outifle="blub.nc", n_levels=137,\
         campaign="any_camp",\
         location="any_location", elevations=elevations, azimuths=azimuths):
@@ -1154,6 +1338,49 @@ def produce_dataset(profile_indices, level_pressures,
                                      "azimuth","N_Channels"), tbs_joyhat),
             "TBs_hamhat":           (("time","elevation",\
                                      "azimuth","N_Channels"), tbs_hamhat),
+                                     
+            "Dwdhat_z":           (( "time","N_Levels"), dwd_profiles[:,0,:]),    
+            "Dwdhat_ta":           (( "time","N_Levels"), dwd_profiles[:,1,:]), 
+            "Dwdhat_taBL":           (( "time","N_Levels"), dwd_profiles[:,2,:]), 
+            "Dwdhat_hua":           (( "time","N_Levels"), dwd_profiles[:,3,:]), 
+            "Dwdhat_IWV":           (("time",), iwvs_dwd),
+            "Dwdhat_LWP":           (("time",), lwps_dwd),
+                         
+            "Foghat_z":           (( "time","N_Levels"), fog_profiles[:,0,:]),    
+            "Foghat_ta":           (( "time","N_Levels"), fog_profiles[:,1,:]), 
+            "Foghat_taBL":           (( "time","N_Levels"), fog_profiles[:,2,:]), 
+            "Foghat_hua":           (( "time","N_Levels"), fog_profiles[:,3,:]),
+            "Foghat_IWV":           (("time",), iwvs_fog),
+            "Foghat_LWP":           (("time",), lwps_fog),
+                        
+            "Sunhat_z":           (( "time","N_Levels"), sun_profiles[:,0,:]),    
+            "Sunhat_ta":           (( "time","N_Levels"), sun_profiles[:,1,:]), 
+            "Sunhat_taBL":           (( "time","N_Levels"), sun_profiles[:,2,:]), 
+            "Sunhat_hua":           (( "time","N_Levels"), sun_profiles[:,3,:]),
+            "Sunhat_IWV":           (("time",), iwvs_sun),
+            "Sunhat_LWP":           (("time",), lwps_sun),
+                        
+            "Tophat_z":           (( "time","N_Levels"), top_profiles[:,0,:]),    
+            "Tophat_ta":           (( "time","N_Levels"),top_profiles[:,1,:]), 
+            "Tophat_taBL":           (( "time","N_Levels"), top_profiles[:,2,:]), 
+            "Tophat_hua":           (( "time","N_Levels"),top_profiles[:,3,:]),     
+            "Tophat_IWV":           (("time",), iwvs_top),
+            "Tophat_LWP":           (("time",), lwps_top),            
+            
+            "Joyhat_z":           (( "time","N_Levels"),joy_profiles[:,0,:]),    
+            "Joyhat_ta":           (( "time","N_Levels"), joy_profiles[:,1,:]), 
+            "Joyhat_taBL":           (( "time","N_Levels"), joy_profiles[:,2,:]), 
+            "Joyhat_hua":           (( "time","N_Levels"), joy_profiles[:,3,:]),  
+            "Joyhat_IWV":           (("time",), iwvs_joy),
+            "Joyhat_LWP":           (("time",), lwps_joy),               
+
+            "Hamhat_z":           (( "time","N_Levels"), ham_profiles[:,0,:]),    
+            "Hamhat_ta":           (( "time","N_Levels"), ham_profiles[:,1,:]), 
+            "Hamhat_taBL":           (( "time","N_Levels"),ham_profiles[:,2,:]), 
+            "Hamhat_hua":           (( "time","N_Levels"),ham_profiles[:,3,:]),
+            "Hamhat_IWV":           (("time",), iwvs_ham),
+            "Hamhat_LWP":           (("time",), lwps_ham),
+                        
             "Level_Pressure":       (("N_Levels", "time","Crop"), level_pressures),
             "Level_Temperature":    (("N_Levels", "time","Crop"), level_temperatures),
             "Level_H2O":            (("N_Levels", "time","Crop"), level_wvs),
@@ -1203,6 +1430,12 @@ def produce_dataset(profile_indices, level_pressures,
     ds["Level_Ice"].attrs["units"] = "kg/kg"
     ds["Level_RH"].attrs["units"] = "%"
     ds["Level_z"].attrs["units"] = "m"
+    ds["Sunhat_hua"].attrs["units"] = "kg m-3"
+    ds["Dwdhat_hua"].attrs["units"] = "kg m-3"
+    ds["Foghat_hua"].attrs["units"] = "kg m-3"
+    ds["Tophat_hua"].attrs["units"] = "kg m-3"
+    ds["Joyhat_hua"].attrs["units"] = "kg m-3"
+    ds["Hamhat_hua"].attrs["units"] = "kg m-3"
 
     ds = clean_dataset(ds)
     ds = interpolate_azimuths(ds)
@@ -1238,14 +1471,18 @@ if __name__=="__main__":
     args = parse_arguments()
     sza_float = 0.
     n_levels = 180
-
+    '''
+    '''
     # Read FESSTVaL 1 RAO:
     print("Processing FESSTVaL RAO:")
     profile_indices1, level_pressures, level_temperatures, level_wvs,\
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times,\
         level_ppmvs, level_liq, level_z, level_rhs, level_ice,\
         tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat, tbs_joyhat,\
-        tbs_hamhat =\
+        tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
+        joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
+        lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
+        iwvs_ham  =\
         summarize_many_profiles(pattern=\
         "/home/aki/PhD_data/FESSTVaL_14GB/radiosondes/RAO/sups_rao_sonde00_l1_any_v00_*.nc",\
              sza_float=sza_float,n_levels=n_levels, mwrs="dwdhat/foghat") 
@@ -1256,7 +1493,10 @@ if __name__=="__main__":
         srf_altitude, sza,\
         times ,level_ice,\
         tbs_dwdhat, tbs_foghat, tbs_sunhat,tbs_tophat, tbs_joyhat,\
-        tbs_hamhat,\
+        tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
+        joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
+        lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
+        iwvs_ham,\
         outifle=args.output1,n_levels=n_levels, campaign="FESSTVaL_RAO",\
         location="RAO_Lindenberg")
 
@@ -1266,7 +1506,10 @@ if __name__=="__main__":
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times,\
         level_ppmvs, level_liq, level_z, level_rhs, level_ice,\
         tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat, tbs_joyhat,\
-        tbs_hamhat =\
+        tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
+        joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
+        lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
+        iwvs_ham  =\
         summarize_many_profiles(pattern=\
         "/home/aki/PhD_data/FESSTVaL_14GB/radiosondes/UHH/fval_uhh_sonde00_l1_any_v00_*.nc",\
              sza_float=sza_float,n_levels=n_levels, mwrs="dwdhat/foghat") 
@@ -1278,7 +1521,10 @@ if __name__=="__main__":
         srf_altitude, sza,\
         times ,level_ice,\
         tbs_dwdhat, tbs_foghat, tbs_sunhat,tbs_tophat, tbs_joyhat,\
-        tbs_hamhat,\
+        tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
+        joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
+        lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
+        iwvs_ham,\
         outifle=args.output1,n_levels=n_levels, campaign="FESSTVaL_UHH",\
         location="RAO_Lindenberg")
             
@@ -1288,7 +1534,10 @@ if __name__=="__main__":
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times,\
         level_ppmvs, level_liq, level_z, level_rhs, level_ice,\
         tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat, tbs_joyhat,\
-        tbs_hamhat =\
+        tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
+        joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
+        lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
+        iwvs_ham  =\
         summarize_many_profiles(pattern=\
         "/home/aki/PhD_data/FESSTVaL_14GB/radiosondes/UzK/fval_uzk*.nc",\
              sza_float=sza_float,n_levels=n_levels, mwrs="sunhat") 
@@ -1300,7 +1549,10 @@ if __name__=="__main__":
         srf_altitude, sza,\
         times ,level_ice,\
         tbs_dwdhat, tbs_foghat, tbs_sunhat,tbs_tophat, tbs_joyhat,\
-        tbs_hamhat,\
+        tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
+        joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
+        lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
+        iwvs_ham,\
         outifle=args.output1,n_levels=n_levels, campaign="FESSTVaL_UzK",\
         location="Falkenberg")  
         
@@ -1310,7 +1562,10 @@ if __name__=="__main__":
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times,\
         level_ppmvs, level_liq, level_z, level_rhs, level_ice,\
         tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat, tbs_joyhat,\
-        tbs_hamhat =\
+        tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
+        joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
+        lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
+        iwvs_ham  =\
         summarize_many_profiles(pattern=\
         "/home/aki/PhD_data/Socles/radiosondes/202*/SOUNDING DATA/*_Profile.txt",\
              sza_float=sza_float,n_levels=n_levels, mwrs="tophat") 
@@ -1322,17 +1577,23 @@ if __name__=="__main__":
         srf_altitude, sza,\
         times ,level_ice,\
         tbs_dwdhat, tbs_foghat, tbs_sunhat,tbs_tophat, tbs_joyhat,\
-        tbs_hamhat,\
+        tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
+        joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
+        lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
+        iwvs_ham,\
         outifle=args.output1 ,n_levels=n_levels, campaign="Socles",\
         location="JOYCE")
-    
+
     # Uncropped:
     print("Processing Vital I:")
     profile_indices5, level_pressures, level_temperatures, level_wvs,\
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza, times,\
         level_ppmvs, level_liq, level_z, level_rhs, level_ice,\
         tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat, tbs_joyhat,\
-        tbs_hamhat =\
+        tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
+        joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
+        lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
+        iwvs_ham  =\
         summarize_many_profiles(sza_float=sza_float,n_levels=n_levels,\
         crop=True, mwrs="hamhat/joyhat") 
     # srf_altitude = np.array([h_km_vital]*len(srf_altitude))
@@ -1344,7 +1605,10 @@ if __name__=="__main__":
         srf_altitude, sza,\
         times ,level_ice,\
         tbs_dwdhat, tbs_foghat, tbs_sunhat,tbs_tophat, tbs_joyhat,\
-        tbs_hamhat,\
+        tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
+        joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
+        lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
+        iwvs_ham,\
         outifle=args.output1,n_levels=n_levels, campaign="Vital I",\
         location="JOYCE")
    
