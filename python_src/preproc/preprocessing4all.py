@@ -621,10 +621,18 @@ def derive_cloud_features(p_array, t_array, ppmv_array, m_array,\
 def nearest_ele4elevation(ele_values, azi_values, ele_times,\
         target_elevation,target_azi,datetime_np):
     # Boolean Maske für alle Stellen, an denen "ele" exakt target_elevation ist
-    match_mask = (abs(ele_values-target_elevation)<0.05)
-    match_mask2 = (abs(azi_values-target_azi)<0.05)
+    match_mask = (abs(ele_values-target_elevation)<0.05)   
+    if target_azi =="ANY":
+        match_mask2 = [True]*len(ele_values)
+    else:
+        match_mask2 = (abs(azi_values-target_azi)<0.05)
     final_mask = match_mask & match_mask2
-
+    ####################################
+    # print("len(match_mask):", len(match_mask)) 
+    # print("len(match_mask2):", len(match_mask2))     
+    # print("len(ele_values):", len(ele_values))         
+    # print("len(ele_times):", len(ele_times))     
+    
     if not final_mask.any():
         nearest_idx = None
     else:
@@ -650,7 +658,13 @@ def nearest_ele4elevation(ele_values, azi_values, ele_times,\
         # Elevation check:
         nearest_value = ele_values[nearest_idx]
         nearest_value2 = azi_values[nearest_idx]
-        if abs(nearest_value-target_elevation)>0.05 or\
+        if target_azi =="ANY":
+            if abs(nearest_value-target_elevation)>0.05:
+                print("WARNING: Azimuth or Elevation does not agree, as expected!")
+                print("Ele/Azi tagret values: ",target_elevation, target_azi)
+                print("Ele/Azi found values: ",nearest_value,\
+                    nearest_value2)            
+        elif abs(nearest_value-target_elevation)>0.05 or\
                  (abs(nearest_value2-target_azi)>0.05):
              print("WARNING: Azimuth or Elevation does not agree, as expected!")
              print("Ele/Azi tagret values: ",target_elevation, target_azi)
@@ -754,59 +768,80 @@ def interp2_180(x_array, y_array, x_new=None):
     
 ##############################################################################
 
-def get_profs_from_l2(l2_files, datetime_np):
+def get_profs_from_l2(l2_files, datetime_np, n_levels = 180):
     data = np.full((4,180), np.nan)
     lwp, iwv = np.nan, np.nan
 
     for file in l2_files:
         if "single" in file:
             ds = xr.open_dataset(file)
-            time_diffs = np.abs(ds["time"].values - datetime_np)
-            min_idx = time_diffs.argmin()
-            x_new, y_new = interp2_180(ds["height"].values,\
-                ds["temperature"].values[min_idx, :])
-            data[0,:] = x_new     
-            data[1,:] = y_new    
-            x_new, y_new = interp2_180(ds["height"].values,\
-                ds["absolute_humidity"].values[min_idx, :])       
-            data[3,:] = y_new   
-            lwp = ds["lwp"].values[min_idx]         
-            iwv = ds["iwv"].values[min_idx]       
+            # time_diffs = np.abs(ds["time"].values - datetime_np)
+            # min_idx = time_diffs.argmin()
+            min_idx = nearest_ele4elevation(ds["elevation_angle"].values,\
+                ds["azimuth_angle"].values,\
+                ds["time"].values, 90., "ANY" , datetime_np)
+            if min_idx is None:
+                data[0,:] = [np.nan]*n_levels   
+                data[1,:] = [np.nan]*n_levels   
+                data[3,:] = [np.nan]*n_levels   
+            else:                
+                x_new, y_new = interp2_180(ds["height"].values,\
+		        ds["temperature"].values[min_idx, :])
+                data[0,:] = x_new     
+                data[1,:] = y_new    
+                x_new, y_new = interp2_180(ds["height"].values,\
+		        ds["absolute_humidity"].values[min_idx, :])       
+                data[3,:] = y_new   
+                lwp = ds["lwp"].values[min_idx]         
+                iwv = ds["iwv"].values[min_idx]       
         if "mwr00_l2_ta_" in file:
             ds = xr.open_dataset(file)
-            time_diffs = np.abs(ds["time"].values - datetime_np)
-            min_idx = time_diffs.argmin()
-            x_new, y_new = interp2_180(ds["height"].values,\
-                 ds["ta"].values[min_idx, :])
-            data[0,:] = x_new     
-            data[1,:] = y_new
+            # time_diffs = np.abs(ds["time"].values - datetime_np)
+            # min_idx = time_diffs.argmin()
+            min_idx = nearest_ele4elevation(ds["ele"].values, ds["azi"].values,\
+                ds["time"].values, 90., "ANY" , datetime_np) 
+            if min_idx is None:
+                data[0,:] = [np.nan]*n_levels   
+                data[1,:] = [np.nan]*n_levels   
+            else:                            
+                x_new, y_new = interp2_180(ds["height"].values,\
+                     ds["ta"].values[min_idx, :])
+                data[0,:] = x_new     
+                data[1,:] = y_new
         elif "mwrBL00_l2_ta_" in file:
             ds = xr.open_dataset(file)
             time_diffs = np.abs(ds["time"].values - datetime_np)
             min_idx = time_diffs.argmin()
-            x_new1, y_new = interp2_180(ds["height"].values,\
-                 ds["ta"].values[min_idx, :]) #, x_new=x_new)
-            data[2,:] = y_new            
+            if min_idx is None:
+                data[2,:] = [np.nan]*n_levels     
+            else: 
+                x_new1, y_new = interp2_180(ds["height"].values,\
+                     ds["ta"].values[min_idx, :]) #, x_new=x_new)
+                data[2,:] = y_new            
         elif "_hua_" in file:
             ds = xr.open_dataset(file)
-            time_diffs = np.abs(ds["time"].values - datetime_np)
-            min_idx = time_diffs.argmin()
-            x_new2, y_new = interp2_180(ds["height"].values,\
-                 ds["hua"].values[min_idx, :]) #, x_new=x_new)
-            data[3,:] = y_new                 
+            min_idx = nearest_ele4elevation(ds["ele"].values, ds["azi"].values,\
+                ds["time"].values, 90., "ANY" , datetime_np)  
+            if min_idx is None:
+                data[3,:] = [np.nan]*n_levels   
+            else:                 
+                x_new2, y_new = interp2_180(ds["height"].values,\
+                     ds["hua"].values[min_idx, :]) #, x_new=x_new)
+                data[3,:] = y_new                 
         elif "_prw_" in file:
             ds = xr.open_dataset(file)
-            time_diffs = np.abs(ds["time"].values - datetime_np)
-            min_idx = time_diffs.argmin()
+            # time_diffs = np.abs(ds["time"].values - datetime_np)
+            # min_idx = time_diffs.argmin()
+            min_idx = nearest_ele4elevation(ds["ele"].values, ds["azi"].values,\
+                ds["time"].values, 90., "ANY" , datetime_np)                 
             iwv = ds["prw"].values[min_idx] 
             # All Water Vapor
             # print(ds["prw"])             
         elif "_clwvi_" in file:
             ds = xr.open_dataset(file)
-            time_diffs = np.abs(ds["time"].values - datetime_np)
-            min_idx = time_diffs.argmin()
+            min_idx = nearest_ele4elevation(ds["ele"].values, ds["azi"].values,\
+                ds["time"].values, 90., "ANY" , datetime_np)  
             lwp = ds["clwvi"].values[min_idx]       
-            # print(ds["clwvi"])
     
     ######################
     # Führt zu Fehler, wo keine Dateien vorhanden sind...
@@ -926,7 +961,7 @@ def check_units_physical_realism(p_array, t_array, ppmv_array,\
 
 def summarize_many_profiles(pattern=\
                     "/home/aki/PhD_data/Vital_I/radiosondes/202408*_*.nc",\
-                    crop=False, sza_float =0., n_levels=137, mwrs=""):
+                    crop=False, sza_float =0., n_levels=180, mwrs=""):
                          
     # Bodenlevel ist bei Index -1 - Umkehr der Profile!
     h_km_vital = 0.092
@@ -1277,7 +1312,17 @@ def clean_dataset(ds):
         if np.isnan(ds["Level_z"].values[:,i,0]).any() and\
                 np.isnan(ds["Level_z"].values[:,i,1]).any():
             exclude_times.append(timestamp)
-            # Neuer Erfolg: Nur UHH und Socles fallen vol raus!!!
+
+        # Check for TBs being only NaNs:
+        all_nans = True
+        for arr_name in ["TBs_dwdhat", "TBs_foghat", "TBs_sunhat",\
+                "TBs_tophat", "TBs_joyhat", "TBs_hamhat"]:
+            arr = ds[arr_name].values[i]
+            if not np.isnan(arr).all():
+                all_nans = False
+                break
+        if all_nans:
+            exclude_times.append(timestamp)
     
     for timestamp in exclude_times:
          ds = ds.sel(time=ds.time != timestamp)
@@ -1341,42 +1386,42 @@ def produce_dataset(profile_indices, level_pressures,
                                      
             "Dwdhat_z":           (( "time","N_Levels"), dwd_profiles[:,0,:]),    
             "Dwdhat_ta":           (( "time","N_Levels"), dwd_profiles[:,1,:]), 
-            "Dwdhat_taBL":           (( "time","N_Levels"), dwd_profiles[:,2,:]), 
+            # "Dwdhat_taBL":           (( "time","N_Levels"), dwd_profiles[:,2,:]), 
             "Dwdhat_hua":           (( "time","N_Levels"), dwd_profiles[:,3,:]), 
             "Dwdhat_IWV":           (("time",), iwvs_dwd),
             "Dwdhat_LWP":           (("time",), lwps_dwd),
                          
             "Foghat_z":           (( "time","N_Levels"), fog_profiles[:,0,:]),    
             "Foghat_ta":           (( "time","N_Levels"), fog_profiles[:,1,:]), 
-            "Foghat_taBL":           (( "time","N_Levels"), fog_profiles[:,2,:]), 
+            # "Foghat_taBL":           (( "time","N_Levels"), fog_profiles[:,2,:]), 
             "Foghat_hua":           (( "time","N_Levels"), fog_profiles[:,3,:]),
             "Foghat_IWV":           (("time",), iwvs_fog),
             "Foghat_LWP":           (("time",), lwps_fog),
                         
             "Sunhat_z":           (( "time","N_Levels"), sun_profiles[:,0,:]),    
             "Sunhat_ta":           (( "time","N_Levels"), sun_profiles[:,1,:]), 
-            "Sunhat_taBL":           (( "time","N_Levels"), sun_profiles[:,2,:]), 
+            # "Sunhat_taBL":           (( "time","N_Levels"), sun_profiles[:,2,:]), 
             "Sunhat_hua":           (( "time","N_Levels"), sun_profiles[:,3,:]),
             "Sunhat_IWV":           (("time",), iwvs_sun),
             "Sunhat_LWP":           (("time",), lwps_sun),
                         
             "Tophat_z":           (( "time","N_Levels"), top_profiles[:,0,:]),    
             "Tophat_ta":           (( "time","N_Levels"),top_profiles[:,1,:]), 
-            "Tophat_taBL":           (( "time","N_Levels"), top_profiles[:,2,:]), 
+            # "Tophat_taBL":           (( "time","N_Levels"), top_profiles[:,2,:]), 
             "Tophat_hua":           (( "time","N_Levels"),top_profiles[:,3,:]),     
             "Tophat_IWV":           (("time",), iwvs_top),
             "Tophat_LWP":           (("time",), lwps_top),            
             
             "Joyhat_z":           (( "time","N_Levels"),joy_profiles[:,0,:]),    
             "Joyhat_ta":           (( "time","N_Levels"), joy_profiles[:,1,:]), 
-            "Joyhat_taBL":           (( "time","N_Levels"), joy_profiles[:,2,:]), 
+            # "Joyhat_taBL":           (( "time","N_Levels"), joy_profiles[:,2,:]), 
             "Joyhat_hua":           (( "time","N_Levels"), joy_profiles[:,3,:]),  
             "Joyhat_IWV":           (("time",), iwvs_joy),
             "Joyhat_LWP":           (("time",), lwps_joy),               
 
             "Hamhat_z":           (( "time","N_Levels"), ham_profiles[:,0,:]),    
             "Hamhat_ta":           (( "time","N_Levels"), ham_profiles[:,1,:]), 
-            "Hamhat_taBL":           (( "time","N_Levels"),ham_profiles[:,2,:]), 
+            # "Hamhat_taBL":           (( "time","N_Levels"),ham_profiles[:,2,:]), 
             "Hamhat_hua":           (( "time","N_Levels"),ham_profiles[:,3,:]),
             "Hamhat_IWV":           (("time",), iwvs_ham),
             "Hamhat_LWP":           (("time",), lwps_ham),
