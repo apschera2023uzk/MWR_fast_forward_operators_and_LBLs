@@ -7,6 +7,13 @@
 # Takes a number of NetCDF files from rs as input
 # Creates one NetCDF that contains files in ARMS-gb readable structure!
 
+# Important limitations:
+# => MWR and rs are matched if there is maximum a 30 minute difference between both measurement times.
+# => LWC and LWP are derived via Nandan et al. 2022; Mixed phase clouds are assumed liquid; IWC is assumed same as LWC.
+# => 
+
+##############################################################
+
 import math
 import argparse
 import os
@@ -985,6 +992,7 @@ def summarize_many_profiles(pattern=\
     joy_profiles= np.full((n, 4,180), np.nan)
     ham_profiles= np.full((n, 4,180), np.nan)
     
+    lwps_rs = np.full((n, 2), np.nan)
     lwps_dwd = np.full((n), np.nan)
     lwps_fog = np.full((n), np.nan)
     lwps_sun = np.full((n), np.nan)
@@ -1057,6 +1065,7 @@ def summarize_many_profiles(pattern=\
             #################
             # p in hPa as in other inputs!
             # mixing ratio in g/kg
+            lwps_rs[i, 1] = lwp_kg_m2
             level_pressures[:,i,1] = p_array[-n_levels:]
             level_temperatures[:,i,1] = t_array[-n_levels:]
             level_wvs[:,i,1] = m_array[-n_levels:]*1000 # convert kg/kg to g/kg
@@ -1147,6 +1156,7 @@ def summarize_many_profiles(pattern=\
         #################
         # p in hPa as in other inputs!
         # mixing ratio in g/kg
+        lwps_rs[i, 0] = lwp_kg_m2
         tbs_dwdhat[i,:,:,:] = tbs_dwdhat1
         tbs_foghat[i,:,:,:] = tbs_foghat1
         tbs_sunhat[i,:,:,:] = tbs_sunhat1
@@ -1197,7 +1207,7 @@ def summarize_many_profiles(pattern=\
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham
+        iwvs_ham, lwps_rs
 
 ##############################################################################
 
@@ -1353,7 +1363,7 @@ def produce_dataset(profile_indices, level_pressures,
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham,\
+        iwvs_ham,lwps_rs, \
         outifle="blub.nc", n_levels=137,\
         campaign="any_camp",\
         location="any_location", elevations=elevations, azimuths=azimuths):
@@ -1438,6 +1448,7 @@ def produce_dataset(profile_indices, level_pressures,
 
             # Oberflächenparameter
             # "times":                (("N_Times"), times),
+            "LWP_radiosonde":       (("time","Crop"), lwps_rs),
             "Obs_Surface_Pressure": (("time","Crop"), srf_pressures),
             "Obs_Temperature_2M":   (("time","Crop"), srf_temps),
             "Obs_H2O_2M":           (("time","Crop"), srf_wvs),
@@ -1466,6 +1477,7 @@ def produce_dataset(profile_indices, level_pressures,
 
     # Add units:
     ds["Level_Pressure"].attrs["units"] = "hPa"
+    ds["LWP_radiosonde"].attrs["units"] = "kg m-2"
     ds["elevation"].attrs["units"] = "degree"
     ds["azimuth"].attrs["units"] = "degree"
     ds["Level_Temperature"].attrs["units"] = "K"
@@ -1527,7 +1539,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham  =\
+        iwvs_ham, lwps_rs  =\
         summarize_many_profiles(pattern=\
         "/home/aki/PhD_data/FESSTVaL_14GB/radiosondes/RAO/sups_rao_sonde00_l1_any_v00_*.nc",\
              sza_float=sza_float,n_levels=n_levels, mwrs="dwdhat/foghat") 
@@ -1541,7 +1553,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham,\
+        iwvs_ham,lwps_rs,\
         outifle=args.output1,n_levels=n_levels, campaign="FESSTVaL_RAO",\
         location="RAO_Lindenberg")
 
@@ -1554,7 +1566,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham  =\
+        iwvs_ham, lwps_rs  =\
         summarize_many_profiles(pattern=\
         "/home/aki/PhD_data/FESSTVaL_14GB/radiosondes/UHH/fval_uhh_sonde00_l1_any_v00_*.nc",\
              sza_float=sza_float,n_levels=n_levels, mwrs="dwdhat/foghat") 
@@ -1569,7 +1581,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham,\
+        iwvs_ham,lwps_rs,\
         outifle=args.output1,n_levels=n_levels, campaign="FESSTVaL_UHH",\
         location="RAO_Lindenberg")
             
@@ -1582,7 +1594,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham  =\
+        iwvs_ham,lwps_rs =\
         summarize_many_profiles(pattern=\
         "/home/aki/PhD_data/FESSTVaL_14GB/radiosondes/UzK/fval_uzk*.nc",\
              sza_float=sza_float,n_levels=n_levels, mwrs="sunhat") 
@@ -1597,7 +1609,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham,\
+        iwvs_ham,lwps_rs,\
         outifle=args.output1,n_levels=n_levels, campaign="FESSTVaL_UzK",\
         location="Falkenberg")  
         
@@ -1610,7 +1622,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham  =\
+        iwvs_ham, lwps_rs  =\
         summarize_many_profiles(pattern=\
         "/home/aki/PhD_data/Socles/radiosondes/202*/SOUNDING DATA/*_Profile.txt",\
              sza_float=sza_float,n_levels=n_levels, mwrs="tophat") 
@@ -1625,7 +1637,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham,\
+        iwvs_ham,lwps_rs,\
         outifle=args.output1 ,n_levels=n_levels, campaign="Socles",\
         location="JOYCE")
 
@@ -1638,7 +1650,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham  =\
+        iwvs_ham, lwps_rs =\
         summarize_many_profiles(sza_float=sza_float,n_levels=n_levels,\
         crop=True, mwrs="hamhat/joyhat") 
     # srf_altitude = np.array([h_km_vital]*len(srf_altitude))
@@ -1653,7 +1665,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham,\
+        iwvs_ham,lwps_rs,\
         outifle=args.output1,n_levels=n_levels, campaign="Vital I",\
         location="JOYCE")
    
