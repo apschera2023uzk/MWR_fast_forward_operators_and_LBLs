@@ -257,7 +257,7 @@ def read_radiosonde_txt(file=\
     if max_index<1000:
         print("Low max index!!!")
         return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan, np.nan
-    elif np.nanmax(df["Alt"].values)<3000:
+    elif np.nanmax(df["Alt"].values)<10000:
         print("No 3000 value!")
         return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan, np.nan
         
@@ -464,7 +464,7 @@ def derive_cloud_features(p_array, t_array, ppmv_array, m_array,\
                     bases.append(z)
                 in_cloud = False
         elif 6000<z<12000:
-            if rh[i]>six2twelvekm[0]:
+          if rh[i]>six2twelvekm[0]:
                 cloud_bools[i] = True
                 if not in_cloud:
                     tops.append(z)
@@ -876,6 +876,7 @@ def get_mwr_data(datetime_np, mwrs):
         l2_files = [file for file in files if "l2" in file] 
         tbs_dwdhat = get_tbs_from_l1(l1_files, datetime_np)
         dwd_profiles, lwp_dwd, iwv_dwd = get_profs_from_l2(l2_files, datetime_np)
+        dwd_profiles[0,:] = dwd_profiles[0,:] + 112
     else:
         tbs_dwdhat = np.full((10, 72, 14), np.nan)
         dwd_profiles = np.full((4,180), np.nan)
@@ -887,6 +888,7 @@ def get_mwr_data(datetime_np, mwrs):
         l2_files = [file for file in files if "l2" in file] 
         tbs_foghat = get_tbs_from_l1(l1_files, datetime_np)
         fog_profiles, lwp_fog, iwv_fog = get_profs_from_l2(l2_files, datetime_np)
+        fog_profiles[0,:] = fog_profiles[0,:] + 112
     else:
         tbs_foghat = np.full((10, 72, 14), np.nan)
         fog_profiles = np.full((4,180), np.nan)
@@ -898,6 +900,7 @@ def get_mwr_data(datetime_np, mwrs):
         l2_files = [file for file in files if "l2" in file] 
         tbs_sunhat = get_tbs_from_l1(l1_files, datetime_np)
         sun_profiles, lwp_sun, iwv_sun = get_profs_from_l2(l2_files, datetime_np)
+        sun_profiles[0,:] = sun_profiles[0,:] + 74
     else:
         tbs_sunhat = np.full((10, 72, 14), np.nan)    
         sun_profiles = np.full((4,180), np.nan)
@@ -909,6 +912,7 @@ def get_mwr_data(datetime_np, mwrs):
         l2_files = [file for file in files if "l2" in file] 
         tbs_tophat = get_tbs_from_l1(l1_files, datetime_np)
         top_profiles, lwp_top, iwv_top = get_profs_from_l2(l2_files, datetime_np)
+        top_profiles[0,:] = top_profiles[0,:] + 110
     else:
         tbs_tophat = np.full((10, 72, 14), np.nan)
         top_profiles = np.full((4,180), np.nan)
@@ -975,6 +979,7 @@ def summarize_many_profiles(pattern=\
     h_km_vital_crop = 0.112   
     files = glob.glob(pattern)
     n = len(files)
+    print("Number of files before filtering: ", n)
     profile_indices = []
     srf_pressures = np.empty([n,2])
     srf_temps = np.empty([n,2])
@@ -1303,7 +1308,6 @@ def write_armsgb_input_nc(profile_indices, level_pressures,
     ds["Level_Liquid"].attrs["units"] = "kg/kg"
     ds["Level_RH"].attrs["units"] = "%"
     ds["Level_z"].attrs["units"] = "m"
-
     
     # Schreibe die NetCDF-Datei
     # ds.to_netcdf(outifle, format="NETCDF4_CLASSIC")
@@ -1336,7 +1340,8 @@ def clean_dataset(ds):
     
     for timestamp in exclude_times:
          ds = ds.sel(time=ds.time != timestamp)
-    
+         
+    print("Number of files after filtering: ", len(ds["time"].values))
     return ds
 
 ##############################################################################
@@ -1493,7 +1498,16 @@ def produce_dataset(profile_indices, level_pressures,
     ds["Tophat_hua"].attrs["units"] = "kg m-3"
     ds["Joyhat_hua"].attrs["units"] = "kg m-3"
     ds["Hamhat_hua"].attrs["units"] = "kg m-3"
-
+    ds["Sunhat_z"].attrs["units"] = "Height above mean sea level - not consistent for different instruments"
+    ds["Dwdhat_z"].attrs["units"] = "Height above mean sea level - not consistent for different instruments"
+    ds["Foghat_z"].attrs["units"] = "Height above mean sea level - not consistent for different instruments"
+    ds["Tophat_z"].attrs["units"] = "Height above mean sea level - not consistent for different instruments"
+    ds["Joyhat_z"].attrs["units"] = "Height above mean sea level - not consistent for different instruments"
+    ds["Hamhat_z"].attrs["units"] = "Height above mean sea level - not consistent for different instruments"    
+    
+    # Additional attrs:
+    ds.attrs["Description"] = "Radiosondes and associated MWR BT measurements from Vital I, Socles and FESSTVaL. Level variables are rs."
+    
     ds = clean_dataset(ds)
     ds = interpolate_azimuths(ds)
     
