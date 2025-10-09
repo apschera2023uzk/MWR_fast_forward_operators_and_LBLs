@@ -464,7 +464,7 @@ def derive_cloud_features(p_array, t_array, ppmv_array, m_array,\
                     bases.append(z)
                 in_cloud = False
         elif 6000<z<12000:
-          if rh[i]>six2twelvekm[0]:
+            if rh[i]>six2twelvekm[0]:
                 cloud_bools[i] = True
                 if not in_cloud:
                     tops.append(z)
@@ -694,6 +694,7 @@ def derive_elevation_index(ds_bl, elevation):
 def get_tbs_from_l1(l1_files, datetime_np, elevations=elevations,\
         azimuths=azimuths): 
     tbs = np.full((10, 72, 14), np.nan)
+    lat = np.nan; lon = np.nan
     
     for file in l1_files:
         
@@ -721,10 +722,14 @@ def get_tbs_from_l1(l1_files, datetime_np, elevations=elevations,\
                         pass
                     else:
                         tbs[i,j, :] = ds_c1["tb"].values[time_idx,:]
-                        # print("TBs found MWR: ", ds_c1["tb"].values[time_idx,:])
+            if "latitude" in ds_c1.data_vars:
+                lat = ds_c1["latitude"].values[0]
+                lon = ds_c1["longitude"].values[0]
+            elif "lat" in ds_c1.data_vars:
+                lat = ds_c1["lat"].values
+                lon = ds_c1["lon"].values           
         else: 
             ds_mwr = xr.open_dataset(file)
-            # print("Opened MWR for file: ", file)
             for i,elevation in enumerate(elevations):
                 # 
                 for j,azi in enumerate(azimuths):
@@ -735,8 +740,13 @@ def get_tbs_from_l1(l1_files, datetime_np, elevations=elevations,\
                         pass
                     else:
                         tbs[i,j, :] = ds_mwr["tb"].values[time_idx,:]
-                        # print("TBs found MWR: ", ds_mwr["tb"].values[time_idx,:])
-    return tbs
+            if "latitude" in ds_mwr.data_vars:
+                lat = ds_mwr["latitude"].values[0]
+                lon = ds_mwr["longitude"].values[0]
+            elif "lat" in ds_mwr.data_vars:
+                lat = ds_mwr["lat"].values
+                lon = ds_mwr["lon"].values 
+    return tbs, lat, lon
    
 ##############################################################################
 
@@ -874,7 +884,7 @@ def get_mwr_data(datetime_np, mwrs):
         files = [file for file in dwd_files if datestring in file]   
         l1_files = [file for file in files if "l1" in file]   
         l2_files = [file for file in files if "l2" in file] 
-        tbs_dwdhat = get_tbs_from_l1(l1_files, datetime_np)
+        tbs_dwdhat, lat, lon = get_tbs_from_l1(l1_files, datetime_np)
         dwd_profiles, lwp_dwd, iwv_dwd = get_profs_from_l2(l2_files, datetime_np)
         dwd_profiles[0,:] = dwd_profiles[0,:] + 112
     else:
@@ -886,7 +896,7 @@ def get_mwr_data(datetime_np, mwrs):
         files = [file for file in fog_files if datestring in file]   
         l1_files = [file for file in files if "l1" in file]   
         l2_files = [file for file in files if "l2" in file] 
-        tbs_foghat = get_tbs_from_l1(l1_files, datetime_np)
+        tbs_foghat, lat, lon = get_tbs_from_l1(l1_files, datetime_np)
         fog_profiles, lwp_fog, iwv_fog = get_profs_from_l2(l2_files, datetime_np)
         fog_profiles[0,:] = fog_profiles[0,:] + 112
     else:
@@ -898,7 +908,7 @@ def get_mwr_data(datetime_np, mwrs):
         files = [file for file in sun_files if datestring in file]   
         l1_files = [file for file in files if "l1" in file]   
         l2_files = [file for file in files if "l2" in file] 
-        tbs_sunhat = get_tbs_from_l1(l1_files, datetime_np)
+        tbs_sunhat, lat, lon = get_tbs_from_l1(l1_files, datetime_np)
         sun_profiles, lwp_sun, iwv_sun = get_profs_from_l2(l2_files, datetime_np)
         sun_profiles[0,:] = sun_profiles[0,:] + 74
     else:
@@ -910,7 +920,7 @@ def get_mwr_data(datetime_np, mwrs):
         files = [file for file in top_files if datestring in file]   
         l1_files = [file for file in files if "l1" in file]   
         l2_files = [file for file in files if "l2" in file] 
-        tbs_tophat = get_tbs_from_l1(l1_files, datetime_np)
+        tbs_tophat, lat, lon = get_tbs_from_l1(l1_files, datetime_np)
         top_profiles, lwp_top, iwv_top = get_profs_from_l2(l2_files, datetime_np)
         top_profiles[0,:] = top_profiles[0,:] + 110
     else:
@@ -922,7 +932,7 @@ def get_mwr_data(datetime_np, mwrs):
         files = [file for file in joy_files if datestring in file]   
         l1_files = [file for file in files if "1C01" in file]   
         l2_files = [file for file in files if "single" in file] 
-        tbs_joyhat = get_tbs_from_l1(l1_files, datetime_np)
+        tbs_joyhat, lat, lon = get_tbs_from_l1(l1_files, datetime_np)
         joy_profiles, lwp_joy, iwv_joy = get_profs_from_l2(l2_files, datetime_np) 
     else:
         tbs_joyhat = np.full((10, 72, 14), np.nan)
@@ -933,7 +943,7 @@ def get_mwr_data(datetime_np, mwrs):
         files = [file for file in ham_files if datestring in file]   
         l1_files = [file for file in files if "1C01" in file]   
         l2_files = [file for file in files if "single" in file] 
-        tbs_hamhat = get_tbs_from_l1(l1_files, datetime_np)
+        tbs_hamhat, lat, lon = get_tbs_from_l1(l1_files, datetime_np)
         ham_profiles, lwp_ham, iwv_ham = get_profs_from_l2(l2_files, datetime_np)
     else:
         tbs_hamhat = np.full((10, 72, 14), np.nan)
@@ -947,7 +957,7 @@ def get_mwr_data(datetime_np, mwrs):
     
     return tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat, tbs_joyhat,\
         tbs_hamhat, dwd_profiles,fog_profiles, sun_profiles, top_profiles,\
-        joy_profiles, ham_profiles, integrals
+        joy_profiles, ham_profiles, integrals, lat, lon
 
 ##############################################################################
 
@@ -1022,6 +1032,8 @@ def summarize_many_profiles(pattern=\
     srf_altitude = np.empty([n,2])
     
     times = np.empty([n])
+    lats = np.full((n), np.nan)
+    lons = np.full((n), np.nan)
     sza = [sza_float]*n
     
     for i, file in enumerate(files):
@@ -1033,7 +1045,8 @@ def summarize_many_profiles(pattern=\
         ###################
         tbs_dwdhat1, tbs_foghat1,tbs_sunhat1,tbs_tophat1, tbs_joyhat1,\
         tbs_hamhat1, dwd_profiles1,fog_profiles1, sun_profiles1,\
-        top_profiles1, joy_profiles1, ham_profiles1, integrals =\
+        top_profiles1, joy_profiles1, ham_profiles1, integrals,\
+         lat, lon =\
             get_mwr_data(datetime_np, mwrs)
         times[i] = datetime_np
         if crop:
@@ -1162,6 +1175,8 @@ def summarize_many_profiles(pattern=\
         # p in hPa as in other inputs!
         # mixing ratio in g/kg
         lwps_rs[i, 0] = lwp_kg_m2
+        lats[i] = lat
+        lons[i] = lon
         tbs_dwdhat[i,:,:,:] = tbs_dwdhat1
         tbs_foghat[i,:,:,:] = tbs_foghat1
         tbs_sunhat[i,:,:,:] = tbs_sunhat1
@@ -1212,7 +1227,7 @@ def summarize_many_profiles(pattern=\
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham, lwps_rs
+        iwvs_ham, lwps_rs, lats, lons
 
 ##############################################################################
 
@@ -1368,7 +1383,7 @@ def produce_dataset(profile_indices, level_pressures,
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham,lwps_rs, \
+        iwvs_ham,lwps_rs, lats, lons, \
         outifle="blub.nc", n_levels=137,\
         campaign="any_camp",\
         location="any_location", elevations=elevations, azimuths=azimuths):
@@ -1465,7 +1480,9 @@ def produce_dataset(profile_indices, level_pressures,
             # Zusätzliche Metadaten
             "Profile_Index":        (("time",), profile_indices),
             "Campaign":        (("time",), [campaign]*len(times)),
-            "Location":        (("time",), [location]*len(times)),   
+            "Location":        (("time",), [location]*len(times)),
+            "Latitude":        (("time",), lats),
+            "Longitude":        (("time",), lons ),
         },
         
         # Ort / Kampagne - mit Dimension time!
@@ -1504,9 +1521,54 @@ def produce_dataset(profile_indices, level_pressures,
     ds["Tophat_z"].attrs["units"] = "Height above mean sea level - not consistent for different instruments"
     ds["Joyhat_z"].attrs["units"] = "Height above mean sea level - not consistent for different instruments"
     ds["Hamhat_z"].attrs["units"] = "Height above mean sea level - not consistent for different instruments"    
+    ds["time"].attrs["units"] = "Seconds since 1970-01-01T00:00:00"
+    for var in ["TBs_dwdhat", "TBs_foghat", "TBs_sunhat",\
+              "TBs_tophat", "TBs_joyhat", "TBs_hamhat"]:
+        ds[var].attrs["units"] = "K"
+    for var in ["Dwdhat_ta", "Foghat_ta", "Sunhat_ta",\
+                "Tophat_ta", "Joyhat_ta", "Hamhat_ta"]:
+        ds[var].attrs["units"] = "K"
+    for var in ["Dwdhat_IWV", "Dwdhat_LWP", "Foghat_IWV",\
+           "Foghat_LWP","Sunhat_IWV", "Sunhat_LWP", "Tophat_IWV",\
+           "Tophat_LWP","Joyhat_IWV", "Joyhat_LWP", "Hamhat_IWV",\
+           "Hamhat_LWP"]:
+        ds[var].attrs["units"] = "kg m-2"
+    ds["Obs_Surface_Pressure"].attrs["units"] = "hPa"
+    ds["Obs_Temperature_2M"].attrs["units"] = "K"
+    ds["Obs_H2O_2M"].attrs["units"] = "kg/kg"
+    ds["Surface_Pressure"].attrs["units"] = "hPa"
+    ds["Temperature_2M"].attrs["units"] = "K"
+    ds["H2O_2M"].attrs["units"] = "kg/kg"
+    ds["Surface_Altitude"].attrs["units"] = "km"
+
+    # Profile_Index: no unit, but add long_name
+    ds["Profile_Index"].attrs["long_name"] = "Number of radiosonde in dataset"
+    ds["Crop"].attrs["description"] = "Crop=1 contains shortened rs profiles for Processing with roof placed HATPRO Joyhat, as opposed to yard placed HATPRO Hamhat (Crop=0)."
     
     # Additional attrs:
-    ds.attrs["Description"] = "Radiosondes and associated MWR BT measurements from Vital I, Socles and FESSTVaL. Level variables are rs."
+    ds.attrs["author"] = "Alexander Pschera"
+    ds.attrs["institution"] = "University of Cologne"    
+    ds.attrs["description"] = "Radiosondes and associated MWR BT measurements from Vital I, Socles and FESSTVaL. Level variables are rs."
+    
+    ds.attrs.update({
+        "title": "Radiosonde and microwave radiometer brightness temperature dataset from FESSTVaL, SOCLES, and VITAL-I campaigns",
+        "summary": "This dataset contains co-located radiosonde profiles and HATPRO microwave radiometer brightness temperatures from three field campaigns at Jülich ObservatorY for Cloud Evolution (JOYCE) and Richard-Assmann-Observatory (RAO) in Lindenberg.",
+        "keywords": "radiosonde, microwave radiometer, brightness temperature, atmospheric profiles, water vapor, liquid water path",
+        "Conventions": "CF-1.8",  # WICHTIG für Interoperabilität!
+        "history": f"Created on {datetime.utcnow().isoformat()}Z by {os.getlogin()}",
+        "source": "Vaisala RS41/GRAW DMF-09 radiosondes and RPG-HATPRO microwave radiometers",
+        "references": "FESSTVaL radiosondes and other data: https://www.cen.uni-hamburg.de/icdc/data/atmosphere/samd-st-datasets/samd-st-fesstval.html | https://www.fdr.uni-hamburg.de/record/10279; SOCLES: https://gepris.dfg.de/gepris/projekt/430226822?context=projekt&task=showDetail&id=430226822&; Vital I: https://www.herz.uni-bonn.de/wordpress/index.php/vital-campaigns/",
+        "license": "CC BY 4.0",
+        # "acknowledgement": "Data collected within the DFG-funded projects FESSTVaL, SOCLES, and VITAL-I.",
+        "contact": "apscher1@uni-koeln.de",
+        "geospatial_lat_min": str(np.nanmin(lats)),
+        "geospatial_lat_max": str(np.nanmax(lats)),
+        "geospatial_lon_min": str(np.nanmin(lons)),
+        "geospatial_lon_max": str(np.nanmax(lons)),
+        "time_coverage_start": str(times.min()),
+        "time_coverage_end": str(times.max()),
+     })
+    
     
     ds = clean_dataset(ds)
     ds = interpolate_azimuths(ds)
@@ -1553,7 +1615,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham, lwps_rs  =\
+        iwvs_ham, lwps_rs, lats, lons  =\
         summarize_many_profiles(pattern=\
         "/home/aki/PhD_data/FESSTVaL_14GB/radiosondes/RAO/sups_rao_sonde00_l1_any_v00_*.nc",\
              sza_float=sza_float,n_levels=n_levels, mwrs="dwdhat/foghat") 
@@ -1567,7 +1629,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham,lwps_rs,\
+        iwvs_ham,lwps_rs, lats, lons,\
         outifle=args.output1,n_levels=n_levels, campaign="FESSTVaL_RAO",\
         location="RAO_Lindenberg")
 
@@ -1580,7 +1642,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham, lwps_rs  =\
+        iwvs_ham, lwps_rs, lats, lons  =\
         summarize_many_profiles(pattern=\
         "/home/aki/PhD_data/FESSTVaL_14GB/radiosondes/UHH/fval_uhh_sonde00_l1_any_v00_*.nc",\
              sza_float=sza_float,n_levels=n_levels, mwrs="dwdhat/foghat") 
@@ -1595,7 +1657,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham,lwps_rs,\
+        iwvs_ham,lwps_rs, lats, lons,\
         outifle=args.output1,n_levels=n_levels, campaign="FESSTVaL_UHH",\
         location="RAO_Lindenberg")
             
@@ -1608,7 +1670,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham,lwps_rs =\
+        iwvs_ham,lwps_rs, lats, lons =\
         summarize_many_profiles(pattern=\
         "/home/aki/PhD_data/FESSTVaL_14GB/radiosondes/UzK/fval_uzk*.nc",\
              sza_float=sza_float,n_levels=n_levels, mwrs="sunhat") 
@@ -1623,7 +1685,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham,lwps_rs,\
+        iwvs_ham,lwps_rs, lats, lons,\
         outifle=args.output1,n_levels=n_levels, campaign="FESSTVaL_UzK",\
         location="Falkenberg")  
         
@@ -1636,7 +1698,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham, lwps_rs  =\
+        iwvs_ham, lwps_rs, lats, lons  =\
         summarize_many_profiles(pattern=\
         "/home/aki/PhD_data/Socles/radiosondes/202*/SOUNDING DATA/*_Profile.txt",\
              sza_float=sza_float,n_levels=n_levels, mwrs="tophat") 
@@ -1651,7 +1713,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham,lwps_rs,\
+        iwvs_ham,lwps_rs, lats, lons,\
         outifle=args.output1 ,n_levels=n_levels, campaign="Socles",\
         location="JOYCE")
 
@@ -1664,7 +1726,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham, lwps_rs =\
+        iwvs_ham, lwps_rs, lats, lons =\
         summarize_many_profiles(sza_float=sza_float,n_levels=n_levels,\
         crop=True, mwrs="hamhat/joyhat") 
     # srf_altitude = np.array([h_km_vital]*len(srf_altitude))
@@ -1679,7 +1741,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham,lwps_rs,\
+        iwvs_ham,lwps_rs, lats, lons,\
         outifle=args.output1,n_levels=n_levels, campaign="Vital I",\
         location="JOYCE")
    
