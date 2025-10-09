@@ -28,8 +28,13 @@ from pyrtlib.climatology import AtmosphericProfiles as atmp
 from pyrtlib.utils import ppmv2gkg, mr2rh
 from datetime import datetime
 
+##############################################################################
+# 1.5: Parameter
+##############################################################################
+
 elevations = np.array([90., 30, 19.2, 14.4, 11.4, 8.4,  6.6,  5.4, 4.8,  4.2])
 azimuths = np.arange(0.,355.1,5.) # Interpoliere dazwischen!
+n_levels=180
 
 ##############################################################################
 # 2nd Used Functions
@@ -210,7 +215,7 @@ def read_radiosonde_nc_arms(file=\
         ds[h_var].values)
     if np.array(rh<=1.5).all():
         rh=rh*100
-    length_value = len(t_array )
+    length_value = len(t_array)
         
     m_array = []
     for rh_lev, t_lev, p_lev in zip (rh, t_array, p_array):
@@ -304,10 +309,15 @@ def add_clim2profiles(p_array, t_array, ppmv_array, m_array, z_array, rh):
     
     p_array = np.concatenate([p_array, np.array(p)[mask]])
     t_array = np.concatenate([t_array ,np.array(t)[mask]])
-    m_array = np.concatenate([m_array , np.array(gkg)[mask]])
+    m_array = np.concatenate([m_array , np.array(gkg)[mask]/1000])
     z_array = np.concatenate([z_array , np.array(z*1000)[mask]])
     rh = np.concatenate([rh , np.array(rhs_clim)[mask]])
-    ppmv_array = np.concatenate([ppmv_array , np.array(md[:, atmp.H2O])[mask]])
+    # ppmv_array = np.concatenate([ppmv_array , np.array(md[:, atmp.H2O])[mask]])
+    ppmv_array = np.array(m_array) * (28.9644e6 / 18.0153)
+    
+    # print("\n\nm_array: ",m_array)
+    # print("\n\nppmv_array: ",ppmv_array)
+    
     return p_array[::-1], t_array[::-1], ppmv_array[::-1], m_array[::-1],\
         z_array[::-1], rh[::-1]
 
@@ -776,17 +786,17 @@ def interpolate_preserve_old_points_fix(x_old, new_length):
 
 ####################################################################
 
-def interp2_180(x_array, y_array, x_new=None):
+def interp2_180(x_array, y_array, x_new=None, n_levels=n_levels):
     # if x_new is None:
-    x_new = interpolate_preserve_old_points_fix(x_array, 180)
+    x_new = interpolate_preserve_old_points_fix(x_array, n_levels)
     interp_func = interp1d(x_array, y_array, kind='linear', fill_value="extrapolate")
     y_new = interp_func(x_new)   
     return x_new, y_new
     
 ##############################################################################
 
-def get_profs_from_l2(l2_files, datetime_np, n_levels = 180):
-    data = np.full((4,180), np.nan)
+def get_profs_from_l2(l2_files, datetime_np, n_levels = n_levels):
+    data = np.full((4,n_levels), np.nan)
     lwp, iwv = np.nan, np.nan
 
     for file in l2_files:
@@ -870,7 +880,7 @@ def get_profs_from_l2(l2_files, datetime_np, n_levels = 180):
 
 ##############################################################################
 
-def get_mwr_data(datetime_np, mwrs):
+def get_mwr_data(datetime_np, mwrs,n_levels=n_levels):
     dwdhat_pattern = "/home/aki/PhD_data/FESSTVaL_14GB/dwdhat/l*/*/*/*.nc"
     foghat_pattern = "/home/aki/PhD_data/FESSTVaL_14GB/foghat/l*/*/*/*.nc"
     sunhat_pattern = "/home/aki/PhD_data/FESSTVaL_14GB/sunhat/l*/*/*/*.nc"
@@ -889,7 +899,7 @@ def get_mwr_data(datetime_np, mwrs):
         dwd_profiles[0,:] = dwd_profiles[0,:] + 112
     else:
         tbs_dwdhat = np.full((10, 72, 14), np.nan)
-        dwd_profiles = np.full((4,180), np.nan)
+        dwd_profiles = np.full((4,n_levels), np.nan)
         lwp_dwd, iwv_dwd = np.nan, np.nan
     if "foghat" in mwrs:
         fog_files = glob.glob(foghat_pattern)
@@ -901,7 +911,7 @@ def get_mwr_data(datetime_np, mwrs):
         fog_profiles[0,:] = fog_profiles[0,:] + 112
     else:
         tbs_foghat = np.full((10, 72, 14), np.nan)
-        fog_profiles = np.full((4,180), np.nan)
+        fog_profiles = np.full((4,n_levels), np.nan)
         lwp_fog, iwv_fog = np.nan, np.nan        
     if "sunhat" in mwrs:
         sun_files = glob.glob(sunhat_pattern)
@@ -913,7 +923,7 @@ def get_mwr_data(datetime_np, mwrs):
         sun_profiles[0,:] = sun_profiles[0,:] + 74
     else:
         tbs_sunhat = np.full((10, 72, 14), np.nan)    
-        sun_profiles = np.full((4,180), np.nan)
+        sun_profiles = np.full((4,n_levels), np.nan)
         lwp_sun, iwv_sun = np.nan, np.nan            
     if "tophat" in mwrs:
         top_files = glob.glob(tophat_pattern)
@@ -925,7 +935,7 @@ def get_mwr_data(datetime_np, mwrs):
         top_profiles[0,:] = top_profiles[0,:] + 110
     else:
         tbs_tophat = np.full((10, 72, 14), np.nan)
-        top_profiles = np.full((4,180), np.nan)
+        top_profiles = np.full((4,n_levels), np.nan)
         lwp_top, iwv_top = np.nan, np.nan        
     if "joyhat" in mwrs:
         joy_files = glob.glob(joyhat_pattern)
@@ -936,7 +946,7 @@ def get_mwr_data(datetime_np, mwrs):
         joy_profiles, lwp_joy, iwv_joy = get_profs_from_l2(l2_files, datetime_np) 
     else:
         tbs_joyhat = np.full((10, 72, 14), np.nan)
-        joy_profiles = np.full((4,180), np.nan)
+        joy_profiles = np.full((4,n_levels), np.nan)
         lwp_joy, iwv_joy = np.nan, np.nan        
     if "hamhat" in mwrs:
         ham_files = glob.glob(hamhat_pattern)
@@ -947,7 +957,7 @@ def get_mwr_data(datetime_np, mwrs):
         ham_profiles, lwp_ham, iwv_ham = get_profs_from_l2(l2_files, datetime_np)
     else:
         tbs_hamhat = np.full((10, 72, 14), np.nan)
-        ham_profiles = np.full((4,180), np.nan)
+        ham_profiles = np.full((4,n_levels), np.nan)
         lwp_ham, iwv_ham = np.nan, np.nan        
         
     # Then jsut read l1-files for now
@@ -982,7 +992,7 @@ def check_units_physical_realism(p_array, t_array, ppmv_array,\
 
 def summarize_many_profiles(pattern=\
                     "/home/aki/PhD_data/Vital_I/radiosondes/202408*_*.nc",\
-                    crop=False, sza_float =0., n_levels=180, mwrs=""):
+                    crop=False, sza_float =0., n_levels=n_levels, mwrs=""):
                          
     # Bodenlevel ist bei Index -1 - Umkehr der Profile!
     h_km_vital = 0.092
@@ -1000,12 +1010,12 @@ def summarize_many_profiles(pattern=\
     tbs_tophat = np.full((n, 10, 72, 14), np.nan)
     tbs_joyhat = np.full((n, 10, 72, 14), np.nan)
     tbs_hamhat = np.full((n, 10, 72, 14), np.nan)    
-    dwd_profiles = np.full((n, 4,180), np.nan)
-    fog_profiles= np.full((n, 4,180), np.nan)
-    sun_profiles= np.full((n, 4,180), np.nan)
-    top_profiles= np.full((n, 4,180), np.nan)
-    joy_profiles= np.full((n, 4,180), np.nan)
-    ham_profiles= np.full((n, 4,180), np.nan)
+    dwd_profiles = np.full((n, 4,n_levels), np.nan)
+    fog_profiles= np.full((n, 4,n_levels), np.nan)
+    sun_profiles= np.full((n, 4,n_levels), np.nan)
+    top_profiles= np.full((n, 4,n_levels), np.nan)
+    joy_profiles= np.full((n, 4,n_levels), np.nan)
+    ham_profiles= np.full((n, 4,n_levels), np.nan)
     
     lwps_rs = np.full((n, 2), np.nan)
     lwps_dwd = np.full((n), np.nan)
@@ -1217,8 +1227,10 @@ def summarize_many_profiles(pattern=\
         else:  
             srf_altitude[i,0] = height_in_km
          
-        ##########                                                                   
-        # break           
+        ##########   
+        #if i==4:                                                                
+         #   break 
+        ##########                 
     
     return profile_indices, level_pressures, level_temperatures, level_wvs,\
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza,\
@@ -1603,9 +1615,7 @@ def write_combined_input_prof_file(t_array, ppmv_array,length_value,\
 if __name__=="__main__":
     args = parse_arguments()
     sza_float = 0.
-    n_levels = 180
-    '''
-    '''
+
     # Read FESSTVaL 1 RAO:
     print("Processing FESSTVaL RAO:")
     profile_indices1, level_pressures, level_temperatures, level_wvs,\
