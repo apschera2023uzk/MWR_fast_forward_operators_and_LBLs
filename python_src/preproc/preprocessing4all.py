@@ -35,6 +35,7 @@ from datetime import datetime
 elevations = np.array([90., 30, 19.2, 14.4, 11.4, 8.4,  6.6,  5.4, 4.8,  4.2])
 azimuths = np.arange(0.,355.1,5.) # Interpoliere dazwischen!
 n_levels=180
+min_p = 10
 
 ##############################################################################
 # 2nd Used Functions
@@ -115,7 +116,7 @@ def running_mean_from_arrays(inds, z_array, any_array):
 
 def read_radiosonde_nc_arms(file=\
         "/home/aki/PhD_data/Vital_I/radiosondes/20240805_102936.nc",\
-         crop=0):
+         crop=0, min_p=min_p):
     
     if file==None:
         return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan, np.nan
@@ -160,6 +161,8 @@ def read_radiosonde_nc_arms(file=\
     
     # 3 Fangen Profile auch in Höhge an? 
     max_index = np.nanargmax(ds[height_var].values)
+    if ds[p_var].values[max_index]/p_factor<min_p:
+        max_index = np.nanargmin(np.abs(ds[p_var].values/p_factor-min_p))    
     index3000 = np.nanargmin(abs(ds[height_var].values[:max_index]-3000))
     
    # Or just find 132 m height:
@@ -184,11 +187,11 @@ def read_radiosonde_nc_arms(file=\
     if crop > 8:
         print("Unusually high crop value: ",crop)
         
-    if max_index<1000:
+    if max_index<300:
         print("Low max index!!!")
         return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan, np.nan
     elif np.nanmax(ds[height_var].values)<10000:
-        print("No 3000 m reached!")
+        print("No 10000 m reached!")
         return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan, np.nan
         
     # Thinning pattern:
@@ -229,7 +232,7 @@ def read_radiosonde_nc_arms(file=\
 
 def read_radiosonde_txt(file=\
         "/home/aki/PhD_data/Socles/radiosondes/2021072106/'SOUNDING DATA'/20210721060020068041_Profile.txt",\
-         crop=0):
+         crop=0,min_p=min_p):
     # Bodenlevel ist bei Index -1 - Umkehr der Profile!
     
     if file==None:
@@ -240,6 +243,8 @@ def read_radiosonde_txt(file=\
         "Wd", "Long.", "Lat.", "Alt", "Geopot","Rs","Elevation",\
         "Azimuth", "Range"])
     max_index = np.nanargmax(df["Alt"].values)
+    if df["P"].values[max_index]<min_p:
+        max_index = np.nanargmin(np.abs(df["P"].values-min_p))       
     index3000 = np.nanargmin(abs(df["Alt"].values[:max_index]-3000))
                 
     # AccRate / Height change crop:
@@ -259,11 +264,11 @@ def read_radiosonde_txt(file=\
     if crop > 8:
         print("Unusually high crop value: ",crop)
         
-    if max_index<1000:
+    if max_index<300:
         print("Low max index!!!")
         return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan, np.nan
     elif np.nanmax(df["Alt"].values)<10000:
-        print("No 3000 value!")
+        print("No 10000 m reached!")
         return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan, np.nan
         
     # Thinning pattern:
@@ -304,7 +309,7 @@ def add_clim2profiles(p_array, t_array, ppmv_array, m_array, z_array, rh):
     p_threshold = np.nanmin(p_array)
     z, p, d, t, md = atmp.gl_atm(atm=1) # midlatitude summer!
     gkg = ppmv2gkg(md[:, atmp.H2O], atmp.H2O)
-    rhs_clim = mr2rh(p, t, gkg)[0] / 100
+    rhs_clim = mr2rh(p, t, gkg)[0]
     mask = p_threshold>np.array(p)
     
     p_array = np.concatenate([p_array, np.array(p)[mask]])
@@ -1176,7 +1181,7 @@ def summarize_many_profiles(pattern=\
         # Add climatology at top to fill profiles:
         p_array, t_array, ppmv_array, m_array, z_array, rh = add_clim2profiles(\
                                     p_array, t_array, ppmv_array,\
-                                    m_array, z_array, rh)              
+                                    m_array, z_array, rh)                             
         # derive liquid water content:
         lwc_kg_m3, lwc_kg_kg, lwp_kg_m2,iwc_kg_m3, iwc_kg_kg, iwp_kg_m2 =\
             derive_cloud_features(\
@@ -1213,7 +1218,7 @@ def summarize_many_profiles(pattern=\
         iwvs_ham[i] = integrals[11]               
         level_pressures[:,i,0] = p_array[-n_levels:]
         level_temperatures[:,i,0] = t_array[-n_levels:]
-        level_wvs[:,i,0] = m_array[-n_levels:]*1000 # convert kg/kg to g/kg
+        level_wvs[:,i,0] = 1000*m_array[-n_levels:] # convert kg/kg to g/kg
         level_ppmvs[:,i,0] =ppmv_array[-n_levels:]
         level_liq[:,i,0] = lwc_kg_kg[-n_levels:] # np.array([0]*n_levels)
         level_ice[:,i,0] = iwc_kg_kg[-n_levels:]

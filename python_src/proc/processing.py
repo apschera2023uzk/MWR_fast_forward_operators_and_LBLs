@@ -25,7 +25,8 @@ import subprocess
 # 1.5: Parameter
 ##############################################################################
 
-n_levels = 180
+n_levels=180
+batch_size=20
 
 ##############################################################################
 # 2nd Used Functions
@@ -45,7 +46,7 @@ def parse_arguments():
         "--rttov", "-r",
         type=str,
         default=os.path.expanduser("/home/aki/RTTOV-gb/rttov_test/test_example_k.1"),
-        help="RTTOV-gb driectory to execute code!"
+        help="RTTOV-gb directory with input profile!"
     )    
     parser.add_argument(
         "--script", "-s",
@@ -68,7 +69,7 @@ def write1profile2str(t_array, ppmv_array,length_value,\
     for value in ppmv_array:
         string+=f"{value:9.4f}\n"
     for value in liquid_array:
-        string+=f"{0.:12.6E}\n"
+        string+=f"{value:12.6E}\n"
     string+=f"{t_array[-1]:10.4f}{p_array[-1]:10.2f}\n"
     string+=f"{height_in_km:6.1f}{deg_lat:6.1f}\n"
     string+=f"{zenith_angle:6.1f}\n"
@@ -96,17 +97,17 @@ def check4NANs_in_time_crop_ele(ds, i,j,k):
 
 ##############################################################################
 
-def create_RTTOV_gb_in_profiles(ds, args):
+def create_RTTOV_gb_in_profiles(ds, args, batch):
     profiles = ""
     valid_indices = []
-    
-    for i, timestep in enumerate(ds["time"].values):
-         for j, crop in enumerate(ds["Crop"].values):
-             for k, elevation in enumerate(ds["elevation"].values):
-                 if check4NANs_in_time_crop_ele(ds, i,j,k):
-                     pass
-                 else:
-                     profile1 = write1profile2str(\
+
+    for i in batch:    
+        for j, crop in enumerate(ds["Crop"].values):
+            for k, elevation in enumerate(ds["elevation"].values):
+                if check4NANs_in_time_crop_ele(ds, i,j,k):
+                    pass
+                else:
+                    profile1 = write1profile2str(\
                          ds["Level_Temperature"].values[:,i,j],\
                          ds["Level_ppmvs"].values[:,i,j],\
                          len(ds["Level_ppmvs"].values[:,i,j]),\
@@ -115,30 +116,36 @@ def create_RTTOV_gb_in_profiles(ds, args):
                          height_in_km=ds["Surface_Altitude"].values[i,j],\
                          deg_lat=ds["Latitude"].values[i],\
                          zenith_angle=90.-elevation)
-                     profiles+=profile1
-                     valid_indices.append((i,j,k))
-         
-         #################
-         #if i==3:
-         #    break
-         ###########
+                    profiles+=profile1
+                    valid_indices.append((i,j,k))
                               
     # After loops - save results:
     dir_name = os.path.dirname(args.input)
-    outfile = str(dir_name)+"/"+"prof_plev.dat"
+    outfile = str(dir_name)+"/rttov_profs/prof_plev"+str(i)+".dat"
     out = open(outfile, "w")
     out.write(profiles)
     out.close()
          
     return outfile, valid_indices
+    
+##############################################################################
+
+def batch_creator(array, batch_size):
+    i=0
+    while i*batch_size<len(array)-1:
+        if i*batch_size+batch_size<len(array)-1:
+            yield range(i*batch_size,i*batch_size+batch_size)
+        else:
+            yield range(i*batch_size,len(array))
+        i+=1
 
 ##############################################################################
 
 def run_rttov_gb(outfile, valid_indices, args,nlevels = n_levels):
 
     # 1st Copy prof_plev.dat to inputs
-    prof_file = outfile.split("/")[-1]
-    where2 = args.rttov+"/"+prof_file
+    # prof_file = outfile.split("/")[-1]
+    where2 = args.rttov+"/prof_plev.dat"
     shutil.copy(outfile, where2)
     
     # 2nd edit run script for level number:
@@ -162,15 +169,31 @@ def run_rttov_gb(outfile, valid_indices, args,nlevels = n_levels):
 ##############################################################################
 
 
-def derive_TBs4RTTOV_gb(ds, args):
+def derive_TBs4RTTOV_gb(ds, args, batch_size=batch_size):
+    all_valid_indices = []
 
-    # 1st Create prof_plev file from ds:
-    outfile, valid_indices = create_RTTOV_gb_in_profiles(ds, args)
-    
-    # 2nd Run RTTOV-gb on them:
-    run_rttov_gb(outfile, valid_indices, args)
+    for m, batch in enumerate(batch_creator(ds["time"].values, batch_size)):
+        print("batch: ", batch, " of total ",\
+            len(ds["time"].values), " in processing")
         
-    # 3rd Extract RTTOV-gb TBs:
+        # 1st Create prof_plev file from ds:
+        outfile, valid_indices = create_RTTOV_gb_in_profiles(ds, args, batch)
+        all_valid_indices+=valid_indices
+        
+        # 2nd Run RTTOV-gb on them:
+        run_rttov_gb(outfile, valid_indices, args)       
+
+        # 3rd Extract RTTOV-gb TBs:q
+        # Read in full RTTOV-gb info, not just TBs!
+                
+        #################
+        if m ==3:
+            break
+        ##################
+    
+
+        
+
     
     
     return 0
