@@ -130,6 +130,7 @@ def read_radiosonde_nc_arms(file=\
         h_var = "Humidity"
         p_factor = 1.
         deg_lat = ds["Latitude"].values[0]
+        deg_lon = ds["Longitude"].values[0]
     elif "zg" in ds.data_vars:
         height_var = "zg"
         height_in_km = ds["zsl_start"].values/1000
@@ -139,6 +140,7 @@ def read_radiosonde_nc_arms(file=\
         p_var = "pa"
         h_var = "hur"
         deg_lat = ds["lat"].values[0]
+        deg_lon = ds["lon"].values[0]
         # g = gravity(deg_lat)
         p_factor = 100.
     elif "zsl" in ds.data_vars:
@@ -150,6 +152,7 @@ def read_radiosonde_nc_arms(file=\
         p_var = "pa"
         h_var = "hur"
         deg_lat = ds["lat"].values[0]
+        deg_lon = ds["lon"].values[0]
         # g = gravity(deg_lat)
         p_factor = 100.
 
@@ -226,7 +229,7 @@ def read_radiosonde_nc_arms(file=\
     ppmv_array = np.array(m_array) * (28.9644e6 / 18.0153)
 
     return length_value, p_array, t_array, ppmv_array, height_in_km, deg_lat,\
-       m_array, z_array, rh
+       m_array, z_array, rh, deg_lon
        
 ##############################################################################
 
@@ -297,9 +300,10 @@ def read_radiosonde_txt(file=\
     
     height_in_km = df["Alt"].values[0]/1000
     deg_lat = df["Lat."].values[0]
+    deg_lon = df["Lon."].values[0]
 
     return length_value, p_array, t_array, ppmv_array, height_in_km, deg_lat,\
-       m_array, z_array, rh
+       m_array, z_array, rh, deg_lon
 
 ##############################################################################
 
@@ -1067,7 +1071,7 @@ def summarize_many_profiles(pattern=\
         if crop:
             if ".nc" in file:
                 length_value, p_array, t_array, ppmv_array, height_in_km,\
-                    deg_lat, m_array, z_array, rh =\
+                    deg_lat, m_array, z_array, rh, deg_lon =\
                     read_radiosonde_nc_arms(file=file, crop=7)
             if length_value<150:
                 invalid_z = True
@@ -1156,11 +1160,11 @@ def summarize_many_profiles(pattern=\
             ##########        
         if ".nc" in file:
             length_value, p_array, t_array, ppmv_array, height_in_km,\
-                    deg_lat, m_array, z_array, rh =\
+                    deg_lat, m_array, z_array, rh, deg_lon =\
                     read_radiosonde_nc_arms(file=file)
         elif "Profile.txt" in file:
             length_value, p_array, t_array, ppmv_array, height_in_km,\
-                    deg_lat, m_array, z_array, rh =\
+                    deg_lat, m_array, z_array, rh, deg_lon =\
                     read_radiosonde_txt(file=file)
         if length_value<150:
             invalid_z = True
@@ -1190,8 +1194,8 @@ def summarize_many_profiles(pattern=\
         # p in hPa as in other inputs!
         # mixing ratio in g/kg
         lwps_rs[i, 0] = lwp_kg_m2
-        lats[i] = lat
-        lons[i] = lon
+        lats[i] = deg_lat
+        lons[i] = deg_lon
         tbs_dwdhat[i,:,:,:] = tbs_dwdhat1
         tbs_foghat[i,:,:,:] = tbs_foghat1
         tbs_sunhat[i,:,:,:] = tbs_sunhat1
