@@ -119,7 +119,8 @@ def read_radiosonde_nc_arms(file=\
          crop=0, min_p=min_p):
     
     if file==None:
-        return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan, np.nan
+        return 0, np.nan, np.nan, np.nan, np.nan,np.nan,\
+           np.nan, np.nan, np.nan, np.nan
     ds = xr.open_dataset(file)
     #######################
     if "Height" in ds.data_vars:
@@ -192,10 +193,10 @@ def read_radiosonde_nc_arms(file=\
         
     if max_index<300:
         print("Low max index!!!")
-        return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan, np.nan
+        return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan, np.nan,np.nan
     elif np.nanmax(ds[height_var].values)<10000:
         print("No 10000 m reached!")
-        return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan, np.nan
+        return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan, np.nan,np.nan
         
     # Thinning pattern:
     datapoints_bl = 75
@@ -239,7 +240,8 @@ def read_radiosonde_txt(file=\
     # Bodenlevel ist bei Index -1 - Umkehr der Profile!
     
     if file==None:
-        return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan, np.nan      
+        return 0, np.nan, np.nan, np.nan, np.nan,np.nan,\
+            np.nan, np.nan, np.nan, np.nan     
     df = pd.read_table(file, encoding_errors="ignore", engine='python',\
         skiprows=20,\
         skipfooter=10, header=None , names=["Time", "P", "T", "Hu", "Ws",\
@@ -269,10 +271,12 @@ def read_radiosonde_txt(file=\
         
     if max_index<300:
         print("Low max index!!!")
-        return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan, np.nan
+        return 0, np.nan, np.nan, np.nan, np.nan,np.nan,\
+           np.nan, np.nan, np.nan,np.nan
     elif np.nanmax(df["Alt"].values)<10000:
         print("No 10000 m reached!")
-        return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan, np.nan
+        return 0, np.nan, np.nan, np.nan, np.nan,np.nan,\
+            np.nan, np.nan, np.nan,np.nan
         
     # Thinning pattern:
     datapoints_bl = 75
@@ -300,7 +304,7 @@ def read_radiosonde_txt(file=\
     
     height_in_km = df["Alt"].values[0]/1000
     deg_lat = df["Lat."].values[0]
-    deg_lon = df["Lon."].values[0]
+    deg_lon = df["Long."].values[0]
 
     return length_value, p_array, t_array, ppmv_array, height_in_km, deg_lat,\
        m_array, z_array, rh, deg_lon
@@ -1391,6 +1395,30 @@ def interpolate_azimuths(ds):
         .interpolate_na(dim="azimuth", method="linear")
     
     return ds
+
+##############################################################################
+
+def replace_nan_lats_and_lons(ds):
+
+    for i, lat in enumerate(ds["Latitude"].values):
+        if np.isnan(lat):
+            if (not np.isnan(ds["Latitude"].values[i-1])) and\
+                    (ds["Location"].values[i-1]==ds["Location"].values[i]):
+                ds["Latitude"].values[i] = ds["Latitude"].values[i-1]
+            elif (not np.isnan(ds["Latitude"].values[i+1])) and\
+                    (ds["Location"].values[i+1]==ds["Location"].values[i]):
+                ds["Latitude"].values[i] = ds["Latitude"].values[i+1]      
+
+    for i, lon in enumerate(ds["Longitude"].values):
+        if np.isnan(lon):
+            if (not np.isnan(ds["Longitude"].values[i-1])) and\
+                    (ds["Location"].values[i-1]==ds["Location"].values[i]):
+                ds["Longitude"].values[i] = ds["Longitude"].values[i-1]
+            elif (not np.isnan(ds["Longitude"].values[i+1])) and\
+                    (ds["Location"].values[i+1]==ds["Location"].values[i]):
+                ds["Longitude"].values[i] =ds["Latitude"].values[i+1]         
+
+    return ds 
     
 ##############################################################################
 
@@ -1593,6 +1621,7 @@ def produce_dataset(profile_indices, level_pressures,
     
     ds = clean_dataset(ds)
     ds = interpolate_azimuths(ds)
+    ds = replace_nan_lats_and_lons(ds)
     
     return ds
 
