@@ -1803,7 +1803,9 @@ if __name__=="__main__":
     
     # print(new_ds["time"].values)
     # print(len(new_ds["time"]))
-    new_ds.to_netcdf("/home/aki/PhD_data/armsgb_all_campaigns_zenith.nc", format="NETCDF4_CLASSIC")
+    new_ds.to_netcdf(\
+        "/home/aki/PhD_data/MWR_rs_FESSTVaLSoclesVital1_all_elevations.nc",\
+         format="NETCDF4_CLASSIC")
         
 
         
