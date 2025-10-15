@@ -39,7 +39,7 @@ def parse_arguments():
     parser.add_argument(
         "--input", "-i",
         type=str,
-        default=os.path.expanduser("/home/aki/PhD_data/armsgb_all_campaigns_zenith.nc"),
+        default=os.path.expanduser("/home/aki/PhD_data/MWR_rs_FESSTVaLSoclesVital1_all_elevations.nc"),
         help="NetCDF file with rs and MWR data"
     )
     parser.add_argument(
@@ -71,7 +71,7 @@ def write1profile2str(t_array, ppmv_array,length_value,\
     for value in liquid_array:
         string+=f"{value:12.6E}\n"
     string+=f"{t_array[-1]:10.4f}{p_array[-1]:10.2f}\n"
-    string+=f"{height_in_km:6.1f}{deg_lat:6.1f}\n"
+    string+=f"{height_in_km:6.3f}{deg_lat:6.1f}\n"
     string+=f"{zenith_angle:6.1f}\n"
         
     return string
@@ -168,10 +168,133 @@ def run_rttov_gb(outfile, valid_indices, args,nlevels = n_levels):
     
 ##############################################################################
 
+def get_rttov_outputs(valid_indices, rttovgb_outfile=\
+        "/home/aki/RTTOV-gb/rttov_test/test_example_k.1/output_example_k.dat.gfortran",\
+                   batch_size=batch_size,n_levels=n_levels):
+    print("Reading in RTTOV-gb output from: ", rttovgb_outfile)
+    
+    tbs = np.full((batch_size, 14,10,2), np.nan)
+    trans = np.full((batch_size, 14,10,2), np.nan)
+    # time, channel, elevation, crop
+    trans_by_lev=np.full((batch_size,n_levels, 14, 10,2 ), np.nan)
+    # time, level, channel, elevation, crop
+    jacs_by_lev=np.full((batch_size, n_levels, 14, 10,2, 4), np.nan)
+    # time, level, channel, elevation, crop, variable (last one removed in ds)
+    
+    switch = False
+    switch_t = False
+    sw_trans_by_lev=False
+    sw_jacs_by_lev=False
+    switch_count = 0
+    switcht_count = 0
+    sw_c_trans_by_lev = 0
+    sw_c_jacs_by_lev = 0
+    tb_string = ""
+    trans_string = ""
+    string_jc_by_lev=""
+    string_tr_by_lev = ""
+    
+    file = open(rttovgb_outfile, "r")
+    
+    # Read in TBs: 
+    for i, line in enumerate(file.readlines()):
+            
+        if "Profile      " in line:
+            prof_idx=int(line.split(" ")[-1])-1
+            rs_time_idx, crop_idx, ele_idx = valid_indices[prof_idx] 
+            rs_time_idx = rs_time_idx%20
+            # print("i (profile in batch: ",  i )
+            # print("rs_time_idx, crop_idx, ele_idx ::", rs_time_idx, crop_idx, ele_idx )
+            # print("prof_idx: ", prof_idx)
+        
+        if switch and switch_count<2:
+            switch_count+= 1
+            tb_string+= line
+        elif "CALCULATED BRIGHTNESS TEMPERATURES (K):" in line:
+            switch = True
+        elif switch:
+            switch = False
+            liste = tb_string.split(" ")
+            tbs_rs = [float(s.strip("\n")) for s in liste if s.strip() != ""]
+            tb_string = ""
+            switch_count = 0
+            tbs[rs_time_idx, :, ele_idx, crop_idx] = np.array(tbs_rs)
+            
+        # Read in Tot Transmittances:     
+        if switch_t and switcht_count<2:
+            switcht_count+= 1
+            trans_string+= line
+        elif "CALCULATED SURFACE TO SPACE TRANSMITTANCE:" in line:
+            switch_t = True
+        elif switch_t:
+            switch_t = False
+            liste = trans_string.split(" ")
+            tot_trans_by_chan = [float(s.strip("\n")) for s in liste if s.strip() != ""]
+            trans_string = ""
+            switcht_count = 0
+            trans[rs_time_idx, :, ele_idx, crop_idx]=np.array(tot_trans_by_chan)
+          
+        # Read in Lev Transmittances:   
+        if sw_trans_by_lev and sw_c_trans_by_lev<n_levels:
+            sw_c_trans_by_lev+= 1
+            string_tr_by_lev+= line
+        elif "Level to surface transmittances for channels" in line:
+            sw_trans_by_lev = True
+        elif sw_trans_by_lev:
+            sw_trans_by_lev = False
+            liste = string_tr_by_lev.split("\n")[1:]  #.split(" ")
+            for j, line in enumerate(liste):
+                list_of_numbers = line.split(" ")
+                trans_by_lev1 = [float(s) for s in list_of_numbers if s.strip() != "" and s.strip() != "**"]
+                if len(trans_by_lev1)<4:
+                    break
+                elif 4<=len(trans_by_lev1)<5:
+                    trans_by_lev[rs_time_idx, j,10:, ele_idx, crop_idx]=\
+                        np.array(trans_by_lev1)
+                elif 5<=len(trans_by_lev1)<6:
+                    trans_by_lev[rs_time_idx, j,10:, ele_idx, crop_idx] =\
+                        np.array(trans_by_lev1[1:])                  
+                elif j<99:
+                    trans_by_lev[rs_time_idx, j,:10, ele_idx, crop_idx] =\
+                        np.array(trans_by_lev1[1:])
+                else:
+                    trans_by_lev[rs_time_idx, j,:10, ele_idx, crop_idx] =\
+                        np.array(trans_by_lev1)            
+            string_tr_by_lev = ""
+            sw_c_trans_by_lev = 0              
+        
+        # Read in Jacobians somehow:       
+        if "Channel        " in line:
+            sw_jacs_by_lev = True
+            ch_idx = int(line.split("Channel")[-1])-1
+        if sw_jacs_by_lev and sw_c_jacs_by_lev<n_levels+3:
+            sw_c_jacs_by_lev+= 1
+            string_jc_by_lev+= line
+        elif sw_jacs_by_lev:
+            liste = string_jc_by_lev.split("\n")[3:n_levels+3]
+            for j, line in enumerate(liste):
+                # print(j, line)
+                werte = line.split()
+                jacs_by_lev[rs_time_idx, j, ch_idx, ele_idx, crop_idx, :]=\
+                    werte[1:]
+            string_jc_by_lev=""
+            sw_jacs_by_lev = False
+            sw_c_jacs_by_lev= 0
+            
+    file.close()
+    print("Finished reading RTTOV-gb output from: ", rttovgb_outfile)
+    return tbs, trans, trans_by_lev, jacs_by_lev
+    
+##############################################################################
+
 
 def derive_TBs4RTTOV_gb(ds, args, batch_size=batch_size):
     all_valid_indices = []
-
+    all_tbs = []
+    all_trans = []
+    all_trans_by_lev = []
+    all_jacs_by_lev = []
+    
     for m, batch in enumerate(batch_creator(ds["time"].values, batch_size)):
         print("batch: ", batch, " of total ",\
             len(ds["time"].values), " in processing")
@@ -183,20 +306,62 @@ def derive_TBs4RTTOV_gb(ds, args, batch_size=batch_size):
         # 2nd Run RTTOV-gb on them:
         run_rttov_gb(outfile, valid_indices, args)       
 
-        # 3rd Extract RTTOV-gb TBs:q
-        # Read in full RTTOV-gb info, not just TBs!
-                
-        #################
-        if m ==3:
-            break
-        ##################
-    
+        # 3rd Extract RTTOV-gb TBs:
+        tbs, trans, trans_by_lev, jacs_by_lev = get_rttov_outputs(valid_indices,\
+            batch_size=len(valid_indices),\
+            rttovgb_outfile=\
+            "/home/aki/RTTOV-gb/rttov_test/test_example_k.1/output_example_k.dat.gfortran")
+        all_tbs.append(tbs)
+        all_trans.append(trans)
+        all_trans_by_lev.append(trans_by_lev)
+        all_jacs_by_lev.append(jacs_by_lev)
 
+    # Nach der Schleife alles zusammenfügen:
+    tbs_concat = np.concatenate(all_tbs, axis=0)
+    trans_concat = np.concatenate(all_trans, axis=0)
+    trans_by_lev_concat = np.concatenate(all_trans_by_lev, axis=0)
+    jacs_by_lev_concat = np.concatenate(all_jacs_by_lev, axis=0)
+    
+    ds['TBs_RTTOV_gb'] = (('time', 'N_Channels', 'elevation','Crop'), tbs_concat)
+    ds['TBs_RTTOV_gb'].attrs["units"]="K"
+    ds['TBs_RTTOV_gb'].attrs["long_name"]="Brightness temperatures from RTTOV-gb"
+    ds['TBs_RTTOV_gb'].attrs["description"]="TBs were derived with Fast RTE from radiosonde profiles."
+    
+    ds['ttrans_RTTOV_gb'] = (('time', 'N_Channels', 'elevation','Crop'), trans_concat)
+    ds['ttrans_RTTOV_gb'].attrs["units"]="dimensionless"
+    ds['ttrans_RTTOV_gb'].attrs["long_name"]="Total Transmissivities by channel from RTTOV-gb"
+    ds['ttrans_RTTOV_gb'].attrs["description"]="Transmissivities were derived with Fast RTE from radiosonde profiles."        
+    
+    ds['levtrans_RTTOV_gb'] = (('time', 'N_Levels',"N_Channels", 'elevation','Crop'), trans_by_lev_concat)
+    ds['levtrans_RTTOV_gb'].attrs["units"]="dimensionless"
+    ds['levtrans_RTTOV_gb'].attrs["long_name"]="Level Transmissivities by channel from RTTOV-gb"
+    ds['levtrans_RTTOV_gb'].attrs["description"]="Transmissivities were derived with Fast RTE from radiosonde profiles." 
+
+    ds['Jacobian_p_RTTOV_gb'] = (('time', 'N_Levels','Crop'), jacs_by_lev_concat[:,:,0,0,:,0])
+    ds['Jacobian_p_RTTOV_gb'].attrs["units"]="hPa"
+    ds['Jacobian_p_RTTOV_gb'].attrs["long_name"]="Pressure levels for Sensitvities from RTTOV-gb"
+
+    ds['Jacobian_T_RTTOV_gb'] = (('time', 'N_Levels',"N_Channels", 'elevation','Crop'), jacs_by_lev_concat[:,:,:,:,:,1])
+    ds['Jacobian_T_RTTOV_gb'].attrs["units"]="K K-1"
+    ds['Jacobian_T_RTTOV_gb'].attrs["long_name"]="TB Level Sensitivities to temperature by channel from RTTOV-gb"
+    ds['Jacobian_T_RTTOV_gb'].attrs["description"]="Sensitivities were derived with Fast RTE from radiosonde profiles." 
+
+    ds['Jacobian_ppmv_RTTOV_gb'] = (('time', 'N_Levels',"N_Channels", 'elevation','Crop'), jacs_by_lev_concat[:,:,:,:,:,2])
+    ds['Jacobian_ppmv_RTTOV_gb'].attrs["units"]="K ppmv-1"
+    ds['Jacobian_ppmv_RTTOV_gb'].attrs["long_name"]="TB Level Sensitivities to WV by channel from RTTOV-gb"
+    ds['Jacobian_ppmv_RTTOV_gb'].attrs["description"]="Sensitivities were derived with Fast RTE from radiosonde profiles." 
+
+    ds['Jacobian_liq_RTTOV_gb'] = (('time', 'N_Levels',"N_Channels", 'elevation','Crop'), jacs_by_lev_concat[:,:,:,:,:,3])
+    ds['Jacobian_liq_RTTOV_gb'].attrs["units"]="K kg kg-1"
+    ds['Jacobian_liq_RTTOV_gb'].attrs["long_name"]="TB Level Sensitivities to liquid water content by channel from RTTOV-gb"
+    ds['Jacobian_liq_RTTOV_gb'].attrs["description"]="Sensitivities were derived with Fast RTE from radiosonde profiles."     
         
-
-    
-    
-    return 0
+        #################
+        #if m ==3:
+        #    break
+        ##################
+        
+    return ds
     
 ##############################################################################
 # 3rd: Main code:
@@ -211,13 +376,16 @@ if __name__=="__main__":
     # What the program should do:
     
     # 1 Derive TBs for all elevations  for RTTOV-gb
-    derive_TBs4RTTOV_gb(ds, args)
+    new_ds = derive_TBs4RTTOV_gb(ds, args)
     
     # 2 Derive TBs for all elevations  for pyrtlib
 
-    # 2.5 Derive TBs for clear sky for ARMS-gb
+    # 3. Derive TBs for clear sky for ARMS-gb
 
-    # 3 Append dataset
+    # 3 Print dataset to NetCDF
+    new_ds.to_netcdf(\
+        "/home/aki/PhD_data/3campaigns_TBs_processed.nc",\
+         format="NETCDF4_CLASSIC")
 
         
 

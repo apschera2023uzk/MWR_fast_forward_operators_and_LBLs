@@ -156,12 +156,6 @@ def read_radiosonde_nc_arms(file=\
         deg_lon = ds["lon"].values[0]
         # g = gravity(deg_lat)
         p_factor = 100.
-
-    #############
-    # g0 = 9.80665
-    # print("g value: ", g)
-    # print("g_dev", g/g0)    
-    #############
     
     # 3 Fangen Profile auch in Höhge an? 
     max_index = np.nanargmax(ds[height_var].values)
@@ -381,11 +375,6 @@ def calc_lwc(tops, bases, p_array, t_array, ppmv_array, m_array,\
                 dz = z_array[j-1] - z_array[j] # ergab soweit auch Sinn..
                 lwc_ad = rho * cp / L * (gamma_d - gamma_s) * dz
                 dh = z_array[j] - base # abs entfernt
-                '''
-                print("z_array[j]: ", z_array[j])
-                print("base: ", base)
-                print("dh: ", dh)           
-                '''     
                 lwc = lwc_ad * (1.239 - 0.145*np.log(dh)) # kg m-3
                 if lwc<0:
                     lwc = 0
@@ -399,11 +388,6 @@ def calc_lwc(tops, bases, p_array, t_array, ppmv_array, m_array,\
                 dz = z_array[j-1] - z_array[j] # ergab soweit auch Sinn..
                 iwc_ad = rho * cp / L * (gamma_d - gamma_s) * dz
                 dh = z_array[j] - base
-                '''
-                print("z_array[j]: ", z_array[j])
-                print("base: ", base)
-                print("dh: ", dh)
-                '''
                 iwc = iwc_ad * (1.239 - 0.145*np.log(dh)) # kg m-3
                 if iwc<0:
                     iwc = 0
@@ -415,12 +399,7 @@ def calc_lwc(tops, bases, p_array, t_array, ppmv_array, m_array,\
                 rho = p_array[j]*100 / R_L / t_array[j] # Ergebnis realistisch kg m-3
                 dz = z_array[j-1] - z_array[j] # ergab soweit auch Sinn..
                 lwc_ad = rho * cp / L * (gamma_d - gamma_s) * dz
-                dh = z_array[j] - base
-                '''
-                print("z_array[j]: ", z_array[j])
-                print("base: ", base)
-                print("dh: ", dh)        
-                '''        
+                dh = z_array[j] - base     
                 lwc = lwc_ad * (1.239 - 0.145*np.log(dh)) # kg m-3
                 if lwc<0:
                     lwc = 0
@@ -699,6 +678,7 @@ def nearest_ele4elevation(ele_values, azi_values, ele_times,\
              print("WARNING: Azimuth or Elevation does not agree, as expected!")
              print("Ele/Azi tagret values: ",target_elevation, target_azi)
              print("Ele/Azi found values: ",nearest_value, nearest_value2)
+                    
     return nearest_idx
 
 ##############################################################################
@@ -1239,11 +1219,6 @@ def summarize_many_profiles(pattern=\
             srf_altitude[i,0] = h_km_vital
         else:  
             srf_altitude[i,0] = height_in_km
-         
-        ##########   
-        #if i==4:                                                                
-         #   break 
-        ##########                 
     
     return profile_indices, level_pressures, level_temperatures, level_wvs,\
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza,\
@@ -1382,6 +1357,7 @@ def clean_dataset(ds):
          ds = ds.sel(time=ds.time != timestamp)
          
     print("Number of files after filtering: ", len(ds["time"].values))
+    
     return ds
 
 ##############################################################################
@@ -1389,11 +1365,11 @@ def clean_dataset(ds):
 def interpolate_azimuths(ds):    
     # Joyhat & Foghat je 30 °:
     
-    ds["TBs_foghat"] = ds["TBs_foghat"].isel(elevation=1)\
+    ds["TBs_foghat"][:,1,:,:] = ds["TBs_foghat"].isel(elevation=1)\
         .interpolate_na(dim="azimuth", method="linear")
-    ds["TBs_joyhat"] = ds["TBs_joyhat"].isel(elevation=1)\
+    ds["TBs_joyhat"][:,1,:,:] = ds["TBs_joyhat"].isel(elevation=1)\
         .interpolate_na(dim="azimuth", method="linear")
-    
+   
     return ds
 
 ##############################################################################
@@ -1439,12 +1415,12 @@ def produce_dataset(profile_indices, level_pressures,
 
     # Ermitteln der Dimensionen
     n_levels, n_profiles, n_crop = level_pressures.shape
+    elevations = np.array(elevations, dtype=float)
+    azimuths = np.array(azimuths, dtype=float)
     
     # Setze Dummy-Werte für Dimensionsgrößen
     n_times = len(profile_indices)
     n_channels = 14  # Beispielwert
-    any_obs = np.empty([14, n_times])
-    # n_data = 1       # Wird oft für Metadaten genutzt
 
     ds = xr.Dataset(
         data_vars={
