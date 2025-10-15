@@ -27,6 +27,7 @@ import subprocess
 
 n_levels=180
 batch_size=20
+elevations = np.array([90., 30, 19.2, 14.4, 11.4, 8.4,  6.6,  5.4, 4.8,  4.2])
 
 ##############################################################################
 # 2nd Used Functions
@@ -101,6 +102,10 @@ def create_RTTOV_gb_in_profiles(ds, args, batch):
     profiles = ""
     valid_indices = []
 
+    print("len(batch): ", len(batch))
+    print("len(ds[Crop].values): ", len(ds["Crop"].values))
+    print("ds[elevation].values): ", len(ds["elevation"].values))
+
     for i in batch:    
         for j, crop in enumerate(ds["Crop"].values):
             for k, elevation in enumerate(ds["elevation"].values):
@@ -144,7 +149,6 @@ def batch_creator(array, batch_size):
 def run_rttov_gb(outfile, valid_indices, args,nlevels = n_levels):
 
     # 1st Copy prof_plev.dat to inputs
-    # prof_file = outfile.split("/")[-1]
     where2 = args.rttov+"/prof_plev.dat"
     shutil.copy(outfile, where2)
     
@@ -287,6 +291,61 @@ def get_rttov_outputs(valid_indices, rttovgb_outfile=\
     
 ##############################################################################
 
+def write_jacobians_and_level_transmissions_to_file(trans_by_lev,\
+        jacs_by_lev, batch, args,ds, valid_indices, elevations=elevations):
+    outfile = os.path.dirname(args.input)+\
+        "/RTTOV_jacs_and_trans/RTTOV-gb_"+str(batch)+\
+        "_jacs_and_trans.nc"
+    n_channels=14
+    time_inds = np.unique(np.array([indices[0] for indices in valid_indices]))
+    times=ds["time"].isel(time=time_inds).values
+        
+    ds = xr.Dataset(
+        data_vars={
+            'levtrans_RTTOV_gb':        (('time', 'N_Levels',"N_Channels",\
+                'elevation','Crop'), trans_by_lev),
+            'Jacobian_p_RTTOV_gb':      (('time', 'N_Levels','Crop'),\
+                jacs_by_lev[:,:,0,0,:,0]),
+            'Jacobian_T_RTTOV_gb':        (('time', 'N_Levels',"N_Channels",\
+                'elevation','Crop'), jacs_by_lev[:,:,:,:,:,1]),    
+            'Jacobian_ppmv_RTTOV_gb':    (('time', 'N_Levels',"N_Channels",\
+                 'elevation','Crop'), jacs_by_lev[:,:,:,:,:,2]),    
+            'Jacobian_liq_RTTOV_gb':     (('time', 'N_Levels',"N_Channels",\
+                 'elevation','Crop'), jacs_by_lev[:,:,:,:,:,3]),                   
+        },
+        coords={
+            "Crop":     np.array([False, True]),
+            "N_Channels": np.arange(n_channels),
+            "time":    times,
+            "N_Levels":   np.arange(n_levels),
+            "elevation":   elevations,
+        }
+    )
+    
+    ds['levtrans_RTTOV_gb'].attrs["units"]="dimensionless"
+    ds['levtrans_RTTOV_gb'].attrs["long_name"]="Level Transmissivities by channel from RTTOV-gb"
+    ds['levtrans_RTTOV_gb'].attrs["description"]="Transmissivities were derived with Fast RTE from radiosonde profiles." 
+    
+    ds['Jacobian_p_RTTOV_gb'].attrs["units"]="hPa"
+    ds['Jacobian_p_RTTOV_gb'].attrs["long_name"]="Pressure levels for Sensitvities from RTTOV-gb"
+
+    ds['Jacobian_T_RTTOV_gb'].attrs["units"]="K K-1"
+    ds['Jacobian_T_RTTOV_gb'].attrs["long_name"]="TB Level Sensitivities to temperature by channel from RTTOV-gb"
+    ds['Jacobian_T_RTTOV_gb'].attrs["description"]="Sensitivities were derived with Fast RTE from radiosonde profiles."   
+    
+    ds['Jacobian_ppmv_RTTOV_gb'].attrs["units"]="K ppmv-1"
+    ds['Jacobian_ppmv_RTTOV_gb'].attrs["long_name"]="TB Level Sensitivities to WV by channel from RTTOV-gb"
+    ds['Jacobian_ppmv_RTTOV_gb'].attrs["description"]="Sensitivities were derived with Fast RTE from radiosonde profiles." 
+
+    ds['Jacobian_liq_RTTOV_gb'].attrs["units"]="K kg kg-1"
+    ds['Jacobian_liq_RTTOV_gb'].attrs["long_name"]="TB Level Sensitivities to liquid water content by channel from RTTOV-gb"
+    ds['Jacobian_liq_RTTOV_gb'].attrs["description"]="Sensitivities were derived with Fast RTE from radiosonde profiles."
+    
+    ds.to_netcdf(outfile, format="NETCDF4_CLASSIC")
+         
+    return 0
+
+##############################################################################
 
 def derive_TBs4RTTOV_gb(ds, args, batch_size=batch_size):
     all_valid_indices = []
@@ -308,20 +367,24 @@ def derive_TBs4RTTOV_gb(ds, args, batch_size=batch_size):
 
         # 3rd Extract RTTOV-gb TBs:
         tbs, trans, trans_by_lev, jacs_by_lev = get_rttov_outputs(valid_indices,\
-            batch_size=len(valid_indices),\
+            batch_size=len(batch),\
             rttovgb_outfile=\
             "/home/aki/RTTOV-gb/rttov_test/test_example_k.1/output_example_k.dat.gfortran")
+            
+        # Smaller Jacobian files:
+        #write_jacobians_and_level_transmissions_to_file(trans_by_lev,\
+        #    jacs_by_lev, batch, args,ds, valid_indices)
+            
         all_tbs.append(tbs)
-        all_trans.append(trans)
-        all_trans_by_lev.append(trans_by_lev)
-        all_jacs_by_lev.append(jacs_by_lev)
+        all_trans.append(trans) 
+        all_trans_by_lev.append(trans_by_lev)    
+        all_jacs_by_lev.append(jacs_by_lev)   
 
     # Nach der Schleife alles zusammenfügen:
     tbs_concat = np.concatenate(all_tbs, axis=0)
     trans_concat = np.concatenate(all_trans, axis=0)
     trans_by_lev_concat = np.concatenate(all_trans_by_lev, axis=0)
     jacs_by_lev_concat = np.concatenate(all_jacs_by_lev, axis=0)
-    
     ds['TBs_RTTOV_gb'] = (('time', 'N_Channels', 'elevation','Crop'), tbs_concat)
     ds['TBs_RTTOV_gb'].attrs["units"]="K"
     ds['TBs_RTTOV_gb'].attrs["long_name"]="Brightness temperatures from RTTOV-gb"
@@ -331,36 +394,32 @@ def derive_TBs4RTTOV_gb(ds, args, batch_size=batch_size):
     ds['ttrans_RTTOV_gb'].attrs["units"]="dimensionless"
     ds['ttrans_RTTOV_gb'].attrs["long_name"]="Total Transmissivities by channel from RTTOV-gb"
     ds['ttrans_RTTOV_gb'].attrs["description"]="Transmissivities were derived with Fast RTE from radiosonde profiles."        
-    
-    ds['levtrans_RTTOV_gb'] = (('time', 'N_Levels',"N_Channels", 'elevation','Crop'), trans_by_lev_concat)
+
+    # Complete Jacobians and transmissions:
+    ds['levtrans_RTTOV_gb'] = (('time', 'N_Levels',"N_Channels",'elevation','Crop'), trans_by_lev_concat)
     ds['levtrans_RTTOV_gb'].attrs["units"]="dimensionless"
     ds['levtrans_RTTOV_gb'].attrs["long_name"]="Level Transmissivities by channel from RTTOV-gb"
     ds['levtrans_RTTOV_gb'].attrs["description"]="Transmissivities were derived with Fast RTE from radiosonde profiles." 
-
-    ds['Jacobian_p_RTTOV_gb'] = (('time', 'N_Levels','Crop'), jacs_by_lev_concat[:,:,0,0,:,0])
+    
+    ds['Jacobian_p_RTTOV_gb'] = (('time', 'N_Levels','Crop'),jacs_by_lev_concat[:,:,0,0,:,0])
     ds['Jacobian_p_RTTOV_gb'].attrs["units"]="hPa"
     ds['Jacobian_p_RTTOV_gb'].attrs["long_name"]="Pressure levels for Sensitvities from RTTOV-gb"
 
-    ds['Jacobian_T_RTTOV_gb'] = (('time', 'N_Levels',"N_Channels", 'elevation','Crop'), jacs_by_lev_concat[:,:,:,:,:,1])
+    ds['Jacobian_T_RTTOV_gb'] = (('time', 'N_Levels',"N_Channels",'elevation','Crop'), jacs_by_lev_concat[:,:,:,:,:,1])
     ds['Jacobian_T_RTTOV_gb'].attrs["units"]="K K-1"
     ds['Jacobian_T_RTTOV_gb'].attrs["long_name"]="TB Level Sensitivities to temperature by channel from RTTOV-gb"
-    ds['Jacobian_T_RTTOV_gb'].attrs["description"]="Sensitivities were derived with Fast RTE from radiosonde profiles." 
-
+    ds['Jacobian_T_RTTOV_gb'].attrs["description"]="Sensitivities were derived with Fast RTE from radiosonde profiles."   
+    
     ds['Jacobian_ppmv_RTTOV_gb'] = (('time', 'N_Levels',"N_Channels", 'elevation','Crop'), jacs_by_lev_concat[:,:,:,:,:,2])
     ds['Jacobian_ppmv_RTTOV_gb'].attrs["units"]="K ppmv-1"
     ds['Jacobian_ppmv_RTTOV_gb'].attrs["long_name"]="TB Level Sensitivities to WV by channel from RTTOV-gb"
     ds['Jacobian_ppmv_RTTOV_gb'].attrs["description"]="Sensitivities were derived with Fast RTE from radiosonde profiles." 
 
-    ds['Jacobian_liq_RTTOV_gb'] = (('time', 'N_Levels',"N_Channels", 'elevation','Crop'), jacs_by_lev_concat[:,:,:,:,:,3])
+    ds['Jacobian_liq_RTTOV_gb'] = (('time', 'N_Levels',"N_Channels",'elevation','Crop'), jacs_by_lev_concat[:,:,:,:,:,3])
     ds['Jacobian_liq_RTTOV_gb'].attrs["units"]="K kg kg-1"
     ds['Jacobian_liq_RTTOV_gb'].attrs["long_name"]="TB Level Sensitivities to liquid water content by channel from RTTOV-gb"
-    ds['Jacobian_liq_RTTOV_gb'].attrs["description"]="Sensitivities were derived with Fast RTE from radiosonde profiles."     
-        
-        #################
-        #if m ==3:
-        #    break
-        ##################
-        
+    ds['Jacobian_liq_RTTOV_gb'].attrs["description"]="Sensitivities were derived with Fast RTE from radiosonde profiles."
+            
     return ds
     
 ##############################################################################

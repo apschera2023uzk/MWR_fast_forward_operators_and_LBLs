@@ -70,13 +70,6 @@ def clausius_clapeyron_liq(temp_celsius):
     return esl
     
 ##############################################################################
-'''
-def gravity(latitude_deg):
-    phi = math.radians(latitude_deg)
-    g = 9.780327 * (1 + 0.0053024 * math.sin(phi)**2 - 0.0000058 * math.sin(2*phi)**2)
-    return g  # in m/s^2
-'''
-##############################################################################
 
 def clausius_clapeyron_ice(temp_celsius):
     # Sättigungsdampfdruck für eine Temperatur in °C
@@ -1600,28 +1593,7 @@ def produce_dataset(profile_indices, level_pressures,
     ds = replace_nan_lats_and_lons(ds)
     
     return ds
-
-##############################################################################
-
-'''
-def write_combined_input_prof_file(t_array, ppmv_array,length_value,\
-        p_array, liquid_array, height_in_km=0., deg_lat=50.,\
-        filename="prof_plev.dat", zenith_angle=0.):
-    with open(filename, "w") as file:
-        for value in p_array:
-            file.write(f"{value:8.4f}\n")  # eingerückt, 4 Nachkommastellen
-        for value in t_array:
-            file.write(f"{value:6.3f}\n")  # eingerückt, 4 Nachkommastellen
-        for value in ppmv_array:
-            file.write(f"{value:9.4f}\n")  # eingerückt, 4 Nachkommastellen
-        for value in liquid_array:
-            file.write(f"{0.:12.6E}\n")  # eingerückt, 4 Nachkommastellen
-        file.write(f"{t_array[-1]:10.4f}{p_array[-1]:10.2f}\n")
-        file.write(f"{height_in_km:6.1f}{deg_lat:6.1f}\n")
-        file.write(f"{zenith_angle:6.1f}\n")
-        
-        return 0
-'''        
+     
 ##############################################################################
 # 3rd: Main code:
 ##############################################################################
