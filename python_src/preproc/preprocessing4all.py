@@ -27,6 +27,9 @@ sys.path.append('/home/aki/pyrtlib')
 from pyrtlib.climatology import AtmosphericProfiles as atmp
 from pyrtlib.utils import ppmv2gkg, mr2rh
 from datetime import datetime
+import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use("Agg")
 
 ##############################################################################
 # 1.5: Parameter
@@ -107,9 +110,34 @@ def running_mean_from_arrays(inds, z_array, any_array):
 
 ##############################################################################
 
+def interpolation_test_plot(ds, length_value, p_array, t_array,\
+       ppmv_array, height_in_km, deg_lat,\
+       m_array, z_array, rh, deg_lon,height_var, t_var,\
+       p_var, h_var, index):     
+    
+    if np.all(ds[h_var].values<1.5):
+        rhs_before = ds[h_var].values*100
+    else: 
+        rhs_before = ds[h_var].values
+    plt.figure(figsize=(15,15))
+    plt.title("Interpolation of Radisonde profile")
+    plt.plot(rhs_before,ds[height_var].values, label="Radiosonde profile")
+    plt.plot(rh, z_array, label="Interpolated profile for RTE")
+    plt.xlabel("Relative Humidity [%]")
+    plt.ylabel("height [m]")
+    plt.ylim(0,3000)
+    plt.legend()
+    plt.savefig("/home/aki/PhD_plots/After_oktober_25_1st_paper/\
+RS_hum_interpolation/"+str(h_var)+"_"+str(index)+\
+    "_interpolation.png")
+    
+    return 0
+       
+##############################################################################
+
 def read_radiosonde_nc_arms(file=\
         "/home/aki/PhD_data/Vital_I/radiosondes/20240805_102936.nc",\
-         crop=0, min_p=min_p):
+         crop=0, min_p=min_p, index=7):
     
     if file==None:
         return 0, np.nan, np.nan, np.nan, np.nan,np.nan,\
@@ -215,6 +243,16 @@ def read_radiosonde_nc_arms(file=\
     for rh_lev, t_lev, p_lev in zip (rh, t_array, p_array):
         m_array.append(rh2mixing_ratio(RH=rh_lev, abs_T=t_lev, p=p_lev*100))
     ppmv_array = np.array(m_array) * (28.9644e6 / 18.0153)
+
+    ######################
+    '''
+    if index%50==0:
+        interpolation_test_plot(ds, length_value, p_array, t_array,\
+           ppmv_array, height_in_km, deg_lat,\
+           m_array, z_array, rh, deg_lon,height_var, t_var, p_var, h_var,\
+           index)
+    '''     
+    ######################       
 
     return length_value, p_array, t_array, ppmv_array, height_in_km, deg_lat,\
        m_array, z_array, rh, deg_lon
@@ -1038,6 +1076,7 @@ def summarize_many_profiles(pattern=\
         
         profile_indices.append(i)
         datetime_np = derive_date_from_file_name(file)
+
         ###################
         tbs_dwdhat1, tbs_foghat1,tbs_sunhat1,tbs_tophat1, tbs_joyhat1,\
         tbs_hamhat1, dwd_profiles1,fog_profiles1, sun_profiles1,\
@@ -1049,7 +1088,7 @@ def summarize_many_profiles(pattern=\
             if ".nc" in file:
                 length_value, p_array, t_array, ppmv_array, height_in_km,\
                     deg_lat, m_array, z_array, rh, deg_lon =\
-                    read_radiosonde_nc_arms(file=file, crop=7)
+                    read_radiosonde_nc_arms(file=file, crop=7, index=i)
             if length_value<150:
                 invalid_z = True
                 level_ppmvs[:,i,1] = np.array([np.nan]*n_levels)
@@ -1138,7 +1177,7 @@ def summarize_many_profiles(pattern=\
         if ".nc" in file:
             length_value, p_array, t_array, ppmv_array, height_in_km,\
                     deg_lat, m_array, z_array, rh, deg_lon =\
-                    read_radiosonde_nc_arms(file=file)
+                    read_radiosonde_nc_arms(file=file, index=i)
         elif "Profile.txt" in file:
             length_value, p_array, t_array, ppmv_array, height_in_km,\
                     deg_lat, m_array, z_array, rh, deg_lon =\
@@ -1212,6 +1251,7 @@ def summarize_many_profiles(pattern=\
             srf_altitude[i,0] = h_km_vital
         else:  
             srf_altitude[i,0] = height_in_km
+    #############
     
     return profile_indices, level_pressures, level_temperatures, level_wvs,\
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza,\
@@ -1573,7 +1613,7 @@ def produce_dataset(profile_indices, level_pressures,
         "summary": "This dataset contains co-located radiosonde profiles and HATPRO microwave radiometer brightness temperatures from three field campaigns at Jülich ObservatorY for Cloud Evolution (JOYCE) and Richard-Assmann-Observatory (RAO) in Lindenberg.",
         "keywords": "radiosonde, microwave radiometer, brightness temperature, atmospheric profiles, water vapor, liquid water path",
         "Conventions": "CF-1.8",  # WICHTIG für Interoperabilität!
-        "history": f"Created on {datetime.utcnow().isoformat()}Z by {os.getlogin()}",
+        "history": f"Created on {datetime.utcnow().isoformat()}Z by {os.getlogin()} by Alexander Pschera from datasets of UzK on Vital I and Socles as well as FESSTVaL data from UHH (Link in references).",
         "source": "Vaisala RS41/GRAW DMF-09 radiosondes and RPG-HATPRO microwave radiometers",
         "references": "FESSTVaL radiosondes and other data: https://www.cen.uni-hamburg.de/icdc/data/atmosphere/samd-st-datasets/samd-st-fesstval.html | https://www.fdr.uni-hamburg.de/record/10279; SOCLES: https://gepris.dfg.de/gepris/projekt/430226822?context=projekt&task=showDetail&id=430226822&; Vital I: https://www.herz.uni-bonn.de/wordpress/index.php/vital-campaigns/",
         "license": "CC BY 4.0",

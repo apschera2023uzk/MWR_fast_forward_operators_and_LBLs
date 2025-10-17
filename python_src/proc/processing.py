@@ -16,10 +16,14 @@ import numpy as np
 import pandas as pd
 from scipy.interpolate import interp1d
 import glob
-import sys
 import shutil
 from datetime import datetime
 import subprocess
+import sys
+sys.path.append('/home/aki/pyrtlib')
+from pyrtlib.climatology import AtmosphericProfiles as atmp
+from pyrtlib.tb_spectrum import TbCloudRTE
+from pyrtlib.utils import ppmv2gkg, mr2rh
 
 ##############################################################################
 # 1.5: Parameter
@@ -422,6 +426,71 @@ def derive_TBs4RTTOV_gb(ds, args, batch_size=batch_size):
             
     return ds
     
+##############################################################################  
+
+def check_for_nans(z_in, p_in, t_in, rh_in, frqs, ang):
+    return np.any([
+        np.isnan(z_in).any(),
+        np.isnan(p_in).any(),
+        np.isnan(t_in).any(),
+        np.isnan(rh_in).any(),
+        np.isnan(frqs).any(),
+        np.isnan(ang).any()
+    ])
+      
+##############################################################################  
+
+def derive_TBs4PyRTlib(ds, args):
+    # Dieser Code ist sehr langsam...
+    # Es liegt schon ein Unterschied zwischen 48 Sonden oder 521 Sonden à 10 Winkel...
+
+    frqs = np.array([22.24,23.04,23.84,25.44,26.24,27.84,31.4,51.26,52.28,\
+        53.86,54.94,56.66,57.3,58.])
+    nf = len(frqs)    
+    mdls = ["R17", "R03", "R16", "R19", "R98", "R19SD", "R20", "R20SD","R24"]
+    tags = ["Rosenkranz 17", "Tretjakov 2003", "Rosenkranz 17 (2)",\
+        "Rosenkranz + Cimini", "Rosenkranz + Cimini SD", "Makarov",\
+         "Makarov SD", "Rosenkranz 24"]
+    tbs = np.full((len(ds["time"].values), 14,10,2), np.nan)     
+     
+    for i, timestep in enumerate(ds["time"].values):
+        for j, crop in enumerate(ds["Crop"].values):
+            for k, elevation in enumerate(ds["elevation"].values):
+                # print("Indices: ",i,j,k)
+            
+                #########
+                # Put elevation in here:
+                ang = np.array([elevation])
+                
+                # Which input variables do I need?
+                rh_in = ds["Level_RH"].isel(time=i).isel(Crop=j).values/100
+                # as fraction not %
+                z_in =  ds["Level_z"].isel(time=i).isel(Crop=j).values/1000
+                # m to km!
+                p_in = ds["Level_Pressure"].isel(time=i).isel(Crop=j).values # hPa
+                t_in =ds["Level_Temperature"].isel(time=i).isel(Crop=j).values  # K
+                
+                # Exclude profiles with any Nans again:
+                nan_bool = check_for_nans(z_in, p_in, t_in, rh_in, frqs, ang)
+                
+                if not nan_bool:
+                    # Run RTE model:
+                    mdl = mdls[-1] # Rosenkranz 24
+                    rte = TbCloudRTE(z_in[::-1], p_in[::-1], t_in[::-1], rh_in[::-1], frqs, ang)
+                    rte.init_absmdl(mdl)
+                    ####################
+                    # Clear sky!!!
+                    # rte.cloudy = False 
+                    ####################
+                    rte.satellite = False # downwelling!!!
+                    df_from_ground = rte.execute()                 
+                    tbs[i,:,k,j] = df_from_ground["tbtotal"].values
+                else:
+                    print("NaNs found!!!!!!!")
+
+    ds["TBs_PyRTlib_R24"] = (('time', 'N_Channels','elevation','Crop'), tbs)
+    return ds
+    
 ##############################################################################
 # 3rd: Main code:
 ##############################################################################
@@ -435,17 +504,17 @@ if __name__=="__main__":
     # What the program should do:
     
     # 1 Derive TBs for all elevations  for RTTOV-gb
-    new_ds = derive_TBs4RTTOV_gb(ds, args)
-    
+    ds = derive_TBs4RTTOV_gb(ds, args)
+
     # 2 Derive TBs for all elevations  for pyrtlib
+    ds = derive_TBs4PyRTlib(ds, args)
 
     # 3. Derive TBs for clear sky for ARMS-gb
 
     # 3 Print dataset to NetCDF
-    new_ds.to_netcdf(\
+    ds.to_netcdf(\
         "/home/aki/PhD_data/3campaigns_TBs_processed.nc",\
          format="NETCDF4_CLASSIC")
-
         
 
         
