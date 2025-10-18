@@ -38,7 +38,7 @@ matplotlib.use("Agg")
 elevations = np.array([90., 30, 19.2, 14.4, 11.4, 8.4,  6.6,  5.4, 4.8,  4.2])
 azimuths = np.arange(0.,355.1,5.) # Interpoliere dazwischen!
 n_levels=180
-min_p = 10
+min_p = 5
 
 ##############################################################################
 # 2nd Used Functions

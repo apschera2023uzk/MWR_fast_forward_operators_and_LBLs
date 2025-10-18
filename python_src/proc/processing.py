@@ -211,9 +211,8 @@ def get_rttov_outputs(valid_indices, rttovgb_outfile=\
             prof_idx=int(line.split(" ")[-1])-1
             rs_time_idx, crop_idx, ele_idx = valid_indices[prof_idx] 
             rs_time_idx = rs_time_idx%20
-            # print("i (profile in batch: ",  i )
-            # print("rs_time_idx, crop_idx, ele_idx ::", rs_time_idx, crop_idx, ele_idx )
-            # print("prof_idx: ", prof_idx)
+            print("prof_idx: ", prof_idx)
+            print("len valid: ",len(valid_indices))
         
         if switch and switch_count<2:
             switch_count+= 1
