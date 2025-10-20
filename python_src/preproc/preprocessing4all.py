@@ -1428,6 +1428,203 @@ def replace_nan_lats_and_lons(ds):
                 ds["Longitude"].values[i] =ds["Latitude"].values[i+1]         
 
     return ds 
+
+##############################################################################
+
+def add_attrs_CF_conform(ds):
+    # === CF-COMPLIANT ATTRIBUTE ADDITIONS ===
+
+    # --- Coordinate variables ---
+    ds["time"].attrs.update({
+        "standard_name": "time",
+        "long_name": "Time of observation",
+        "units": "seconds since 1970-01-01T00:00:00",
+        "calendar": "gregorian",
+        "axis": "T"
+    })
+
+    ds["Latitude"].attrs.update({
+        "standard_name": "latitude",
+        "long_name": "Latitude of observation",
+        "units": "degree",
+        "axis": "Y",
+        "valid_range": (-90.0, 90.0)
+    })
+
+    ds["Longitude"].attrs.update({
+        "standard_name": "longitude",
+        "long_name": "Longitude of observation",
+        "units": "degree",
+        "axis": "X",
+        "valid_range": (-180.0, 180.0)
+    })
+
+    ds["elevation"].attrs.update({
+        "standard_name": "sensor_view_elevation_angle",
+        "long_name": "Elevation angle of MWR observation",
+        "units": "degree",
+        "axis": "Z"
+    })
+
+    ds["azimuth"].attrs.update({
+        "standard_name": "sensor_view_azimuth_angle",
+        "long_name": "Azimuth angle of MWR observation",
+        "units": "degree"
+    })
+
+    ds["Level_z"].attrs.update({
+        "standard_name": "altitude",
+        "long_name": "Geopotential height above mean sea level",
+        "units": "m",
+        "positive": "up",
+        "axis": "Z"
+    })
+
+    # --- Level variables ---
+    ds["Level_Pressure"].attrs.update({
+        "standard_name": "air_pressure",
+        "long_name": "Pressure profile from radiosonde",
+        "units": "hPa",
+        "_FillValue": np.nan,
+        "coordinates": "time Latitude Longitude Level_z",
+        "cell_methods": "time: mean"
+    })
+
+    ds["Level_Temperature"].attrs.update({
+        "standard_name": "air_temperature",
+        "long_name": "Temperature profile from radiosonde",
+        "units": "K",
+        "_FillValue": np.nan,
+        "valid_range": (150.0, 330.0),
+        "coordinates": "time Latitude Longitude Level_z",
+        "cell_methods": "time: mean"
+    })
+
+    ds["Level_H2O"].attrs.update({
+        "standard_name": "mixing ratio",
+        "long_name": "Water vapor mixing ratio",
+        "units": "g kg-1",
+        "_FillValue": np.nan,
+        "coordinates": "time Latitude Longitude Level_z"
+    })
+
+    ds["Level_Liquid"].attrs.update({
+        "standard_name": "cloud_liquid_water_mixing_ratio",
+        "long_name": "Liquid water mixing ratio",
+        "units": "kg kg-1",
+        "_FillValue": np.nan,
+        "coordinates": "time Latitude Longitude Level_z"
+    })
+
+    ds["Level_Ice"].attrs.update({
+        "standard_name": "cloud_ice_mixing_ratio",
+        "long_name": "Ice water mixing ratio",
+        "units": "kg kg-1",
+        "_FillValue": np.nan,
+        "coordinates": "time Latitude Longitude Level_z"
+    })
+
+    ds["Level_RH"].attrs.update({
+        "standard_name": "relative_humidity",
+        "long_name": "Relative humidity",
+        "units": "%",
+        "_FillValue": np.nan,
+        "valid_range": (0.0, 100.0),
+        "coordinates": "time Latitude Longitude Level_z"
+    })
+
+    # --- Integrated quantities ---
+    for var in ["Dwdhat_IWV", "Foghat_IWV", "Sunhat_IWV", "Tophat_IWV", "Joyhat_IWV", "Hamhat_IWV"]:
+        ds[var].attrs.update({
+            "standard_name": "atmosphere_mass_content_of_water_vapor",
+            "long_name": "Integrated water vapor",
+            "units": "kg m-2",
+            "_FillValue": np.nan,
+            "coordinates": "time Latitude Longitude",
+            "cell_methods": "altitude: sum"
+        })
+
+    for var in ["Dwdhat_LWP", "Foghat_LWP", "Sunhat_LWP", "Tophat_LWP", "Joyhat_LWP", "Hamhat_LWP", "LWP_radiosonde"]:
+        ds[var].attrs.update({
+            "standard_name": "atmosphere_cloud_liquid_water_content",
+            "long_name": "Cloud liquid water path",
+            "units": "kg m-2",
+            "_FillValue": np.nan,
+            "coordinates": "time Latitude Longitude",
+            "cell_methods": "altitude: sum"
+        })
+
+    # --- Brightness temperatures ---
+    for var in ["TBs_dwdhat", "TBs_foghat", "TBs_sunhat", "TBs_tophat", "TBs_joyhat", "TBs_hamhat"]:
+        ds[var].attrs.update({
+            "standard_name": "brightness_temperature",
+            "long_name": "Brightness temperature measured by HATPRO",
+            "units": "K",
+            "_FillValue": np.nan,
+            "coordinates": "time elevation azimuth Latitude Longitude N_Channels",
+            "cell_methods": "time: mean"
+        })
+
+    # --- Surface variables ---
+    ds["Obs_Surface_Pressure"].attrs.update({
+        "standard_name": "surface_air_pressure",
+        "long_name": "Surface pressure",
+        "units": "hPa",
+        "_FillValue": np.nan
+    })
+
+    ds["Obs_Temperature_2M"].attrs.update({
+        "standard_name": "air_temperature",
+        "long_name": "2 m air temperature",
+        "units": "K",
+        "_FillValue": np.nan
+    })
+
+    ds["Obs_H2O_2M"].attrs.update({
+        "standard_name": "specific_humidity",
+        "long_name": "2 m specific humidity",
+        "units": "kg kg-1",
+        "_FillValue": np.nan
+    })
+
+    ds["Surface_Altitude"].attrs.update({
+        "standard_name": "surface_altitude",
+        "long_name": "Station altitude above mean sea level",
+        "units": "m",
+        "_FillValue": np.nan
+    })
+
+    # --- Metadata and index ---
+    ds["Profile_Index"].attrs.update({
+        "long_name": "Index number of radiosonde profile",
+        "comment": "Unique identifier for each radiosonde profile in the dataset"
+    })
+
+    # --- Global attributes for CF compliance ---
+    ds.attrs.update({
+        "title": "Radiosonde and microwave radiometer brightness temperature dataset from FESSTVaL, SOCLES, and VITAL-I campaigns",
+        "summary": "Co-located radiosonde profiles and HATPRO microwave radiometer brightness temperatures from field campaigns at JOYCE and RAO sites.",
+        "keywords": "radiosonde, microwave radiometer, brightness temperature, water vapor, liquid water path, FESSTVaL, SOCLES, VITAL-I",
+        "Conventions": "CF-1.8",
+        "featureType": "profile",
+        "institution": "University of Cologne, Institute for Geophysics and Meteorology",
+        "source": "Vaisala RS41/GRAW DMF-09 radiosondes; RPG-HATPRO microwave radiometers",
+        "references": "FESSTVaL: https://www.cen.uni-hamburg.de/icdc/data/atmosphere/samd-st-datasets/samd-st-fesstval.html; SOCLES: https://gepris.dfg.de/gepris/projekt/430226822; VITAL-I: https://www.herz.uni-bonn.de/wordpress/index.php/vital-campaigns/",
+        "history": f"Created {datetime.utcnow().isoformat()}Z by {os.getlogin()} using xarray",
+        "license": "CC BY 4.0",
+        "creator_name": "Alexander Pschera",
+        "creator_email": "apscher1@uni-koeln.de",
+        "creator_institution": "University of Cologne",
+        "contact": "apscher1@uni-koeln.de",
+        "geospatial_lat_min": float(np.nanmin(lats)),
+        "geospatial_lat_max": float(np.nanmax(lats)),
+        "geospatial_lon_min": float(np.nanmin(lons)),
+        "geospatial_lon_max": float(np.nanmax(lons)),
+        "time_coverage_start": str(np.min(times)),
+        "time_coverage_end": str(np.max(times))
+    })
+
+    return ds
     
 ##############################################################################
 
@@ -1555,6 +1752,7 @@ def produce_dataset(profile_indices, level_pressures,
         }
     )
 
+    '''
     # Add units:
     ds["Level_Pressure"].attrs["units"] = "hPa"
     ds["LWP_radiosonde"].attrs["units"] = "kg m-2"
@@ -1626,8 +1824,8 @@ def produce_dataset(profile_indices, level_pressures,
         "time_coverage_start": str(times.min()),
         "time_coverage_end": str(times.max()),
      })
-    
-    
+    '''
+    ds = add_attrs_CF_conform(ds)
     ds = clean_dataset(ds)
     ds = interpolate_azimuths(ds)
     ds = replace_nan_lats_and_lons(ds)
