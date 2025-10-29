@@ -250,7 +250,7 @@ def summarize_many_profiles(pattern=\
         derive_cloud_features(p_array, t_array, ppmv_array, m_array, z_array, rh)
         
         #################
-        break
+        # break
         ##################
                                     
         # p in hPa as in other inputs!
@@ -303,7 +303,8 @@ def write_armsgb_input_nc(profile_indices, level_pressures,
     # Setze Dummy-Werte für Dimensionsgrößen
     n_times = len(profile_indices)
     n_channels = 14  # Beispielwert
-    any_obs = np.empty([14, n_times])
+    # any_obs = np.empty([14, n_times])
+    any_obs = np.full([14, n_times], np.nan)
     n_data = 1       # Wird oft für Metadaten genutzt
 
     ds = xr.Dataset(

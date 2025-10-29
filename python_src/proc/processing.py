@@ -62,6 +62,8 @@ def parse_arguments():
     return parser.parse_args()
 
 ##############################################################################
+# RTTOV-gb:
+##############################################################################
 
 def write1profile2str(t_array, ppmv_array,length_value,\
         p_array, liquid_array, height_in_km=0., deg_lat=50.,\
@@ -83,12 +85,12 @@ def write1profile2str(t_array, ppmv_array,length_value,\
 
 ##############################################################################
 
-def check4NANs_in_time_crop_ele(ds, i,j,k):
+def check4NANs_in_time_crop_ele(ds, t_index, crop_index, ele_index):
     # Extract the relevant DataArrays for the given indices
-    temp_arr = ds["Level_Temperature"].values[:, i, j]
-    ppmvs_arr = ds["Level_ppmvs"].values[:, i, j]
-    press_arr = ds["Level_Pressure"].values[:, i, j]
-    liquid_arr = ds["Level_Liquid"].values[:, i, j]
+    temp_arr = ds["Level_Temperature"].values[:, t_index, crop_index]
+    ppmvs_arr = ds["Level_ppmvs"].values[:, t_index, crop_index]
+    press_arr = ds["Level_Pressure"].values[:, t_index, crop_index]
+    liquid_arr = ds["Level_Liquid"].values[:, t_index, crop_index]
     
     # Check each array for NaN values
     if np.any(np.isnan(temp_arr)) or \
@@ -501,7 +503,9 @@ def derive_TBs4RTTOV_gb(ds, args, batch_size=batch_size):
             
     return ds
     
-##############################################################################  
+##############################################################################
+# PyRTlib:
+##############################################################################
 
 def check_for_nans(z_in, p_in, t_in, rh_in, frqs, ang):
     return np.any([
@@ -556,6 +560,8 @@ def derive_TBs4PyRTlib(ds, args):
                     ####################
                     # Clear sky!!!
                     # rte.cloudy = False 
+                    # False is default I guess...
+                    print("RTE_cloudy: ", rte.cloudy)
                     ####################
                     rte.satellite = False # downwelling!!!
                     df_from_ground = rte.execute()                 
@@ -574,9 +580,238 @@ def derive_TBs4PyRTlib(ds, args):
     return ds
 
 ##############################################################################
+# ARMS-gb:
+##############################################################################
+'''
 
-def derive_TBs4ARMS_gb(ds, args):
+def get_O3_profile()
+    z, p, _, t, md = atmp.gl_atm(atmp.MIDLATITUDE_SUMMER)
+    # Ozone is usually identified by atmp.O3 index in molecular species array
+    o3_profile_ppmv = md[:, atmp.O3]
+    
+    
+
+##############################################################################
+'''
+
+def write_armsgb_input_nc(profile_indices, level_pressures,
+        level_temperatures, level_wvs,level_ppmvs, level_liq,level_z,\
+        level_rhs,\
+        srf_pressures, srf_temps, srf_wvs,\
+        srf_altitude, ZA,\
+        times ,outfile="~/PhD_data/arms_gb_inputs.nc"):
+
+    # Ermitteln der Dimensionen
+    n_levels, n_profiles = level_pressures.shape
+
+    # Optional: Konvertiere Inputs in float32 falls nötig
+    level_pressures = np.array(level_pressures, dtype=np.float32)
+    level_temperatures = np.array(level_temperatures, dtype=np.float32)
+    level_wvs = np.array(level_wvs, dtype=np.float32)
+    level_ppmvs = np.array(level_ppmvs, dtype=np.float32)
+    level_liq = np.array(level_liq, dtype=np.float32)
+    level_z = np.array(level_z, dtype=np.float32)
+    srf_pressures = np.array(srf_pressures, dtype=np.float32)
+    srf_temps = np.array(srf_temps, dtype=np.float32)
+    srf_wvs = np.array(srf_wvs, dtype=np.float32)
+    srf_altitude = np.array(srf_altitude, dtype=np.float32)
+    ZA = np.array(ZA, dtype=np.float32)
+    profile_indices = np.array(profile_indices, dtype=np.int32)
+    level_o3s = np.empty(np.shape(level_wvs))
+
+    # Setze Dummy-Werte für Dimensionsgrößen
+    n_times = len(profile_indices)
+    n_channels = 14  # Beispielwert
+    any_obs = np.empty([14, n_times])
+    #####################################
+    # any_obs = np.full([14, n_times], np.nan)
+    # => Lösungsversuch hat nicht geholfen!
+    #############################
+    n_data = 1       # Wird oft für Metadaten genutzt
+
+    ds = xr.Dataset(
+        data_vars={
+            # Okay dieser Code-Block hat meinen Segfault error gelöst:
+            "Times_Number": ("N_Data", np.array([n_times], dtype=np.int32)),
+            "Levels_Number": ("N_Data", np.array([n_levels], dtype=np.int32)),
+            "Profiles_Number": ("N_Data", np.array([n_profiles], dtype=np.int32)),
+            
+            # Profilebenen
+            "Level_Pressure":       (("N_Levels", "N_Profiles"), level_pressures),
+            "Level_Temperature":    (("N_Levels", "N_Profiles"), level_temperatures),
+            "Level_H2O":            (("N_Levels", "N_Profiles"), level_wvs),
+            "Level_ppmvs":          (("N_Levels", "N_Profiles"), level_ppmvs),
+            "Level_Liquid":         (("N_Levels", "N_Profiles"), level_liq),
+            "Level_z":              (("N_Levels", "N_Profiles"), level_z),
+            'Level_O3':             (("N_Levels", "N_Profiles"), level_o3s),
+            "Level_RH":              (("N_Levels", "N_Profiles"), level_rhs),
+
+            # Oberflächenparameter
+            "times":                (("N_Times"), times),
+            "Obs_Surface_Pressure": (("N_Times",), srf_pressures),
+            "Obs_Temperature_2M":   (("N_Times",), srf_temps),
+            "Obs_H2O_2M":           (("N_Times",), srf_wvs),
+            "Surface_Pressure":     (("N_Profiles",), srf_pressures),
+            "Temperature_2M":       (("N_Profiles",), srf_temps),
+            "H2O_2M":               (("N_Profiles",), srf_wvs),
+            "Surface_Altitude":     (("N_Profiles",), srf_altitude),
+            
+            'Obs_BT':               (("N_Channels","N_Times",), np.array(any_obs)),
+            'Sim_BT':               (("N_Channels","N_Times",), np.array(any_obs)),
+            'OMB':                  (("N_Channels","N_Times",), np.array(any_obs)),
+            
+            'QC_Flag':              (("N_Times",), np.zeros([n_times])),
+
+            # Zusätzliche Metadaten
+            "Profile_Index":        (("N_Times",), profile_indices.astype(np.float64)),
+            "GMRZenith":            (("N_Times",), 90-ZA), # Elevationswinkel!!!
+            # Kein Zenitwinkel zsa:0; GMR: 90
+            
+        },
+        
+        coords={
+            "N_Data":     np.arange(n_data),
+            "N_Channels": np.arange(n_channels),
+            "N_Times":    np.arange(n_times),
+            "N_Levels":   np.arange(n_levels),
+            "N_Profiles": profile_indices,
+        }
+    )
+
+    # Add units:
+    ds["Level_Pressure"].attrs["units"] = "hPa"
+    ds["Level_Temperature"].attrs["units"] = "K"
+    ds["Level_H2O"].attrs["units"] = "g/kg"
+    ds["Level_ppmvs"].attrs["units"] = "ppmv"
+    ds["Level_Liquid"].attrs["units"] = "kg/kg"
+    ds["Level_z"].attrs["units"] = "m"
+    
+    # Schreibe die NetCDF-Datei
+    ds.to_netcdf(outfile, format="NETCDF4_CLASSIC")
+
     return 0
+
+##############################################################################
+
+def create_input4arms_gb(ds, args, batch, n_levels=n_levels):
+
+    # 1st derive valide indices:
+    # Start to add data to ARMS-gb inputs:
+    valid_indices = []
+    for i in batch: 
+        print("Findin valid profiles for timestep to ARMS-gb file: ")
+        print(i, ds["time"].values[i])
+        for j, elevation in enumerate(ds["elevation"].values):
+            for k, Crop in enumerate(ds["Crop"].values):
+                if check4NANs_in_time_crop_ele(ds, i, k, j):
+                    pass
+                else:
+                    valid_indices.append((i,j,k))
+
+    # 2nd define fields:
+    # n_Levels, n_Profiles:
+    N_profiles = len(valid_indices)
+    level_pressures = np.full((n_levels, N_profiles), np.nan)
+    level_temperatures = np.full((n_levels, N_profiles), np.nan)
+    level_wvs = np.full((n_levels, N_profiles), np.nan)
+    level_ppmvs = np.full((n_levels, N_profiles), np.nan)
+    level_liq = np.full((n_levels, N_profiles), np.nan)
+    level_z =  np.full((n_levels, N_profiles), np.nan)
+    level_rhs =  np.full((n_levels, N_profiles), np.nan)
+    # N_profiles:
+    profile_indices = []
+    srf_pressures = np.full((N_profiles), np.nan)
+    srf_temperatures = np.full((N_profiles), np.nan)
+    srf_wvs = np.full((N_profiles), np.nan)
+    srf_altitude = np.full((N_profiles), np.nan)
+    ZA = np.full((N_profiles), np.nan)
+    times = np.full((N_profiles), np.nan)
+
+    # 3rd: fill fields with data:
+    # Start to add data to ARMS-gb inputs:
+    for total_index, indices in enumerate(valid_indices):
+        print("Wrtiting valid indices: ", indices)
+        i,j,k = indices
+        profile_indices.append(i)
+        level_pressures[:, total_index] = ds["Level_Pressure"].values[:, i, k]
+        level_temperatures[:, total_index] = ds["Level_Temperature"].values[:, i, k]
+        level_wvs[:, total_index] = ds["Level_H2O"].values[:, i, k]
+        level_ppmvs[:, total_index] = ds["Level_ppmvs"].values[:, i, k]
+        level_liq[:, total_index] = ds["Level_Liquid"].values[:, i, k]
+        level_rhs[:, total_index] = ds["Level_RH"].values[:, i, k]
+        ##########
+        # level_ice[:, total_index] = ds["Level_Ice"].values[:, i, k]
+        # level_rh[:, total_index] = ds["Level_RH"].values[:, i, k]
+        ##########
+        level_z[:, total_index] = ds["Level_z"].values[:, i, k]
+                
+        srf_pressures[total_index] = ds["Surface_Pressure"].values[i, k]
+        srf_temperatures[total_index] = ds["Temperature_2M"].values[i, k]
+        srf_wvs[total_index] = ds["H2O_2M"].values[i, k]
+        srf_altitude[total_index] = ds["Surface_Altitude"].values[i, k] 
+        ZA[total_index] = 90-ds["elevation"].values[j]
+        times[total_index] = ds["time"].values[i]
+
+    # 4th Schreibe ARMS-gb Inputdatei:
+    write_armsgb_input_nc(profile_indices, level_pressures,
+        level_temperatures, level_wvs,level_ppmvs, level_liq,level_z,\
+        level_rhs,\
+        srf_pressures, srf_temperatures, srf_wvs,\
+        srf_altitude, ZA,\
+        times, outfile="~/PhD_data/arms_gb_inputs.nc")
+        
+    outfile="/home/aki/PhD_data/arms_gb_inputs.nc"
+    return outfile, valid_indices
+
+##############################################################################
+
+def read_outputs_arms_gb(infile, valid_indices):
+    ds = xr.open_dataset(infile)
+    TBs1 = np.full((len(valid_indices), 14), np.nan)
+
+    for total_index, indices in enumerate(valid_indices):
+        i,j,k = indices    
+        TBs1[total_index,:]=\
+            ds["Sim_BT"].isel(N_Times=total_index).values    
+
+    print("TBs for on etimestep: ",TBs1)
+    return TBs1
+
+##############################################################################
+
+def derive_TBs4ARMS_gb(ds, args, n_levels=n_levels, batch_size=batch_size):
+    print("Start processing ARMS-gb...")
+    all_valid_indices = []
+    all_tbs = []
+    
+    for m, batch in enumerate(batch_creator(ds["time"].values, batch_size)):
+        print("batch: ", batch, " of total ",\
+            len(ds["time"].values), " in processing")
+            
+        # 1st create NetCDF input for ARMS-gb model:
+
+        infile, valid_indices = create_input4arms_gb(ds, args, n_levels=n_levels, batch=batch) 
+        all_valid_indices+=valid_indices               
+        # Error: Input Sensor Zenith Angle is less than 0 or larger than 85.
+        # ZA seem normal - error occurs because I have values of elevtaion below 5 at 4.2 and 4.8°
+        #  Error: Input Level O3 is less than or equal to 0.
+        # => This error also does not seem relevant, as I do not use O3.
+
+        # 2nd Copy inputs and run model:
+        subprocess.run("./run_arms_gb.sh")    
+   
+        # 3rd read outputs:
+        tbs1 = read_outputs_arms_gb(infile, valid_indices)
+        
+        ######################
+        break
+        #ä################
+    
+    
+    # 4th write TBs to full dataset:
+
+    print("Processed ARMS-gb")
+    return ds
     
 ##############################################################################
 # 3rd: Main code:
