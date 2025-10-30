@@ -108,10 +108,6 @@ def create_RTTOV_gb_in_profiles(ds, args, batch):
     profiles = ""
     valid_indices = []
 
-    print("len(batch): ", len(batch))
-    print("len(ds[Crop].values): ", len(ds["Crop"].values))
-    print("ds[elevation].values): ", len(ds["elevation"].values))
-
     for i in batch:    
         for j, crop in enumerate(ds["Crop"].values):
             for k, elevation in enumerate(ds["elevation"].values):
@@ -213,8 +209,6 @@ def get_rttov_outputs(valid_indices, rttovgb_outfile=\
             prof_idx=int(line.split(" ")[-1])-1
             rs_time_idx, crop_idx, ele_idx = valid_indices[prof_idx] 
             rs_time_idx = rs_time_idx%20
-            print("prof_idx: ", prof_idx)
-            print("len valid: ",len(valid_indices))
         
         if switch and switch_count<2:
             switch_count+= 1
@@ -282,7 +276,6 @@ def get_rttov_outputs(valid_indices, rttovgb_outfile=\
         elif sw_jacs_by_lev:
             liste = string_jc_by_lev.split("\n")[3:n_levels+3]
             for j, line in enumerate(liste):
-                # print(j, line)
                 werte = line.split()
                 jacs_by_lev[rs_time_idx, j, ch_idx, ele_idx, crop_idx, :]=\
                     werte[1:]
@@ -386,8 +379,10 @@ def add_rttov_variables_to_ds(
     }
 
     # Jacobian p (pressure levels)
-    jac_p = jacs_by_lev_data[:, :, :, :, :, 0]
-    ds['Jacobian_p_RTTOV_gb'] = ( (time_dim, n_levels_dim, crop_dim), jac_p )
+    jac_p = jacs_by_lev_data[:, :, 0, 0, :, 0]
+    # Jacobian_p_RTTOV_gb'
+    ds['Jacobian_p_RTTOV_gb'] = ((time_dim, n_levels_dim, crop_dim),\
+       jac_p ) 
     ds['Jacobian_p_RTTOV_gb'].attrs = {
         "units": "hPa",
         "long_name": "Pressure levels for Sensitivities from RTTOV-gb"
@@ -461,7 +456,7 @@ def derive_TBs4RTTOV_gb(ds, args, batch_size=batch_size):
     trans_concat = np.concatenate(all_trans, axis=0)
     trans_by_lev_concat = np.concatenate(all_trans_by_lev, axis=0)
     jacs_by_lev_concat = np.concatenate(all_jacs_by_lev, axis=0)
-    add_rttov_variables_to_ds(ds, tbs_concat, trans_concat,\
+    ds = add_rttov_variables_to_ds(ds, tbs_concat, trans_concat,\
          trans_by_lev_concat, jacs_by_lev_concat)
     
     '''
@@ -611,6 +606,7 @@ def write_armsgb_input_nc(profile_indices, level_pressures,
     level_ppmvs = np.array(level_ppmvs, dtype=np.float32)
     level_liq = np.array(level_liq, dtype=np.float32)
     level_z = np.array(level_z, dtype=np.float32)
+    level_rhs = np.array(level_rhs, dtype=np.float32)
     srf_pressures = np.array(srf_pressures, dtype=np.float32)
     srf_temps = np.array(srf_temps, dtype=np.float32)
     srf_wvs = np.array(srf_wvs, dtype=np.float32)
@@ -685,6 +681,7 @@ def write_armsgb_input_nc(profile_indices, level_pressures,
     ds["Level_ppmvs"].attrs["units"] = "ppmv"
     ds["Level_Liquid"].attrs["units"] = "kg/kg"
     ds["Level_z"].attrs["units"] = "m"
+    ds["Level_RH"].attrs["units"] = "%"
     
     # Schreibe die NetCDF-Datei
     ds.to_netcdf(outfile, format="NETCDF4_CLASSIC")
@@ -693,126 +690,128 @@ def write_armsgb_input_nc(profile_indices, level_pressures,
 
 ##############################################################################
 
-def create_input4arms_gb(ds, args, batch, n_levels=n_levels):
+def create_input4arms_gb_per_elevation(ds, args, elev_index, n_levels=n_levels):
 
-    # 1st derive valide indices:
-    # Start to add data to ARMS-gb inputs:
+    elevation = ds["elevation"].values[elev_index]
+    n_times = len(ds["time"].values)
+    n_crops = len(ds["Crop"].values)
     valid_indices = []
-    for i in batch: 
-        print("Findin valid profiles for timestep to ARMS-gb file: ")
-        print(i, ds["time"].values[i])
-        for j, elevation in enumerate(ds["elevation"].values):
-            for k, Crop in enumerate(ds["Crop"].values):
-                if check4NANs_in_time_crop_ele(ds, i, k, j):
-                    pass
-                else:
-                    valid_indices.append((i,j,k))
 
-    # 2nd define fields:
-    # n_Levels, n_Profiles:
+    # Sammle alle gültigen Indizes für diese Elevation
+    for i in range(n_times):
+        for k in range(n_crops):
+            if not check4NANs_in_time_crop_ele(ds, i, k, elev_index):
+                valid_indices.append((i, elev_index, k))
+
     N_profiles = len(valid_indices)
-    level_pressures = np.full((n_levels, N_profiles), np.nan)
+    
+    # Initialisiere Output-Arrays
+    level_pressures    = np.full((n_levels, N_profiles), np.nan)
     level_temperatures = np.full((n_levels, N_profiles), np.nan)
-    level_wvs = np.full((n_levels, N_profiles), np.nan)
-    level_ppmvs = np.full((n_levels, N_profiles), np.nan)
-    level_liq = np.full((n_levels, N_profiles), np.nan)
-    level_z =  np.full((n_levels, N_profiles), np.nan)
-    level_rhs =  np.full((n_levels, N_profiles), np.nan)
-    # N_profiles:
-    profile_indices = []
-    srf_pressures = np.full((N_profiles), np.nan)
-    srf_temperatures = np.full((N_profiles), np.nan)
-    srf_wvs = np.full((N_profiles), np.nan)
-    srf_altitude = np.full((N_profiles), np.nan)
-    ZA = np.full((N_profiles), np.nan)
-    times = np.full((N_profiles), np.nan)
+    level_wvs          = np.full((n_levels, N_profiles), np.nan)
+    level_ppmvs        = np.full((n_levels, N_profiles), np.nan)
+    level_liq          = np.full((n_levels, N_profiles), np.nan)
+    level_z            = np.full((n_levels, N_profiles), np.nan)
+    level_rhs          = np.full((n_levels, N_profiles), np.nan)
 
-    # 3rd: fill fields with data:
-    # Start to add data to ARMS-gb inputs:
-    for total_index, indices in enumerate(valid_indices):
-        print("Wrtiting valid indices: ", indices)
-        i,j,k = indices
-        profile_indices.append(i)
-        level_pressures[:, total_index] = ds["Level_Pressure"].values[:, i, k]
+    srf_pressures      = np.full((N_profiles), np.nan)
+    srf_temperatures   = np.full((N_profiles), np.nan)
+    srf_wvs            = np.full((N_profiles), np.nan)
+    srf_altitude       = np.full((N_profiles), np.nan)
+    if elev_index==0: 
+        ZA             = np.full((N_profiles), 0.)
+    else:
+        ZA             = np.full((N_profiles), 90. - elevation)
+    times              = np.full((N_profiles), np.nan)
+    profile_indices    = []
+
+    for total_index, (i, j, k) in enumerate(valid_indices):
+        profile_indices.append(total_index)
+        level_pressures[:, total_index]    = ds["Level_Pressure"].values[:, i, k]
         level_temperatures[:, total_index] = ds["Level_Temperature"].values[:, i, k]
-        level_wvs[:, total_index] = ds["Level_H2O"].values[:, i, k]
-        level_ppmvs[:, total_index] = ds["Level_ppmvs"].values[:, i, k]
-        level_liq[:, total_index] = ds["Level_Liquid"].values[:, i, k]
-        level_rhs[:, total_index] = ds["Level_RH"].values[:, i, k]
-        ##########
-        # level_ice[:, total_index] = ds["Level_Ice"].values[:, i, k]
-        # level_rh[:, total_index] = ds["Level_RH"].values[:, i, k]
-        ##########
-        level_z[:, total_index] = ds["Level_z"].values[:, i, k]
-                
-        srf_pressures[total_index] = ds["Surface_Pressure"].values[i, k]
-        srf_temperatures[total_index] = ds["Temperature_2M"].values[i, k]
-        srf_wvs[total_index] = ds["H2O_2M"].values[i, k]
-        srf_altitude[total_index] = ds["Surface_Altitude"].values[i, k] 
-        ZA[total_index] = 90-ds["elevation"].values[j]
-        times[total_index] = ds["time"].values[i]
+        level_wvs[:, total_index]          = ds["Level_H2O"].values[:, i, k]
+        level_ppmvs[:, total_index]        = ds["Level_ppmvs"].values[:, i, k]
+        level_liq[:, total_index]          = ds["Level_Liquid"].values[:, i, k]
+        level_rhs[:, total_index]          = ds["Level_RH"].values[:, i, k]
+        level_z[:, total_index]            = ds["Level_z"].values[:, i, k]
+        srf_pressures[total_index]         = ds["Surface_Pressure"].values[i, k]
+        srf_temperatures[total_index]      = ds["Temperature_2M"].values[i, k]
+        srf_wvs[total_index]               = ds["H2O_2M"].values[i, k]
+        srf_altitude[total_index]          = ds["Surface_Altitude"].values[i, k]
+        times[total_index]                 = ds["time"].values[i]
 
-    # 4th Schreibe ARMS-gb Inputdatei:
-    write_armsgb_input_nc(profile_indices, level_pressures,
-        level_temperatures, level_wvs,level_ppmvs, level_liq,level_z,\
-        level_rhs,\
-        srf_pressures, srf_temperatures, srf_wvs,\
-        srf_altitude, ZA,\
-        times, outfile="~/PhD_data/arms_gb_inputs.nc")
-        
-    outfile="/home/aki/PhD_data/arms_gb_inputs.nc"
-    return outfile, valid_indices
+    ########################################
+    # Was bewirkt dieser Absatz???? Auf einmal funktioniert 90° wieder...
+    outfilename = f"~/PhD_data/elevation_{elev_index}.nc"
+    write_armsgb_input_nc(
+        profile_indices,
+        level_pressures, level_temperatures, level_wvs, level_ppmvs,
+        level_liq, level_z, level_rhs,
+        srf_pressures, srf_temperatures, srf_wvs, srf_altitude, ZA,
+        times, outfile=outfilename
+    )
+    ########################################
 
+    outfilename = "~/PhD_data/arms_gb_inputs.nc"
+    write_armsgb_input_nc(
+        profile_indices,
+        level_pressures, level_temperatures, level_wvs, level_ppmvs,
+        level_liq, level_z, level_rhs,
+        srf_pressures, srf_temperatures, srf_wvs, srf_altitude, ZA,
+        times, outfile=outfilename
+    )
+    return outfilename, valid_indices
+    
 ##############################################################################
 
-def read_outputs_arms_gb(infile, valid_indices):
-    ds = xr.open_dataset(infile)
-    TBs1 = np.full((len(valid_indices), 14), np.nan)
+def read_outputs_arms_gb(ds, infile, valid_indices):
+    ds_arms = xr.open_dataset(infile)
+    TBs1 = np.full((len(ds["time"].values),\
+        len(ds["N_Channels"].values), len(ds["elevation"].values),\
+        len(ds["Crop"].values)), np.nan)
 
     for total_index, indices in enumerate(valid_indices):
         i,j,k = indices    
-        TBs1[total_index,:]=\
-            ds["Sim_BT"].isel(N_Times=total_index).values    
+        TBs1[i, :,j, k]=\
+            ds_arms["Sim_BT"].isel(N_Times=total_index).values    
 
-    print("TBs for on etimestep: ",TBs1)
     return TBs1
-
+    
 ##############################################################################
 
-def derive_TBs4ARMS_gb(ds, args, n_levels=n_levels, batch_size=batch_size):
-    print("Start processing ARMS-gb...")
+def derive_TBs4ARMS_gb_per_elevation(ds, args, n_levels=n_levels):
     all_valid_indices = []
-    all_tbs = []
+    all_tbs = np.full((len(ds["time"].values),\
+        len(ds["N_Channels"].values), len(ds["elevation"].values),\
+        len(ds["Crop"].values)), np.nan)
     
-    for m, batch in enumerate(batch_creator(ds["time"].values, batch_size)):
-        print("batch: ", batch, " of total ",\
-            len(ds["time"].values), " in processing")
-            
-        # 1st create NetCDF input for ARMS-gb model:
-
-        infile, valid_indices = create_input4arms_gb(ds, args, n_levels=n_levels, batch=batch) 
-        all_valid_indices+=valid_indices               
-        # Error: Input Sensor Zenith Angle is less than 0 or larger than 85.
-        # ZA seem normal - error occurs because I have values of elevtaion below 5 at 4.2 and 4.8°
-        #  Error: Input Level O3 is less than or equal to 0.
-        # => This error also does not seem relevant, as I do not use O3.
-
-        # 2nd Copy inputs and run model:
-        subprocess.run("./run_arms_gb.sh")    
-   
-        # 3rd read outputs:
-        tbs1 = read_outputs_arms_gb(infile, valid_indices)
+    for elev_index in range(len(ds["elevation"].values)):
         
-        ######################
-        break
-        #ä################
-    
-    
-    # 4th write TBs to full dataset:
-
-    print("Processed ARMS-gb")
+        elevation = ds["elevation"].values[elev_index]
+        print(f"Processing elevation index {elev_index}; elevation: {elevation}")
+        
+        # 1st Für jede Elevation Inputdatei erstellen und ARMS-gb Modell laufen lassen
+        infile, valid_indices = create_input4arms_gb_per_elevation(\
+                ds, args, elev_index, n_levels=n_levels)
+        all_valid_indices += valid_indices
+        
+        # 2nd Modell ausführen
+        subprocess.run("./run_arms_gb.sh")
+        
+        # 3rd Read TBs:
+        tbs1 = read_outputs_arms_gb(ds, infile, valid_indices)
+        all_tbs[:,:,elev_index,:] = tbs1[:,:,elev_index,:]
+        
+    # 4th append ds:
+    # concatenated_tbs = np.concatenate(all_tbs, axis=2)
+    TBs_ARMS_gb = xr.DataArray(
+        all_tbs,
+        dims=("time", "N_Channels", "elevation", "Crop"),
+    )
+    ds["TBs_ARMS_gb"] = TBs_ARMS_gb
+        
     return ds
-    
+
 ##############################################################################
 # 3rd: Main code:
 ##############################################################################
@@ -821,18 +820,14 @@ if __name__=="__main__":
     args = parse_arguments()
     ds = xr.open_dataset(args.input)
     
-    ##################
-    # print(ds.data_vars)
-    # What the program should do:
-    
     # 1 Derive TBs for all elevations  for RTTOV-gb
-    # ds = derive_TBs4RTTOV_gb(ds, args)
+    ds = derive_TBs4RTTOV_gb(ds, args)
 
     # 2 Derive TBs for all elevations  for pyrtlib
     # ds = derive_TBs4PyRTlib(ds, args)
 
     # 3. Derive TBs for clear sky for ARMS-gb
-    ds = derive_TBs4ARMS_gb(ds, args)
+    # ds = derive_TBs4ARMS_gb_per_elevation(ds, args)
 
     # 3 Print dataset to NetCDF
     ds.to_netcdf(\

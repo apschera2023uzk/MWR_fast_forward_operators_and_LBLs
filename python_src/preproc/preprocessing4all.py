@@ -1264,106 +1264,6 @@ def summarize_many_profiles(pattern=\
 
 ##############################################################################
 
-def write_armsgb_input_nc(profile_indices, level_pressures,
-        level_temperatures, level_wvs,level_ppmvs, level_liq, level_z,\
-        level_rhs,\
-        srf_pressures, srf_temps, srf_wvs,\
-        srf_altitude, sza,\
-        times ,outifle="blub.nc", n_levels=137):
-
-    # Ermitteln der Dimensionen
-    n_levels, n_profiles = level_pressures.shape
-    level_o3s = np.empty(np.shape(level_wvs))
-
-    '''
-    # Optional: Konvertiere Inputs in float32 falls nötig
-    level_pressures = np.array(level_pressures, dtype=np.float32)
-    level_temperatures = np.array(level_temperatures, dtype=np.float32)
-    level_wvs = np.array(level_wvs, dtype=np.float32)
-    level_ppmvs = np.array(level_ppmvs, dtype=np.float32)
-    level_liq = np.array(level_liq, dtype=np.float32)
-    level_z = np.array(level_z, dtype=np.float32)
-    level_rhs = np.array(level_rhs, dtype=np.float32)
-    srf_pressures = np.array(srf_pressures, dtype=np.float32)
-    srf_temps = np.array(srf_temps, dtype=np.float32)
-    srf_wvs = np.array(srf_wvs, dtype=np.float32)
-    srf_altitude = np.array(srf_altitude, dtype=np.float32)
-    sza = np.array(sza, dtype=np.float32)
-    profile_indices = np.array(profile_indices, dtype=np.int32)
-    
-    '''
-
-    # Setze Dummy-Werte für Dimensionsgrößen
-    n_times = len(profile_indices)
-    n_channels = 14  # Beispielwert
-    any_obs = np.empty([14, n_times])
-    n_data = 1       # Wird oft für Metadaten genutzt
-
-    ds = xr.Dataset(
-        data_vars={
-            # Okay dieser Code-Block hat meinen Segfault error gelöst:
-            "Times_Number": ("N_Data", np.array([n_times], dtype=np.int32)),
-            "Levels_Number": ("N_Data", np.array([n_levels], dtype=np.int32)),
-            "Profiles_Number": ("N_Data", np.array([n_profiles], dtype=np.int32)),
-            
-            # Profilebenen
-            "Level_Pressure":       (("N_Levels", "N_Profiles"), level_pressures),
-            "Level_Temperature":    (("N_Levels", "N_Profiles"), level_temperatures),
-            "Level_H2O":            (("N_Levels", "N_Profiles"), level_wvs),
-            "Level_ppmvs":          (("N_Levels", "N_Profiles"), level_ppmvs),
-            "Level_Liquid":         (("N_Levels", "N_Profiles"), level_liq),
-            "Level_z":              (("N_Levels", "N_Profiles"), level_z),
-            'Level_O3':             (("N_Levels", "N_Profiles"), level_o3s),
-            "Level_RH":              (("N_Levels", "N_Profiles"), level_rhs),
-
-            # Oberflächenparameter
-            "times":                (("N_Times"), times),
-            "Obs_Surface_Pressure": (("N_Times",), srf_pressures),
-            "Obs_Temperature_2M":   (("N_Times",), srf_temps),
-            "Obs_H2O_2M":           (("N_Times",), srf_wvs),
-            "Surface_Pressure":     (("N_Profiles",), srf_pressures),
-            "Temperature_2M":       (("N_Profiles",), srf_temps),
-            "H2O_2M":               (("N_Profiles",), srf_wvs),
-            "Surface_Altitude":     (("N_Profiles",), srf_altitude),
-            
-            'Obs_BT':               (("N_Channels","N_Times",), np.array(any_obs)),
-            'Sim_BT':               (("N_Channels","N_Times",), np.array(any_obs)),
-            'OMB':                  (("N_Channels","N_Times",), np.array(any_obs)),
-            
-            'QC_Flag':              (("N_Times",), np.zeros([n_times])),
-
-            # Zusätzliche Metadaten
-            "Profile_Index":        (("N_Times",), profile_indices.astype(np.float64)),
-            "GMRZenith":            (("N_Times",), 90-sza), # Elevationswinkel!!!
-            # Kein Zenitwinkel zsa:0; GMR: 90
-            
-        },
-        
-        coords={
-            "N_Data":     np.arange(n_data),
-            "N_Channels": np.arange(n_channels),
-            "N_Times":    np.arange(n_times),
-            "N_Levels":   np.arange(n_levels),
-            "N_Profiles": profile_indices,
-        }
-    )
-
-    # Add units:
-    ds["Level_Pressure"].attrs["units"] = "hPa"
-    ds["Level_Temperature"].attrs["units"] = "K"
-    ds["Level_H2O"].attrs["units"] = "g/kg"
-    ds["Level_ppmvs"].attrs["units"] = "ppmv"
-    ds["Level_Liquid"].attrs["units"] = "kg/kg"
-    ds["Level_RH"].attrs["units"] = "%"
-    ds["Level_z"].attrs["units"] = "m"
-    
-    # Schreibe die NetCDF-Datei
-    # ds.to_netcdf(outifle, format="NETCDF4_CLASSIC")
-
-    return ds
-    
-##############################################################################
-
 def clean_dataset(ds):
     exclude_times = []
     
@@ -1864,7 +1764,7 @@ if __name__=="__main__":
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
         iwvs_ham,lwps_rs, lats, lons,\
-        outifle=args.output1,n_levels=n_levels, campaign="FESSTVaL_RAO",\
+        outifle=args.output1,n_levels=n_levels, campaign="FESSTVaL",\
         location="RAO_Lindenberg")
 
     # Read FESSTVaL 2 UHH:
@@ -1892,7 +1792,7 @@ if __name__=="__main__":
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
         iwvs_ham,lwps_rs, lats, lons,\
-        outifle=args.output1,n_levels=n_levels, campaign="FESSTVaL_UHH",\
+        outifle=args.output1,n_levels=n_levels, campaign="FESSTVaL",\
         location="RAO_Lindenberg")
             
     # Read FESSTVaL 2 UzK:
@@ -1920,7 +1820,7 @@ if __name__=="__main__":
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
         iwvs_ham,lwps_rs, lats, lons,\
-        outifle=args.output1,n_levels=n_levels, campaign="FESSTVaL_UzK",\
+        outifle=args.output1,n_levels=n_levels, campaign="FESSTVaL",\
         location="Falkenberg")  
         
     # Read in Socles
