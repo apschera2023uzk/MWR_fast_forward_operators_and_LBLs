@@ -49,17 +49,14 @@ def parse_arguments():
         description="Preprocess radiosonde data for RTTOV-gb input format."
     )
     parser.add_argument(
-        "--output1", "-o1",
+        "--output", "-o",
         type=str,
-        default=os.path.expanduser("~/PhD_data/Vital_I/radiosondes/armsgb_vital_1_zenith.nc"),
-        help="ARMS-gb summarized outputs!"
+        default=os.path.expanduser("~/PhD_data/TB_preproc_and_proc_results/MWR_rs_FESSTVaLSoclesVital1_all_elevations.nc"),
+        help="Where to save preprocessed radiosonde data NetCDF file."
     )
-    parser.add_argument(
-        "--output2", "-o2",
-        type=str,
-        default=os.path.expanduser("~/PhD_data/Vital_I/radiosondes/armsgb_vital_1_zenith_cropped.nc"),
-        help="ARMS-gb summarized CROPPED (!) outputs!"
-    )
+    ##########################
+    # Add Input paths here!!!
+    ############
     return parser.parse_args()
 
 ##############################################################################
@@ -245,6 +242,7 @@ def read_radiosonde_nc_arms(file=\
     ppmv_array = np.array(m_array) * (28.9644e6 / 18.0153)
 
     ######################
+    # Still might be needed to show interpolation in Paper:
     '''
     if index%50==0:
         interpolation_test_plot(ds, length_value, p_array, t_array,\
@@ -632,8 +630,6 @@ def derive_cloud_features(p_array, t_array, ppmv_array, m_array,\
         if abs(base-top)<100:
             to_remove_base.append(i)
             to_remove_top.append(i)
-            # new_bases.pop(i)
-            # new_tops.pop(i)
             z_index_top = np.nanargmin(abs(z_array-top))
             z_index_base = np.nanargmin(abs(z_array-base))     
             cloud_bools[z_index_top:z_index_base] = False
@@ -667,11 +663,6 @@ def nearest_ele4elevation(ele_values, azi_values, ele_times,\
     else:
         match_mask2 = (abs(azi_values-target_azi)<0.05)
     final_mask = match_mask & match_mask2
-    ####################################
-    # print("len(match_mask):", len(match_mask)) 
-    # print("len(match_mask2):", len(match_mask2))     
-    # print("len(ele_values):", len(ele_values))         
-    # print("len(ele_times):", len(ele_times))     
     
     if not final_mask.any():
         nearest_idx = None
@@ -893,12 +884,6 @@ def get_profs_from_l2(l2_files, datetime_np, n_levels = n_levels):
             min_idx = nearest_ele4elevation(ds["ele"].values, ds["azi"].values,\
                 ds["time"].values, 90., "ANY" , datetime_np)  
             lwp = ds["clwvi"].values[min_idx]       
-    
-    ######################
-    # Führt zu Fehler, wo keine Dateien vorhanden sind...
-    # Lief im übrigen für meiste dwdhat files ohne Fehler durch...
-    #if (x_new != x_new2).any():
-    #    print("Warning: inconsistent interpolation!")
     
     return data[:,::-1], lwp, iwv
 
@@ -1539,7 +1524,7 @@ def produce_dataset(profile_indices, level_pressures,
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
         iwvs_ham,lwps_rs, lats, lons, \
-        outifle="blub.nc", n_levels=137,\
+        n_levels=137,\
         campaign="any_camp",\
         location="any_location", elevations=elevations, azimuths=azimuths):
 
@@ -1652,79 +1637,6 @@ def produce_dataset(profile_indices, level_pressures,
         }
     )
 
-    '''
-    # Add units:
-    ds["Level_Pressure"].attrs["units"] = "hPa"
-    ds["LWP_radiosonde"].attrs["units"] = "kg m-2"
-    ds["elevation"].attrs["units"] = "degree"
-    ds["azimuth"].attrs["units"] = "degree"
-    ds["Level_Temperature"].attrs["units"] = "K"
-    ds["Level_H2O"].attrs["units"] = "g/kg"
-    ds["Level_ppmvs"].attrs["units"] = "ppmv"
-    ds["Level_Liquid"].attrs["units"] = "kg/kg"
-    ds["Level_Ice"].attrs["units"] = "kg/kg"
-    ds["Level_RH"].attrs["units"] = "%"
-    ds["Level_z"].attrs["units"] = "m"
-    ds["Sunhat_hua"].attrs["units"] = "kg m-3"
-    ds["Dwdhat_hua"].attrs["units"] = "kg m-3"
-    ds["Foghat_hua"].attrs["units"] = "kg m-3"
-    ds["Tophat_hua"].attrs["units"] = "kg m-3"
-    ds["Joyhat_hua"].attrs["units"] = "kg m-3"
-    ds["Hamhat_hua"].attrs["units"] = "kg m-3"
-    ds["Sunhat_z"].attrs["units"] = "Height above mean sea level - not consistent for different instruments"
-    ds["Dwdhat_z"].attrs["units"] = "Height above mean sea level - not consistent for different instruments"
-    ds["Foghat_z"].attrs["units"] = "Height above mean sea level - not consistent for different instruments"
-    ds["Tophat_z"].attrs["units"] = "Height above mean sea level - not consistent for different instruments"
-    ds["Joyhat_z"].attrs["units"] = "Height above mean sea level - not consistent for different instruments"
-    ds["Hamhat_z"].attrs["units"] = "Height above mean sea level - not consistent for different instruments"    
-    ds["time"].attrs["units"] = "Seconds since 1970-01-01T00:00:00"
-    for var in ["TBs_dwdhat", "TBs_foghat", "TBs_sunhat",\
-              "TBs_tophat", "TBs_joyhat", "TBs_hamhat"]:
-        ds[var].attrs["units"] = "K"
-    for var in ["Dwdhat_ta", "Foghat_ta", "Sunhat_ta",\
-                "Tophat_ta", "Joyhat_ta", "Hamhat_ta"]:
-        ds[var].attrs["units"] = "K"
-    for var in ["Dwdhat_IWV", "Dwdhat_LWP", "Foghat_IWV",\
-           "Foghat_LWP","Sunhat_IWV", "Sunhat_LWP", "Tophat_IWV",\
-           "Tophat_LWP","Joyhat_IWV", "Joyhat_LWP", "Hamhat_IWV",\
-           "Hamhat_LWP"]:
-        ds[var].attrs["units"] = "kg m-2"
-    ds["Obs_Surface_Pressure"].attrs["units"] = "hPa"
-    ds["Obs_Temperature_2M"].attrs["units"] = "K"
-    ds["Obs_H2O_2M"].attrs["units"] = "kg/kg"
-    ds["Surface_Pressure"].attrs["units"] = "hPa"
-    ds["Temperature_2M"].attrs["units"] = "K"
-    ds["H2O_2M"].attrs["units"] = "kg/kg"
-    ds["Surface_Altitude"].attrs["units"] = "km"
-
-    # Profile_Index: no unit, but add long_name
-    ds["Profile_Index"].attrs["long_name"] = "Number of radiosonde in dataset"
-    ds["Crop"].attrs["description"] = "Crop=1 contains shortened rs profiles for Processing with roof placed HATPRO Joyhat, as opposed to yard placed HATPRO Hamhat (Crop=0)."
-    
-    # Additional attrs:
-    ds.attrs["author"] = "Alexander Pschera"
-    ds.attrs["institution"] = "University of Cologne"    
-    ds.attrs["description"] = "Radiosondes and associated MWR BT measurements from Vital I, Socles and FESSTVaL. Level variables are rs."
-    
-    ds.attrs.update({
-        "title": "Radiosonde and microwave radiometer brightness temperature dataset from FESSTVaL, SOCLES, and VITAL-I campaigns",
-        "summary": "This dataset contains co-located radiosonde profiles and HATPRO microwave radiometer brightness temperatures from three field campaigns at Jülich ObservatorY for Cloud Evolution (JOYCE) and Richard-Assmann-Observatory (RAO) in Lindenberg.",
-        "keywords": "radiosonde, microwave radiometer, brightness temperature, atmospheric profiles, water vapor, liquid water path",
-        "Conventions": "CF-1.8",  # WICHTIG für Interoperabilität!
-        "history": f"Created on {datetime.utcnow().isoformat()}Z by {os.getlogin()} by Alexander Pschera from datasets of UzK on Vital I and Socles as well as FESSTVaL data from UHH (Link in references).",
-        "source": "Vaisala RS41/GRAW DMF-09 radiosondes and RPG-HATPRO microwave radiometers",
-        "references": "FESSTVaL radiosondes and other data: https://www.cen.uni-hamburg.de/icdc/data/atmosphere/samd-st-datasets/samd-st-fesstval.html | https://www.fdr.uni-hamburg.de/record/10279; SOCLES: https://gepris.dfg.de/gepris/projekt/430226822?context=projekt&task=showDetail&id=430226822&; Vital I: https://www.herz.uni-bonn.de/wordpress/index.php/vital-campaigns/",
-        "license": "CC BY 4.0",
-        # "acknowledgement": "Data collected within the DFG-funded projects FESSTVaL, SOCLES, and VITAL-I.",
-        "contact": "apscher1@uni-koeln.de",
-        "geospatial_lat_min": str(np.nanmin(lats)),
-        "geospatial_lat_max": str(np.nanmax(lats)),
-        "geospatial_lon_min": str(np.nanmin(lons)),
-        "geospatial_lon_max": str(np.nanmax(lons)),
-        "time_coverage_start": str(times.min()),
-        "time_coverage_end": str(times.max()),
-     })
-    '''
     ds = add_attrs_CF_conform(ds)
     ds = clean_dataset(ds)
     ds = interpolate_azimuths(ds)
@@ -1764,7 +1676,7 @@ if __name__=="__main__":
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
         iwvs_ham,lwps_rs, lats, lons,\
-        outifle=args.output1,n_levels=n_levels, campaign="FESSTVaL",\
+        n_levels=n_levels, campaign="FESSTVaL",\
         location="RAO_Lindenberg")
 
     # Read FESSTVaL 2 UHH:
@@ -1792,7 +1704,7 @@ if __name__=="__main__":
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
         iwvs_ham,lwps_rs, lats, lons,\
-        outifle=args.output1,n_levels=n_levels, campaign="FESSTVaL",\
+        n_levels=n_levels, campaign="FESSTVaL",\
         location="RAO_Lindenberg")
             
     # Read FESSTVaL 2 UzK:
@@ -1820,7 +1732,7 @@ if __name__=="__main__":
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
         iwvs_ham,lwps_rs, lats, lons,\
-        outifle=args.output1,n_levels=n_levels, campaign="FESSTVaL",\
+        n_levels=n_levels, campaign="FESSTVaL",\
         location="Falkenberg")  
         
     # Read in Socles
@@ -1848,7 +1760,7 @@ if __name__=="__main__":
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
         iwvs_ham,lwps_rs, lats, lons,\
-        outifle=args.output1 ,n_levels=n_levels, campaign="Socles",\
+        n_levels=n_levels, campaign="Socles",\
         location="JOYCE")
 
     # Uncropped:
@@ -1876,22 +1788,16 @@ if __name__=="__main__":
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
         iwvs_ham,lwps_rs, lats, lons,\
-        outifle=args.output1,n_levels=n_levels, campaign="Vital I",\
+        n_levels=n_levels, campaign="Vital I",\
         location="JOYCE")
    
     ####
-    # New dataset:
+    # Create new dataset and save it:
     ds_list = [ds_fesst_rao, ds_fesst_uhh,ds_fesst_uzk,ds_socles,\
         ds_vital_uncrop]    
     new_ds = xr.concat(ds_list , dim="time")
-    
     print(new_ds)
-    
-    # print(new_ds["time"].values)
-    # print(len(new_ds["time"]))
-    new_ds.to_netcdf(\
-        "/home/aki/PhD_data/MWR_rs_FESSTVaLSoclesVital1_all_elevations.nc",\
-         format="NETCDF4_CLASSIC")
+    new_ds.to_netcdf(args.output, format="NETCDF4_CLASSIC")
         
 
         
