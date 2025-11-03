@@ -73,11 +73,6 @@ def check4NANs_in_time_crop_ele(ds, t_index, crop_index):
     press_arr = ds["Level_Pressure"].values[:, t_index, crop_index]
     liquid_arr = ds["Level_Liquid"].values[:, t_index, crop_index]
     
-    ######################
-    # Offenbar finde ich keine validen Indices für Elevationen unter 90°!
-    # Valid indices sind empty für off zenith...
-    ######################
-    
     # Check each array for NaN values
     if np.any(np.isnan(temp_arr)) or \
             np.any(np.isnan(ppmvs_arr)) or \
@@ -96,7 +91,6 @@ def get_O3_profile():
     return 0
     
 ##############################################################################
-
 
 def write_armsgb_input_nc(profile_indices, level_pressures,
         level_temperatures, level_wvs,level_ppmvs, level_liq,level_z,\
@@ -125,7 +119,12 @@ def write_armsgb_input_nc(profile_indices, level_pressures,
     srf_altitude = np.array(srf_altitude, dtype=np.float32)
     ZA = np.array(ZA, dtype=np.float32)
     profile_indices = np.array(profile_indices, dtype=np.int32)
+    
+    ######################################
+    # Determine O3 as static value 0.06 ppmv:
     level_o3s = np.empty(np.shape(level_wvs))
+    level_o3s[:,:] = 0.06 
+    ####################
 
     # Setze Dummy-Werte für Dimensionsgrößen
     n_times = len(profile_indices)
@@ -282,11 +281,7 @@ def read_outputs_arms_gb(ds, infile, valid_indices):
         i,j,k = indices          
         TBs1[i, :,j, k]=\
             ds_arms["Sim_BT"].isel(N_Times=total_index).values
-        
-        ##################################
-        print("TBs ARMS-gb out: ", ds_arms["Sim_BT"].isel(N_Times=total_index).values)
-        ##################################
-        
+            
     return TBs1
     
 ##############################################################################
@@ -339,9 +334,11 @@ def derive_TBs4ARMS_gb_per_elevation(ds, args, n_levels=n_levels,\
         tbs1 = read_outputs_arms_gb(ds, infile, list_of_valid_lists[elev_index])
         all_tbs[:,:,elev_index,:] = tbs1[:,:,elev_index,:]
         
-        print("elev_index: ", elev_index)
-        print("elevation: ", ds["elevation"].values[elev_index])
-        print("TBs: ", tbs1)
+        #################################
+        # Delete later:
+        # if elev_index==4:
+        #     break
+        ################################
         
     # 4th append ds:
     # concatenated_tbs = np.concatenate(all_tbs, axis=2)

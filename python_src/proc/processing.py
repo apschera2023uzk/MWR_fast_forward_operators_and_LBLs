@@ -41,10 +41,13 @@ def parse_arguments():
     parser = argparse.ArgumentParser(
         description="Preprocess radiosonde data for RTTOV-gb input format."
     )
+    # Define default output path and file:
+    outpath = "~/PhD_data/TB_preproc_and_proc_results/"    
     parser.add_argument(
         "--input", "-i",
         type=str,
-        default=os.path.expanduser("/home/aki/PhD_data/MWR_rs_FESSTVaLSoclesVital1_all_elevations.nc"),
+        default=os.path.expanduser(\
+            outpath+"MWR_rs_FESSTVaLSoclesVital1_all_elevations.nc"),
         help="NetCDF file with rs and MWR data"
     )
     parser.add_argument(
@@ -594,8 +597,12 @@ def write_armsgb_input_nc(profile_indices, level_pressures,
         level_rhs,\
         srf_pressures, srf_temps, srf_wvs,\
         srf_altitude, ZA,\
-        times ,outfile="~/PhD_data/arms_gb_inputs.nc"):
+        times ,outfile="~/PhD_data/arms_gb_inputs.nc",\
+         clear_sky_bool=True):
 
+    if clear_sky_bool:
+        level_liq[:,:] = 0.
+        
     # Ermitteln der Dimensionen
     n_levels, n_profiles = level_pressures.shape
 
@@ -821,13 +828,13 @@ if __name__=="__main__":
     ds = xr.open_dataset(args.input)
     
     # 1 Derive TBs for all elevations  for RTTOV-gb
-    ds = derive_TBs4RTTOV_gb(ds, args)
+    # ds = derive_TBs4RTTOV_gb(ds, args)
 
     # 2 Derive TBs for all elevations  for pyrtlib
     # ds = derive_TBs4PyRTlib(ds, args)
 
     # 3. Derive TBs for clear sky for ARMS-gb
-    # ds = derive_TBs4ARMS_gb_per_elevation(ds, args)
+    ds = derive_TBs4ARMS_gb_per_elevation(ds, args)
 
     # 3 Print dataset to NetCDF
     ds.to_netcdf(\

@@ -238,6 +238,7 @@ def get_rttov_outputs(valid_indices, rttovgb_outfile=\
             tb_string = ""
             switch_count = 0
             tbs[rs_time_idx, :, ele_idx, crop_idx] = np.array(tbs_rs)
+            print("TBs rs: ", np.array(tbs_rs))
             
         # Read in Tot Transmittances:     
         if switch_t and switcht_count<2:
@@ -448,7 +449,7 @@ def derive_TBs4RTTOV_gb(ds, args, batch_size=batch_size):
         # 1st Create prof_plev file from ds:
         outfile, valid_indices = create_RTTOV_gb_in_profiles(ds, args, batch)
         all_valid_indices+=valid_indices
-        
+
         # 2nd Run RTTOV-gb on them:
         run_rttov_gb(outfile, valid_indices, args)       
 
