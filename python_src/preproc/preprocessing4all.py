@@ -87,6 +87,14 @@ def rh2mixing_ratio(RH=70, abs_T=273.15+15, p=101325):
     q = (mue*e) / (p-0.3777*e)
     m = q / (1-q)
     return m
+    
+############################################################################
+
+def rh2ppmv(RH=70, abs_T=273.15+15, p=101325):
+    es = clausius_clapeyron_liq(abs_T-273.15)
+    e = es * RH / 100
+    ppmv = 1000000*e / p
+    return ppmv
 
 ##############################################################################
 
@@ -240,10 +248,14 @@ def read_radiosonde_nc_arms(file=\
         rh=rh*100
     length_value = len(t_array)
         
+    # Humidity unit conversions:
     m_array = []
+    ppmv_array = []
     for rh_lev, t_lev, p_lev in zip (rh, t_array, p_array):
         m_array.append(rh2mixing_ratio(RH=rh_lev, abs_T=t_lev, p=p_lev*100))
-    ppmv_array = np.array(m_array) * (28.9644e6 / 18.0153)
+        ppmv_array.append(rh2ppmv(RH=rh_lev, abs_T=t_lev, p=p_lev*100))
+    m_array = np.array(m_array)    
+    ppmv_array = np.array(ppmv_array)
     
     # Addtional Check for z and p singularities:
     for i in range(1, int(len(z_array)/2)):
@@ -344,10 +356,23 @@ def read_radiosonde_txt(file=\
         df["Hu"].values)
     length_value = len(t_array )
 
+
+    # Humidity unit conversions:
+    m_array = []
+    ppmv_array = []
+    for rh_lev, t_lev, p_lev in zip (rh, t_array, p_array):
+        m_array.append(rh2mixing_ratio(RH=rh_lev, abs_T=t_lev, p=p_lev*100))
+        ppmv_array.append(rh2ppmv(RH=rh_lev, abs_T=t_lev, p=p_lev*100))
+    m_array = np.array(m_array)    
+    ppmv_array = np.array(ppmv_array)
+
+    # Old conversion to ppmv:
+    '''    
     m_array = []
     for rh_lev, t_lev, p_lev in zip (rh, t_array, p_array):
         m_array.append(rh2mixing_ratio(RH=rh_lev, abs_T=t_lev, p=p_lev*100))
     ppmv_array = np.array(m_array) * (28.9644e6 / 18.0153)
+    '''    
     
     height_in_km = df["Alt"].values[0]/1000
     deg_lat = df["Lat."].values[0]
@@ -390,10 +415,10 @@ def add_clim2profiles(p_array, t_array, ppmv_array, m_array, z_array, rh):
     z_array = np.concatenate([z_array , np.array(z*1000)[mask]])
     rh = np.concatenate([rh , np.array(rhs_clim)[mask]])
     # ppmv_array = np.concatenate([ppmv_array , np.array(md[:, atmp.H2O])[mask]])
-    ppmv_array = np.array(m_array) * (28.9644e6 / 18.0153)
-    
-    # print("\n\nm_array: ",m_array)
-    # print("\n\nppmv_array: ",ppmv_array)
+    ppmv_array = []
+    for rh_lev, t_lev, p_lev in zip (rh, t_array, p_array):
+        ppmv_array.append(rh2ppmv(RH=rh_lev, abs_T=t_lev, p=p_lev*100))  
+    ppmv_array = np.array(ppmv_array)    
     
     return p_array[::-1], t_array[::-1], ppmv_array[::-1], m_array[::-1],\
         z_array[::-1], rh[::-1]
