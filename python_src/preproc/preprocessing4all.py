@@ -26,7 +26,7 @@ import sys
 sys.path.append('/home/aki/pyrtlib')
 from pyrtlib.climatology import AtmosphericProfiles as atmp
 from pyrtlib.utils import ppmv2gkg, mr2rh
-from datetime import datetime
+from datetime import datetime, timezone
 import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use("Agg")
@@ -137,10 +137,11 @@ def read_radiosonde_nc_arms(file=\
          crop=0, min_p=min_p, index=7):
     
     if file==None:
-        return 0, np.nan, np.nan, np.nan, np.nan,np.nan,\
-           np.nan, np.nan, np.nan, np.nan
+        return 0, [np.nan]*170, [np.nan]*170, [np.nan]*170, \
+           float('nan'), float('nan'), [np.nan]*170, [np.nan]*170, \
+           [np.nan]*170, float('nan')    
     ds = xr.open_dataset(file)
-    #######################
+    
     if "Height" in ds.data_vars:
         height_var = "Height"
         height_in_km = ds[height_var].values[0]/1000
@@ -188,32 +189,35 @@ def read_radiosonde_nc_arms(file=\
     # AccRate / Height change crop:
     if crop == 0:
         old_h = ds[height_var].values[0]
-        for i in range(100):
+        for i in range(1000):
             current_h = ds[height_var].values[i]
-            if abs(current_h-old_h)<0.3:
+            if abs(current_h-old_h)<2.:
                 if i!=0:
                     crop +=1
             else:
                 break
             old_h = current_h
         if crop > 0:
-            pass
-            # print("Crop due to same height in NC: ", crop)
+            print("Crop due to same height in NC: ", crop)
         
     if crop > 8:
         print("Unusually high crop value: ",crop)
         
     if max_index<300:
         print("Low max index!!!")
-        return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan, np.nan,np.nan
+        return 0, [np.nan]*170, [np.nan]*170, [np.nan]*170, \
+           float('nan'), float('nan'), [np.nan]*170, [np.nan]*170, \
+           [np.nan]*170, float('nan')    
     elif np.nanmax(ds[height_var].values)<10000:
         print("No 10000 m reached!")
-        return 0, np.nan, np.nan, np.nan, np.nan,np.nan, np.nan, np.nan, np.nan,np.nan
+        return 0, [np.nan]*170, [np.nan]*170, [np.nan]*170, \
+           float('nan'), float('nan'), [np.nan]*170, [np.nan]*170, \
+           [np.nan]*170, float('nan')    
         
     # Thinning pattern:
     datapoints_bl = 75
     datapoints_ft = 100
-    increment_bl = int(np.ceil(index3000/datapoints_bl))
+    increment_bl = int(np.ceil((index3000-crop)/datapoints_bl))
     increment_ft = int(np.ceil((max_index-index3000)/datapoints_ft))
     inds = np.r_[crop:index3000:increment_bl, index3000:max_index:increment_ft]
     inds = np.unique(inds)
@@ -240,6 +244,23 @@ def read_radiosonde_nc_arms(file=\
     for rh_lev, t_lev, p_lev in zip (rh, t_array, p_array):
         m_array.append(rh2mixing_ratio(RH=rh_lev, abs_T=t_lev, p=p_lev*100))
     ppmv_array = np.array(m_array) * (28.9644e6 / 18.0153)
+    
+    # Addtional Check for z and p singularities:
+    for i in range(1, int(len(z_array)/2)):
+        if (abs(z_array[i] - z_array[i-1]) > 500) or (abs(p_array[i] - p_array[i-1]) > 50):
+            print("Profile excluded due to huge p or z jump between 2 indices")
+            print("zs: ", z_array[i],  z_array[i-1])
+            print("ps: ", p_array[i],  p_array[i-1])
+            return 0, \
+       np.full_like(p_array, np.nan), \
+       np.full_like(t_array, np.nan), \
+       np.full_like(ppmv_array, np.nan), \
+       float('nan'), \
+       float('nan'), \
+       [np.nan]*len(m_array), \
+       np.full_like(z_array, np.nan), \
+       np.full_like(rh, np.nan), \
+       float('nan')
 
     ######################
     # Still might be needed to show interpolation in Paper:
@@ -263,8 +284,9 @@ def read_radiosonde_txt(file=\
     # Bodenlevel ist bei Index -1 - Umkehr der Profile!
     
     if file==None:
-        return 0, np.nan, np.nan, np.nan, np.nan,np.nan,\
-            np.nan, np.nan, np.nan, np.nan     
+        return 0, [np.nan]*170, [np.nan]*170, [np.nan]*170, \
+           float('nan'), float('nan'), [np.nan]*170, [np.nan]*170, \
+           [np.nan]*170, float('nan')    
     df = pd.read_table(file, encoding_errors="ignore", engine='python',\
         skiprows=20,\
         skipfooter=10, header=None , names=["Time", "P", "T", "Hu", "Ws",\
@@ -278,9 +300,9 @@ def read_radiosonde_txt(file=\
     # AccRate / Height change crop:
     if crop == 0:
         old_h = df["Alt"].values[0]
-        for i in range(100):
+        for i in range(1000):
             current_h = df["Alt"].values[i]
-            if abs(current_h-old_h)<0.3:
+            if abs(current_h-old_h)<2.:
                 if i!=0:
                     crop +=1
             else:
@@ -294,17 +316,19 @@ def read_radiosonde_txt(file=\
         
     if max_index<300:
         print("Low max index!!!")
-        return 0, np.nan, np.nan, np.nan, np.nan,np.nan,\
-           np.nan, np.nan, np.nan,np.nan
+        return 0, [np.nan]*170, [np.nan]*170, [np.nan]*170, \
+           float('nan'), float('nan'), [np.nan]*170, [np.nan]*170, \
+           [np.nan]*170, float('nan')    
     elif np.nanmax(df["Alt"].values)<10000:
         print("No 10000 m reached!")
-        return 0, np.nan, np.nan, np.nan, np.nan,np.nan,\
-            np.nan, np.nan, np.nan,np.nan
+        return 0, [np.nan]*170, [np.nan]*170, [np.nan]*170, \
+           float('nan'), float('nan'), [np.nan]*170, [np.nan]*170, \
+           [np.nan]*170, float('nan')    
         
     # Thinning pattern:
     datapoints_bl = 75
     datapoints_ft = 100
-    increment_bl = int(np.ceil(index3000/datapoints_bl))
+    increment_bl = int(np.ceil((index3000-crop)/datapoints_bl))
     increment_ft = int(np.ceil((max_index-index3000)/datapoints_ft))
     inds = np.r_[crop:index3000:increment_bl, index3000:max_index:increment_ft]
     inds = np.unique(inds)
@@ -328,6 +352,23 @@ def read_radiosonde_txt(file=\
     height_in_km = df["Alt"].values[0]/1000
     deg_lat = df["Lat."].values[0]
     deg_lon = df["Long."].values[0]
+
+    # Addtional Check for z and p singularities:
+    for i in range(1, int(len(z_array)/200)):
+        if (abs(z_array[i] - z_array[i-1]) > 500) or (abs(p_array[i] - p_array[i-1]) > 50):
+            print("Profile excluded due to huge p or z jump between 2 indices")
+            print("zs: ", z_array[i],  z_array[i-1])
+            print("ps: ", p_array[i],  p_array[i-1])
+            return 0, \
+       np.full_like(p_array, np.nan), \
+       np.full_like(t_array, np.nan), \
+       np.full_like(ppmv_array, np.nan), \
+       float('nan'), \
+       float('nan'), \
+       [np.nan]*len(m_array), \
+       np.full_like(z_array, np.nan), \
+       np.full_like(rh, np.nan), \
+       float('nan')    
 
     return length_value, p_array, t_array, ppmv_array, height_in_km, deg_lat,\
        m_array, z_array, rh, deg_lon
@@ -725,7 +766,7 @@ def get_tbs_from_l1(l1_files, datetime_np, elevations=elevations,\
         
         if "BL" in file:
             ds_bl = xr.open_dataset(file)
-            # print("Opened BL for file: ", file)     
+        
             for i,elevation in enumerate(elevations):
                 ele_index = derive_elevation_index(ds_bl, elevation)
                 if ele_index==None:
@@ -737,7 +778,7 @@ def get_tbs_from_l1(l1_files, datetime_np, elevations=elevations,\
                     # print("TBs found BL: ", ds_bl["tb"].values[min_idx,ele_index,:])
         elif "MWR_1C01" in file:
             # print("Found MWR_1C_File!", file)
-            ds_c1 = xr.open_dataset(file)
+            ds_c1 = xr.open_dataset(file)            
             for i,elevation in enumerate(elevations):
                 for j,azi in enumerate(azimuths):
                     time_idx = nearest_ele4elevation(ds_c1["elevation_angle"].values,\
@@ -754,7 +795,10 @@ def get_tbs_from_l1(l1_files, datetime_np, elevations=elevations,\
                 lat = ds_c1["lat"].values
                 lon = ds_c1["lon"].values           
         else: 
+            ###
+            # Reason for double n_freq warning: 
             ds_mwr = xr.open_dataset(file)
+            ###
             for i,elevation in enumerate(elevations):
                 # 
                 for j,azi in enumerate(azimuths):
@@ -816,7 +860,8 @@ def get_profs_from_l2(l2_files, datetime_np, n_levels = n_levels):
 
     for file in l2_files:
         if "single" in file:
-            ds = xr.open_dataset(file)
+            ds = xr.open_dataset(file)    
+            
             # time_diffs = np.abs(ds["time"].values - datetime_np)
             # min_idx = time_diffs.argmin()
             min_idx = nearest_ele4elevation(ds["elevation_angle"].values,\
@@ -984,10 +1029,14 @@ def check_units_physical_realism(p_array, t_array, ppmv_array,\
                 m_array, z_array, rh):
     if (np.array(p_array)>1100).any() or (np.array(p_array)<0).any():
         print("WARNING: Encoutered physically unrealistic value for p in hPa!!!")
+    if abs(p_array[150]-p_array[164])<15:
+        print("WARNING: Pressure gradient in lower levels is too little!")    
+    if abs(z_array[-1]-z_array[-2])<2.:
+        print("WARNING: Low differences between z-values - probably ground data in profile!!!")    
     if (np.array(t_array)>400).any() or (np.array(t_array)<0).any():
         print("WARNING: Encoutered physically unrealistic value for T in K!!!")
-    if (np.array(rh)>115).any() or (np.array(rh)<0).any() or\
-            (not  (np.array(rh)>1.5).any()):
+    if np.any(np.array(rh)>115) or np.any(np.array(rh)<0) or\
+            (not  np.any(np.array(rh)>1.5)):
         print("WARNING: Encoutered physically unrealistic value for RH in %!!!")
     if (np.array(ppmv_array)>40000).any() or (np.array(ppmv_array)<0).any():
         print("WARNING: Encoutered physically unrealistic value for WV in ppmv!!!")
@@ -1495,7 +1544,7 @@ def add_attrs_CF_conform(ds):
         "institution": "University of Cologne, Institute for Geophysics and Meteorology",
         "source": "Vaisala RS41/GRAW DMF-09 radiosondes; RPG-HATPRO microwave radiometers",
         "references": "FESSTVaL: https://www.cen.uni-hamburg.de/icdc/data/atmosphere/samd-st-datasets/samd-st-fesstval.html; SOCLES: https://gepris.dfg.de/gepris/projekt/430226822; VITAL-I: https://www.herz.uni-bonn.de/wordpress/index.php/vital-campaigns/",
-        "history": f"Created {datetime.utcnow().isoformat()}Z by {os.getlogin()} using xarray",
+        "history": f"Created {datetime.now(timezone.utc).isoformat()}Z by {os.getlogin()} using xarray",
         "license": "CC BY 4.0",
         "creator_name": "Alexander Pschera",
         "creator_email": "apscher1@uni-koeln.de",
