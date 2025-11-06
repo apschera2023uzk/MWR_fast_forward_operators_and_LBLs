@@ -4,13 +4,13 @@
 # 1 Necessary modules
 ##############################################################################
 
-# Takes a number of NetCDF files from rs as input
-# Creates one NetCDF that contains files in ARMS-gb readable structure!
+# Author: Alexander Pschera (apscher1@uni-koeln.de / alexander.pschera@posteo.de)
+# Takes a number of NetCDF files from radiosondes and MWR as input
+# Creates one NetCDF that contains files in RT-model friendly structure. 
 
 # Important limitations:
-# => MWR and rs are matched if there is maximum a 30 minute difference between both measurement times.
+# => MWR and rs are matched if there is maximum a X minute difference between both measurement times.
 # => LWC and LWP are derived via Nandan et al. 2022; Mixed phase clouds are assumed liquid; IWC is assumed same as LWC.
-# => 
 
 ##############################################################
 
@@ -27,6 +27,7 @@ sys.path.append('/home/aki/pyrtlib')
 from pyrtlib.climatology import AtmosphericProfiles as atmp
 from pyrtlib.utils import ppmv2gkg, mr2rh
 from datetime import datetime, timezone
+from derive_cloud_water import derive_cloud_features
 import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use("Agg")
@@ -39,6 +40,8 @@ elevations = np.array([90., 30, 19.2, 14.4, 11.4, 8.4,  6.6,  5.4, 4.8,  4.2])
 azimuths = np.arange(0.,355.1,5.) # Interpoliere dazwischen!
 n_levels=180
 min_p = 5
+# min_time_diff_thres = 30 # => Leads to 520 remaining sondes 
+min_time_diff_thres = 15 
 
 ##############################################################################
 # 2nd Used Functions
@@ -61,6 +64,40 @@ def parse_arguments():
 
 ##############################################################################
 
+def check_moisture_consistency(m_array, rh, ppmv_array, t_array, p_array, tol_m=0.2, tol_rh=3.0, tol_ppmv=100):
+    
+    # Rückrechnungen (hier grobe Näherungen)
+    m_from_rh = []
+    for i, level_rh in enumerate(rh):        
+        m_from_rh.append(rh2mixing_ratio(RH=rh[i], abs_T=t_array[i], p=p_array[i]*100))
+    m_from_rh = np.array(m_from_rh)
+        
+    rh_from_ppmv = []
+    for i, level_rh in enumerate(rh):
+        rh_from_ppmv.append(ppmv2rh(ppmv_array[i], abs_T=t_array[i], p=p_array[i]*100))    
+    rh_from_ppmv = np.array(rh_from_ppmv)
+    
+    
+    # This one leads good results (ppmv and m are consistent):
+    m_from_ppmv = []
+    for i, level_rh in enumerate(rh):
+        m_from_ppmv.append(ppmv2mr(ppmv=ppmv_array[i], abs_T=t_array[i], p=p_array[i]*100))                
+    m_from_ppmv = np.array(m_from_ppmv)    
+
+    # Abweichungen
+    diff_m_rh = np.nanmax(np.abs(m_array - m_from_rh))
+    diff_m_ppmv = np.nanmax(np.abs(m_array - m_from_ppmv))
+    diff_rh_ppmv = np.nanmax(np.abs(rh - rh_from_ppmv))  # sehr grobe Umrechnung
+
+    if diff_m_rh > tol_m:
+        print(f"Warning: Mixing ratio vs RH differ by {diff_m_rh:.3f} g/kg (tol {tol_m})")
+    if diff_m_ppmv > tol_m:
+        print(f"Warning: Mixing ratio vs ppmv differ by {diff_m_ppmv:.3f} g/kg (tol {tol_m})")
+    if diff_rh_ppmv > tol_rh:
+        print(f"Warning: RH vs ppmv differ by {diff_rh_ppmv:.3f} % (tol {tol_rh})")
+
+##############################################################################
+
 def clausius_clapeyron_liq(temp_celsius):
     # Sättigungsdampfdruck für eine Temperatur in °C
     # es returned in Pa
@@ -69,15 +106,6 @@ def clausius_clapeyron_liq(temp_celsius):
     esl = 610.78 * np.exp(L / 462 * (1/273.15 - 1/(273.15+temp_celsius)))
     return esl
     
-##############################################################################
-
-def clausius_clapeyron_ice(temp_celsius):
-    # Sättigungsdampfdruck für eine Temperatur in °C
-    # es returned in Pa
-    L_s = 2.840e6
-    esi = 610.78 * np.exp(L_s / 462 * (1/273.15 - 1/(273.15+temp_celsius)))
-    return esi
-
 ##############################################################################
 
 def rh2mixing_ratio(RH=70, abs_T=273.15+15, p=101325):
@@ -95,6 +123,30 @@ def rh2ppmv(RH=70, abs_T=273.15+15, p=101325):
     e = es * RH / 100
     ppmv = 1000000*e / p
     return ppmv
+    
+############################################################################
+
+def ppmv2rh(ppmv, abs_T=273.15+15, p=101325):
+    es = clausius_clapeyron_liq(abs_T-273.15)
+    e = ppmv * p / 1e6
+    RH = 100 * e / es
+    return RH
+
+############################################################################
+
+def mixing_ratio2RH(mixing_ratio=7e-3, abs_T=273.15+15, p=101325):
+    # mixing ratio in kg/kg; p in hPa
+    e = mixing_ratio * p * 28.96e-3 / (18.02e-3)
+    es = clausius_clapeyron_liq(abs_T-273.15)
+    RH = e*100 / es 
+    return RH
+
+############################################################################
+
+def ppmv2mr(ppmv=15e3, abs_T=273.15+15, p=101325):
+    rh = ppmv2rh(ppmv, abs_T=abs_T, p=p)
+    mr = rh2mixing_ratio(RH=rh, abs_T=abs_T, p=p)
+    return mr    
 
 ##############################################################################
 
@@ -229,8 +281,6 @@ def read_radiosonde_nc_arms(file=\
     increment_ft = int(np.ceil((max_index-index3000)/datapoints_ft))
     inds = np.r_[crop:index3000:increment_bl, index3000:max_index:increment_ft]
     inds = np.unique(inds)
-    # print("dz: (BL)", 3000/datapoints_bl)
-    # print("dz FT:", (ds["Height"].values[max_index]- 3000)/datapoints_ft)
     
     ####
     # Create running mean:
@@ -244,7 +294,7 @@ def read_radiosonde_nc_arms(file=\
         ds[p_var].values/p_factor)
     rh = running_mean_from_arrays(inds, ds[height_var].values,\
         ds[h_var].values)
-    if np.array(rh<=1.5).all():
+    if np.all(np.array(rh<=1.5)):
         rh=rh*100
     length_value = len(t_array)
         
@@ -283,7 +333,7 @@ def read_radiosonde_nc_arms(file=\
            m_array, z_array, rh, deg_lon,height_var, t_var, p_var, h_var,\
            index)
     '''     
-    ######################       
+    ###################### 
 
     return length_value, p_array, t_array, ppmv_array, height_in_km, deg_lat,\
        m_array, z_array, rh, deg_lon
@@ -355,7 +405,8 @@ def read_radiosonde_txt(file=\
     rh = running_mean_from_arrays(inds,df["Alt"].values,\
         df["Hu"].values)
     length_value = len(t_array )
-
+    if np.all(np.array(rh<=1.5)):
+        rh=rh*100
 
     # Humidity unit conversions:
     m_array = []
@@ -442,286 +493,10 @@ def derive_date_from_file_name(file):
     return datetime_np
 
 ##############################################################################
-    
-def calc_lwc(tops, bases, p_array, t_array, ppmv_array, m_array,\
-        z_array, rh, cloud_bools):
-    ####
-    # Chakraborty & Maitra 2011  / Nandan et al. 2022:
-    cp = 1003.5 # J /kg / K == 1.003 J / g / K
-    L = 334944 # J / kg == 80 cal / gm
-    R_L = 287.06 # J / kg / K
-    gamma_d = 9.76e-3 # K/m
-    gamma_s = 6.5e-3 # K/m    
-    lwc_kg_m3 = np.array([0.]*len(t_array))
-    lwc_kg_kg = np.array([0.]*len(t_array))
-    iwc_kg_m3 = np.array([0.]*len(t_array))
-    iwc_kg_kg = np.array([0.]*len(t_array))  
-    if len(tops) != len(bases):
-        print("WARNING: base and top number are deviating!")    
-        print("bases: " , bases)
-        print("tops: ", tops) 
-    for i, (base, top) in enumerate(zip(bases,tops)):
-        z_index_top = np.nanargmin(abs(z_array-top))
-        z_index_base = np.nanargmin(abs(z_array-base))
-        if t_array[z_index_base]>273.15 and t_array[z_index_top]>273.15:
-            # print("Water cloud")  
-            for j in range(z_index_top,z_index_base):
-                rho = p_array[j]*100 / R_L / t_array[j] # Ergebnis realistisch kg m-3
-                dz = z_array[j-1] - z_array[j] # ergab soweit auch Sinn..
-                lwc_ad = rho * cp / L * (gamma_d - gamma_s) * dz
-                dh = z_array[j] - base # abs entfernt
-                lwc = lwc_ad * (1.239 - 0.145*np.log(dh)) # kg m-3
-                if lwc<0:
-                    lwc = 0
-                lwc_kg_m3[j] = lwc          
-                lwc_kg_kg[j] = lwc / rho
-        elif t_array[z_index_base]<233.15 and t_array[z_index_top]<233.15:
-            pass
-            # print("Ice cloud")
-            for j in range(z_index_top,z_index_base):
-                rho = p_array[j]*100 / R_L / t_array[j] # Ergebnis realistisch kg m-3
-                dz = z_array[j-1] - z_array[j] # ergab soweit auch Sinn..
-                iwc_ad = rho * cp / L * (gamma_d - gamma_s) * dz
-                dh = z_array[j] - base
-                iwc = iwc_ad * (1.239 - 0.145*np.log(dh)) # kg m-3
-                if iwc<0:
-                    iwc = 0
-                iwc_kg_m3[j] = iwc          
-                iwc_kg_kg[j] = iwc / rho  
-        elif t_array[z_index_base]>233.15 and t_array[z_index_top]<273.15:
-            # print("Mixed phase cloud")       
-            for j in range(z_index_top,z_index_base):
-                rho = p_array[j]*100 / R_L / t_array[j] # Ergebnis realistisch kg m-3
-                dz = z_array[j-1] - z_array[j] # ergab soweit auch Sinn..
-                lwc_ad = rho * cp / L * (gamma_d - gamma_s) * dz
-                dh = z_array[j] - base     
-                lwc = lwc_ad * (1.239 - 0.145*np.log(dh)) # kg m-3
-                if lwc<0:
-                    lwc = 0
-                lwc_kg_m3[j] = lwc          
-                lwc_kg_kg[j] = lwc / rho             
-        else:
-            print("Phase determination error!")
-
-    ##################
-    # Dafür wäre IWC profil noch nice...
-    # Ich brauche IWP
-    # Was macht man mit mixed phase???
-    ###################
-    
-    lwp_kg_m2 = np.abs(np.sum(lwc_kg_m3 * np.gradient(z_array)))  # [kg/m²]
-    iwp_kg_m2 = np.abs(np.sum(iwc_kg_m3 * np.gradient(z_array)))  # [kg/m²]
-        
-    return lwc_kg_m3, lwc_kg_kg, lwp_kg_m2, iwc_kg_m3, iwc_kg_kg, iwp_kg_m2
-
-##############################################################################
-
-def derive_cloud_features(p_array, t_array, ppmv_array, m_array,\
-        z_array, rh):
-    # Follow Nandan et al., 2022
-    # min_rh, max_rh, inter_rh:
-    below_2km = (92,95,84)
-    two2sixkm = (90,93,82)
-    six2twelvekm = (88,90,78)
-    above_12km = (75,80,70)
-    bases = []
-    tops = []
-    
-    #######
-    # 1) the conversion of RH with respect to liquid water to RH 
-    # with respect to ice at temperatures below 0 ◦ C; 2)
-    for i, temp in enumerate(t_array):
-        if temp < 273.15:
-            rh[i] = rh[i] *  clausius_clapeyron_liq(temp-273.15)/\
-                clausius_clapeyron_ice(temp-273.15) # rhl * esl / esi
-   
-    ##########
-    # 2-4: Find RHs above RH_min (preliminary layers):
-    cloud_bools = np.array([False]*len(z_array))
-    in_cloud = False
-    for i, (temp, z) in enumerate(zip(t_array, z_array)):
-        if z<2000:
-            if rh[i]>below_2km[0]:
-                cloud_bools[i] = True
-                if not in_cloud:
-                    tops.append(z)
-                in_cloud = True
-            else:
-                if in_cloud:
-                    bases.append(z)
-                in_cloud = False
-        elif 2000<z<6000:
-            if rh[i]>two2sixkm[0]:
-                cloud_bools[i] = True
-                if not in_cloud:
-                    tops.append(z)
-                in_cloud = True
-            else:
-                if in_cloud:
-                    bases.append(z)
-                in_cloud = False
-        elif 6000<z<12000:
-            if rh[i]>six2twelvekm[0]:
-                cloud_bools[i] = True
-                if not in_cloud:
-                    tops.append(z)
-                in_cloud = True
-            else:
-                if in_cloud:
-                    bases.append(z)
-                in_cloud = False
-        elif 12000<z:
-            if rh[i]>above_12km[0]:
-                cloud_bools[i] = True
-                if not in_cloud:
-                    tops.append(z)
-                in_cloud = True
-            else:
-                if in_cloud:
-                    bases.append(z)
-                in_cloud = False         
-    # print("after 4  tops: ", tops)    
-    # print("after 4  bases: ", bases)
-    ####################################
-    if len(tops) == len(bases)+1:
-        bases.append(z_array[-1])     
-    elif len(tops) != len(bases):
-        print("base and top number are deviating!")    
-        print("bases: " , bases)
-        print("tops: ", tops)        
-    elif len(tops)>=1 and len(bases)>=1:
-        if (0>(np.array(tops)-np.array(bases))).any():
-            print("Warning! Top lower than cloud base... Why?")
-            print("z_array:", z_array)
-            print("rh: ", rh)     
-    #################################
-            
-    ####
-    # 5) Remove cloudbases below 500 m if thickness < 400 m:
-    # New version:
-    valid_indices = [i for i, (base, top) in enumerate(zip(bases, tops))\
-        if not (base < 500 and abs(base-top) < 400)]
-    new_bases = [bases[i] for i in valid_indices]
-    new_tops = [tops[i] for i in valid_indices]
-    for i in range(len(bases)):
-        if i not in valid_indices:
-            z_index_top = np.nanargmin(abs(z_array-tops[i]))
-            z_index_base = np.nanargmin(abs(z_array-bases[i]))
-            cloud_bools[z_index_top:z_index_base] = False
-    # print("after 5  tops: ", new_tops)    
-    # print("after 5  bases: ",new_bases)   
-
-    
-    ###
-    # 6 ) RH_max reached within cloud layer? => discard else!
-    to_remove_base = []
-    to_remove_top = []      
-    tops = new_tops
-    bases = new_bases
-    for i, (base, top) in enumerate(zip(bases,tops)):
-        if base<2000:
-            z_index_top = np.nanargmin(abs(z_array-top))
-            z_index_base = np.nanargmin(abs(z_array-base))
-            if not np.any(below_2km[1] < rh[z_index_top:z_index_base]):
-                cloud_bools[z_index_top:z_index_base] = False
-                to_remove_base.append(i)
-                to_remove_top.append(i)
-        elif 2000<base<6000:
-            z_index_top = np.nanargmin(abs(z_array-top))
-            z_index_base = np.nanargmin(abs(z_array-base))
-            if not np.any(two2sixkm[1] < rh[z_index_top:z_index_base]):
-                cloud_bools[z_index_top:z_index_base] = False
-                to_remove_base.append(i)
-                to_remove_top.append(i)
-        elif 6000<base<12000:
-            z_index_top = np.nanargmin(abs(z_array-top))
-            z_index_base = np.nanargmin(abs(z_array-base))
-            if not np.any(six2twelvekm[1] < rh[z_index_top:z_index_base]):
-                cloud_bools[z_index_top:z_index_base] = False
-                to_remove_base.append(i)
-                to_remove_top.append(i)      
-        elif 12000<base:
-            z_index_top = np.nanargmin(abs(z_array-top))
-            z_index_base = np.nanargmin(abs(z_array-base))
-            if not np.any(above_12km[1]  < rh[z_index_top:z_index_base]):
-                cloud_bools[z_index_top:z_index_base] = False
-                to_remove_base.append(i)
-                to_remove_top.append(i)      
-    for i in sorted(to_remove_base, reverse=True):
-        bases.pop(i)
-    for i in sorted(to_remove_top, reverse=True):
-        tops.pop(i)
-    # print("after 6  tops: ", tops)    
-    # print("after 6  bases: ",bases)   
-        
-    ###
-    # 7) Connect layers, with a gap of less than 300 m:
-    to_remove_base = []
-    to_remove_top = []       
-    for i, (base, top) in enumerate(zip(bases,tops)):      
-        if base<2000:
-            rh_inter = below_2km[2]
-        elif 2000<base<6000:
-            rh_inter = two2sixkm[2]
-        elif 6000<base<12000:
-            rh_inter = six2twelvekm[2]
-        elif 12000<base:
-            rh_inter = above_12km[2]           
-        if i!=0:
-           z_index_base = np.nanargmin(abs(z_array-bases[i-1]))
-           z_index_top = np.nanargmin(abs(z_array-top))
-           if 1==abs(z_index_base-z_index_top):
-               if rh[z_index_base]>rh_inter:  
-                   cloud_bools[z_index_base] = True
-                   to_remove_base.append(i-1)
-                   to_remove_top.append(i)                   
-           elif abs(bases[i-1]-top)<300 or\
-                   np.nanmin(rh[z_index_base:z_index_top-1])>rh_inter:    
-               cloud_bools[z_index_base:z_index_top-1] = True
-               to_remove_base.append(i-1)
-               to_remove_top.append(i)               
-    for i in sorted(to_remove_base, reverse=True):
-        bases.pop(i)
-    for i in sorted(to_remove_top, reverse=True):
-        tops.pop(i)
-    # print("after 7  tops: ", tops)    
-    # print("after 7  bases: ",bases)   
-            
-    # step 8: 
-    to_remove_base = []
-    to_remove_top = []   
-    for i, (base, top) in enumerate(zip(bases,tops)):               
-        ####
-        # 8) Cloud thickness below 100 m:
-        if abs(base-top)<100:
-            to_remove_base.append(i)
-            to_remove_top.append(i)
-            z_index_top = np.nanargmin(abs(z_array-top))
-            z_index_base = np.nanargmin(abs(z_array-base))     
-            cloud_bools[z_index_top:z_index_base] = False
-    for i in sorted(to_remove_base, reverse=True):
-        bases.pop(i)
-    for i in sorted(to_remove_top, reverse=True):
-        tops.pop(i)
-    # print("after 8  tops: ", tops)    
-    # print("after 8  bases: ",bases)           
-
-    ####
-    # Lets get LWC and IWC:
-    lwc_kg_m3, lwc_kg_kg, lwp_kg_m2,iwc_kg_m3, iwc_kg_kg, iwp_kg_m2 =\
-        calc_lwc(tops, bases, p_array, t_array, ppmv_array, m_array,\
-        z_array, rh, cloud_bools)
-
-    # LWC(z) kg/kg; and IWC probably different units for PyRTlib...
-    # Column water and ice: g m-2
-    
-
-    return lwc_kg_m3, lwc_kg_kg, lwp_kg_m2,iwc_kg_m3, iwc_kg_kg, iwp_kg_m2
-
-##############################################################################
 
 def nearest_ele4elevation(ele_values, azi_values, ele_times,\
-        target_elevation,target_azi,datetime_np):
+        target_elevation,target_azi,datetime_np,\
+        min_time_diff_thres=min_time_diff_thres):
     # Boolean Maske für alle Stellen, an denen "ele" exakt target_elevation ist
     match_mask = (abs(ele_values-target_elevation)<0.05)   
     if target_azi =="ANY":
@@ -744,9 +519,10 @@ def nearest_ele4elevation(ele_values, azi_values, ele_times,\
         rs_time = datetime_np.astype('M8[us]').astype(datetime)
         delta = mwr_time - rs_time
         minutes_diff = delta.total_seconds() / 60
-        if minutes_diff>30:
+        if minutes_diff>min_time_diff_thres:
             print("Excluded due to huge time difference from scan!!")
-            nearest_idx = None
+            return None
+            
         
         # Deterime nearest index:
         candidate_indices = np.where(final_mask)[0]
@@ -770,13 +546,57 @@ def nearest_ele4elevation(ele_values, azi_values, ele_times,\
     return nearest_idx
 
 ##############################################################################
+'''
+def nearest_ele4elevation_mean(ele_values, azi_values, ele_times,
+        target_elevation, target_azi, datetime_np,
+        min_time_diff_thres=min_time_diff_thres, time_window_minutes=2):
+    # Boolean Maske für Elevation und Azimuth
+    match_mask = (abs(ele_values - target_elevation) < 0.05)
+    if target_azi == "ANY":
+        match_mask2 = [True] * len(ele_values)
+    else:
+        match_mask2 = (abs(azi_values - target_azi) < 0.05)
+    final_mask = match_mask & match_mask2
+    
+    if not final_mask.any():
+        nearest_idx_list = None
+    else:
+        # Zeitdifferenzen zu allen passenden Zeitpunkten
+        candidate_times = ele_times[final_mask]
+        print("candidate_times by angle: ", candidate_times)
+        time_diffs = np.abs(candidate_times - datetime_np)
+        minutes_diff_all = time_diffs.astype('timedelta64[s]').astype(float) / 60
+        
+        # Alle Indizes, die innerhalb des Zeitfensters liegen
+        valid_mask = minutes_diff_all <= time_window_minutes
+        if not valid_mask.any():
+            print("Excluded: no measurements within time window.")
+            nearest_idx_list = None
+        else:
+            candidate_indices = np.where(final_mask)[0][valid_mask]
+            nearest_idx_list = candidate_indices
+
+            # Optional: Medianzeitpunkt berechnen (Informativ)
+            
+            print("candidate_times[valid_mask] by time: ", candidate_times[valid_mask])
+            median_time = np.median(candidate_times[valid_mask])
+            
+            mwr_time = np.datetime64(median_time)
+            rs_time = datetime_np.astype('M8[us]').astype(datetime)
+            delta = mwr_time.astype('M8[us]').astype(datetime) - rs_time
+            minutes_diff = delta.total_seconds() / 60
+            
+            if minutes_diff > min_time_diff_thres:
+                print("Excluded due to large median time diff from scan!")
+                nearest_idx_list = None
+                
+    return nearest_idx_list
+'''
+##############################################################################
     
 def derive_elevation_index(ds_bl, elevation):
-    # print("Input ele: ",elevation)
     for index, ele in enumerate(ds_bl["ele"].values):
         if abs(ele-elevation)<0.05:
-            # print("Output ele: ", ele)
-            # print("Output Index: ", index)
             return index
     return None
 
@@ -800,12 +620,33 @@ def get_tbs_from_l1(l1_files, datetime_np, elevations=elevations,\
                     time_diffs = np.abs(ds_bl["time"].values - datetime_np)
                     min_idx = time_diffs.argmin()
                     tbs[ele_index,0, :] = ds_bl["tb"].values[min_idx,ele_index,:]
-                    # print("TBs found BL: ", ds_bl["tb"].values[min_idx,ele_index,:])
         elif "MWR_1C01" in file:
-            # print("Found MWR_1C_File!", file)
             ds_c1 = xr.open_dataset(file)            
             for i,elevation in enumerate(elevations):
                 for j,azi in enumerate(azimuths):
+                
+                
+                ############################################
+                    ##########################
+                    # if not isinstance(min_idx, int):
+                    '''
+                    # Derive mean value:
+                    time_idx_list = nearest_ele4elevation_mean(ds_c1["elevation_angle"].values,
+                        ds_c1["azimuth_angle"].values,
+                        ds_c1["time"].values, elevation, azi, datetime_np)
+
+                    if time_idx_list is None:
+                        pass
+                    else:
+                        # Mittelwert der TBs über mehrere Zeitpunkte
+                        tbs[i, j, :] = np.nanmean(ds_c1["tb"].values[time_idx_list, :], axis=0)
+                        print("MEan TBs: ", np.nanmean(ds_c1["tb"].values[time_idx_list, :], axis=0))
+                        print("elevation: ", ds_c1["elevation_angle"].values[ime_idx_list])
+                        print("azi: ", ds_c1["azimuth_angle"].values[ime_idx_list])
+                        
+                    '''    
+                    ##########################
+                    # Derive single value:
                     time_idx = nearest_ele4elevation(ds_c1["elevation_angle"].values,\
                         ds_c1["azimuth_angle"].values,\
                         ds_c1["time"].values, elevation,azi, datetime_np)
@@ -813,6 +654,14 @@ def get_tbs_from_l1(l1_files, datetime_np, elevations=elevations,\
                         pass
                     else:
                         tbs[i,j, :] = ds_c1["tb"].values[time_idx,:]
+                        '''
+                        print("Point TBs: ", ds_c1["tb"].values[time_idx,:])
+                        print("elevation: ", ds_c1["elevation_angle"].values[time_idx])
+                        print("azi: ", ds_c1["azimuth_angle"].values[time_idx])
+                        '''
+                    ############################################    
+                        
+                        
             if "latitude" in ds_c1.data_vars:
                 lat = ds_c1["latitude"].values[0]
                 lon = ds_c1["longitude"].values[0]
@@ -879,20 +728,33 @@ def interp2_180(x_array, y_array, x_new=None, n_levels=n_levels):
     
 ##############################################################################
 
+def check_lwp_iwv(lwp, iwv):
+    if isinstance(lwp, np.ndarray):
+        lwp = np.nan    
+    elif lwp<0:
+        lwp = 0.
+    if isinstance(iwv, np.ndarray):
+        iwv = np.nan   
+    elif iwv<0:
+        iwv = 0.        
+    return lwp, iwv
+
+##############################################################################
+
 def get_profs_from_l2(l2_files, datetime_np, n_levels = n_levels):
     data = np.full((4,n_levels), np.nan)
     lwp, iwv = np.nan, np.nan
 
     for file in l2_files:
+    
         if "single" in file:
             ds = xr.open_dataset(file)    
-            
             # time_diffs = np.abs(ds["time"].values - datetime_np)
             # min_idx = time_diffs.argmin()
             min_idx = nearest_ele4elevation(ds["elevation_angle"].values,\
                 ds["azimuth_angle"].values,\
-                ds["time"].values, 90., "ANY" , datetime_np)
-            if min_idx is None:
+                ds["time"].values, 90., "ANY" , datetime_np)                
+            if not isinstance(min_idx, int):
                 data[0,:] = [np.nan]*n_levels   
                 data[1,:] = [np.nan]*n_levels   
                 data[3,:] = [np.nan]*n_levels   
@@ -904,15 +766,19 @@ def get_profs_from_l2(l2_files, datetime_np, n_levels = n_levels):
                 x_new, y_new = interp2_180(ds["height"].values,\
 		        ds["absolute_humidity"].values[min_idx, :])       
                 data[3,:] = y_new   
-                lwp = ds["lwp"].values[min_idx]         
-                iwv = ds["iwv"].values[min_idx]       
-        if "mwr00_l2_ta_" in file:
+            # Only for lwp and iwv:    
+            time_diffs = np.abs(ds["time"].values - datetime_np)
+            min_idx = time_diffs.argmin()
+            lwp = ds["lwp"].values[min_idx]         
+            iwv = ds["iwv"].values[min_idx]  
+                     
+        if "mwr0" in file and "_l2_ta_" in file:
             ds = xr.open_dataset(file)
             # time_diffs = np.abs(ds["time"].values - datetime_np)
             # min_idx = time_diffs.argmin()
             min_idx = nearest_ele4elevation(ds["ele"].values, ds["azi"].values,\
                 ds["time"].values, 90., "ANY" , datetime_np) 
-            if min_idx is None:
+            if not isinstance(min_idx, int):
                 data[0,:] = [np.nan]*n_levels   
                 data[1,:] = [np.nan]*n_levels   
             else:                            
@@ -920,26 +786,29 @@ def get_profs_from_l2(l2_files, datetime_np, n_levels = n_levels):
                      ds["ta"].values[min_idx, :])
                 data[0,:] = x_new     
                 data[1,:] = y_new
-        elif "mwrBL00_l2_ta_" in file:
+                
+        elif "mwrBL0" in file and "_l2_ta_" in file:
             ds = xr.open_dataset(file)
             time_diffs = np.abs(ds["time"].values - datetime_np)
             min_idx = time_diffs.argmin()
-            if min_idx is None:
+            if not isinstance(min_idx, int):
                 data[2,:] = [np.nan]*n_levels     
             else: 
                 x_new1, y_new = interp2_180(ds["height"].values,\
                      ds["ta"].values[min_idx, :]) #, x_new=x_new)
-                data[2,:] = y_new            
+                data[2,:] = y_new    
+                        
         elif "_hua_" in file:
             ds = xr.open_dataset(file)
             min_idx = nearest_ele4elevation(ds["ele"].values, ds["azi"].values,\
                 ds["time"].values, 90., "ANY" , datetime_np)  
-            if min_idx is None:
+            if not isinstance(min_idx, int):
                 data[3,:] = [np.nan]*n_levels   
             else:                 
                 x_new2, y_new = interp2_180(ds["height"].values,\
                      ds["hua"].values[min_idx, :]) #, x_new=x_new)
-                data[3,:] = y_new                 
+                data[3,:] = y_new  
+                
         elif "_prw_" in file:
             ds = xr.open_dataset(file)
             # time_diffs = np.abs(ds["time"].values - datetime_np)
@@ -947,14 +816,14 @@ def get_profs_from_l2(l2_files, datetime_np, n_levels = n_levels):
             min_idx = nearest_ele4elevation(ds["ele"].values, ds["azi"].values,\
                 ds["time"].values, 90., "ANY" , datetime_np)                 
             iwv = ds["prw"].values[min_idx] 
-            # All Water Vapor
-            # print(ds["prw"])             
+            
         elif "_clwvi_" in file:
             ds = xr.open_dataset(file)
             min_idx = nearest_ele4elevation(ds["ele"].values, ds["azi"].values,\
                 ds["time"].values, 90., "ANY" , datetime_np)  
-            lwp = ds["clwvi"].values[min_idx]       
-    
+            lwp = ds["clwvi"].values[min_idx] 
+            
+    lwp, iwv = check_lwp_iwv(lwp, iwv)
     return data[:,::-1], lwp, iwv
 
 ##############################################################################
@@ -1039,10 +908,14 @@ def get_mwr_data(datetime_np, mwrs,n_levels=n_levels):
         ham_profiles = np.full((4,n_levels), np.nan)
         lwp_ham, iwv_ham = np.nan, np.nan        
         
+    #######################################
     # Then jsut read l1-files for now
     # TBs of shape: (elevation x azimuth x n_chans) , for one timestep
     integrals = [lwp_dwd, iwv_dwd, lwp_fog, iwv_fog, lwp_sun, iwv_sun,\
         lwp_top, iwv_top, lwp_joy, iwv_joy,lwp_ham, iwv_ham ]
+    # [-0.001904392, 23.411406, -0.004118612, 31.603878, nan, nan, nan, nan, nan, nan, nan, nan]
+    # => Warum habe ich denn für sunhat, tophat, joyhat, hamhat keine sinnvollen Werte???
+    # Was mache ich mit negativen Werten???
     
     return tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat, tbs_joyhat,\
         tbs_hamhat, dwd_profiles,fog_profiles, sun_profiles, top_profiles,\
@@ -1058,9 +931,9 @@ def check_units_physical_realism(p_array, t_array, ppmv_array,\
         print("WARNING: Pressure gradient in lower levels is too little!")    
     if abs(z_array[-1]-z_array[-2])<2.:
         print("WARNING: Low differences between z-values - probably ground data in profile!!!")    
-    if (np.array(t_array)>400).any() or (np.array(t_array)<0).any():
+    if (np.array(t_array)>400).any() or (np.array(t_array)<0).any():   
         print("WARNING: Encoutered physically unrealistic value for T in K!!!")
-    if np.any(np.array(rh)>115) or np.any(np.array(rh)<0) or\
+    if np.any(np.array(rh)>110) or np.any(np.array(rh)<0) or\
             (not  np.any(np.array(rh)>1.5)):
         print("WARNING: Encoutered physically unrealistic value for RH in %!!!")
     if (np.array(ppmv_array)>40000).any() or (np.array(ppmv_array)<0).any():
@@ -1163,17 +1036,14 @@ def summarize_many_profiles(pattern=\
                 srf_temps[i,1] = np.nan
                 srf_wvs[i,1] = np.nan
                 srf_altitude[i,1] = np.nan
-                continue                    
-            # Add climatology at top to fill profiles:
-            check_units_physical_realism(p_array, t_array, ppmv_array,\
-                m_array, z_array, rh)       
+                continue                       
             p_array, t_array, ppmv_array, m_array, z_array, rh = add_clim2profiles(\
                                     p_array, t_array, ppmv_array,\
-                                    m_array, z_array, rh)    
+                                    m_array, z_array, rh)  
             # derive liquid water content:
             lwc_kg_m3, lwc_kg_kg, lwp_kg_m2,iwc_kg_m3, iwc_kg_kg, iwp_kg_m2 =\
                 derive_cloud_features(\
-                p_array, t_array, ppmv_array, m_array, z_array, rh)
+                p_array, t_array, ppmv_array, m_array, z_array, rh)   
             #################
             # p in hPa as in other inputs!
             # mixing ratio in g/kg
@@ -1260,11 +1130,11 @@ def summarize_many_profiles(pattern=\
         # Add climatology at top to fill profiles:
         p_array, t_array, ppmv_array, m_array, z_array, rh = add_clim2profiles(\
                                     p_array, t_array, ppmv_array,\
-                                    m_array, z_array, rh)                             
+                                    m_array, z_array, rh)                                                       
         # derive liquid water content:
         lwc_kg_m3, lwc_kg_kg, lwp_kg_m2,iwc_kg_m3, iwc_kg_kg, iwp_kg_m2 =\
             derive_cloud_features(\
-            p_array, t_array, ppmv_array, m_array, z_array, rh)     
+            p_array, t_array, ppmv_array, m_array, z_array, rh)                     
         #################
         # p in hPa as in other inputs!
         # mixing ratio in g/kg
@@ -1283,6 +1153,7 @@ def summarize_many_profiles(pattern=\
         top_profiles[i,:,:] = top_profiles1
         joy_profiles[i,:,:] = joy_profiles1
         ham_profiles[i,:,:] = ham_profiles1    
+        
         lwps_dwd[i] = integrals[0]
         lwps_fog[i] = integrals[2]
         lwps_sun[i] = integrals[4]
@@ -1310,7 +1181,16 @@ def summarize_many_profiles(pattern=\
             srf_altitude[i,0] = h_km_vital
         else:  
             srf_altitude[i,0] = height_in_km
-    #############
+
+        # Check profiles on physical consistency:
+        check_units_physical_realism(p_array, t_array, ppmv_array,\
+            m_array, z_array, rh)     
+        check_moisture_consistency(m_array, rh, ppmv_array, t_array, p_array)
+          
+        #######################    
+        #if i==6:
+         #  break    
+        ############################
     
     return profile_indices, level_pressures, level_temperatures, level_wvs,\
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza,\
@@ -1584,6 +1464,16 @@ def add_attrs_CF_conform(ds):
     })
 
     return ds
+
+##############################################################################
+    
+def print_valid_timebins(ds, varname):
+    # Anzahl der time-bins insgesamt:
+    n_total = ds[varname].sizes['time']
+    # Maske: Für jedes Zeitbin -> Gibt es irgendwo einen nicht-nan Wert?
+    valid_times = (~ds[varname].isnull()).any(dim=("elevation", "azimuth", "N_Channels"))
+    n_valid = valid_times.sum().item() 
+    return n_valid
     
 ##############################################################################
 
@@ -1711,6 +1601,10 @@ def produce_dataset(profile_indices, level_pressures,
         }
     )
 
+    for var in ["TBs_dwdhat", "TBs_foghat", "TBs_sunhat", "TBs_tophat", "TBs_joyhat", "TBs_hamhat"]:
+        n = print_valid_timebins(ds, var)
+        if n>0:
+            print(var+" : "+str(n)+"/"+str(n_times))
     ds = add_attrs_CF_conform(ds)
     ds = clean_dataset(ds)
     ds = interpolate_azimuths(ds)
