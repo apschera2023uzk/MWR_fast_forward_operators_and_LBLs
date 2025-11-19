@@ -91,7 +91,7 @@ def derive_TBs4PyRTlib(ds, args):
     tbs = np.full((len(ds["time"].values), 14,10,2), np.nan)
     tbs17 = np.full((len(ds["time"].values), 14,10,2), np.nan)  
     tbs98 = np.full((len(ds["time"].values), 14,10,2), np.nan)   
-    tbs22 = np.full((len(ds["time"].values), 14,10,2), np.nan)    
+    tbs20 = np.full((len(ds["time"].values), 14,10,2), np.nan)    
      
     for i, timestep in enumerate(ds["time"].values):
         for j, crop in enumerate(ds["Crop"].values):
@@ -115,13 +115,13 @@ def derive_TBs4PyRTlib(ds, args):
                 
                 if not nan_bool:
 
-                    # 0 Rosenkranz 22
-                    mdl = "R22"
+                    # 0 Rosenkranz 20
+                    mdl = "R20"
                     rte = TbCloudRTE(z_in[::-1], p_in[::-1], t_in[::-1], rh_in[::-1], frqs, ang)
                     rte.init_absmdl(mdl)
                     rte.satellite = False # downwelling!!!
                     df_from_ground = rte.execute()                 
-                    tbs22[i,:,k,j] = df_from_ground["tbtotal"].values
+                    tbs20[i,:,k,j] = df_from_ground["tbtotal"].values
                                     
                     # 1st Rosenkranz 24
                     mdl = mdls[-1] 
@@ -150,6 +150,11 @@ def derive_TBs4PyRTlib(ds, args):
                 else:
                     print("NaNs found!!!!!!!")
 
+        ###################
+        # if i==2:
+        #    break
+            ##############
+            
     ds["TBs_PyRTlib_R24"] = (('time', 'N_Channels','elevation','Crop'), tbs)
     attributes = {
         'long_name': 'Brightness temperature modelled by R24',
@@ -157,7 +162,7 @@ def derive_TBs4PyRTlib(ds, args):
         'standard_name': 'brightness_temperature',
         'comments': 'Brightness temperatures modeled from radiosonde data for 14 channels of HATPRO radiometer',
     }
-    ds["TBs_PyRTlib_R17"].attrs = attributes  
+    ds["TBs_PyRTlib_R24"].attrs = attributes  
     
     ds["TBs_PyRTlib_R17"] = (('time', 'N_Channels','elevation','Crop'), tbs17)
     attributes = {
@@ -177,14 +182,14 @@ def derive_TBs4PyRTlib(ds, args):
     }
     ds["TBs_PyRTlib_R98"].attrs = attributes 
     
-    ds["TBs_PyRTlib_R22"] = (('time', 'N_Channels','elevation','Crop'), tbs22)
+    ds["TBs_PyRTlib_R20"] = (('time', 'N_Channels','elevation','Crop'), tbs20)
     attributes = {
-        'long_name': 'Brightness temperature modelled by R22',
+        'long_name': 'Brightness temperature modelled by R20',
         'units': 'K',
         'standard_name': 'brightness_temperature',
         'comments': 'Brightness temperatures modeled from radiosonde data for 14 channels of HATPRO radiometer',
     }
-    ds["TBs_PyRTlib_R22"].attrs = attributes          
+    ds["TBs_PyRTlib_R20"].attrs = attributes          
                
     return ds
 

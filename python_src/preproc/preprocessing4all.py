@@ -28,6 +28,7 @@ from pyrtlib.climatology import AtmosphericProfiles as atmp
 from pyrtlib.utils import ppmv2gkg, mr2rh
 from datetime import datetime, timezone
 from derive_cloud_water import derive_cloud_features
+from MWR_read_in_module import get_mwr_data
 import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use("Agg")
@@ -64,7 +65,7 @@ def parse_arguments():
 
 ##############################################################################
 
-def check_moisture_consistency(m_array, rh, ppmv_array, t_array, p_array, tol_m=0.2, tol_rh=3.0, tol_ppmv=100):
+def check_moisture_consistency(m_array, rh, ppmv_array, t_array, p_array, tol_m=0.2, tol_rh=3.0, tol_ppmv=100, tag=""):
     
     # Rückrechnungen (hier grobe Näherungen)
     m_from_rh = []
@@ -90,11 +91,11 @@ def check_moisture_consistency(m_array, rh, ppmv_array, t_array, p_array, tol_m=
     diff_rh_ppmv = np.nanmax(np.abs(rh - rh_from_ppmv))  # sehr grobe Umrechnung
 
     if diff_m_rh > tol_m:
-        print(f"Warning: Mixing ratio vs RH differ by {diff_m_rh:.3f} g/kg (tol {tol_m})")
+        print(f"Warning ("+tag+"): Mixing ratio vs RH differ by {diff_m_rh:.3f} g/kg (tol {tol_m})")
     if diff_m_ppmv > tol_m:
-        print(f"Warning: Mixing ratio vs ppmv differ by {diff_m_ppmv:.3f} g/kg (tol {tol_m})")
+        print(f"Warning ("+tag+"): Mixing ratio vs ppmv differ by {diff_m_ppmv:.3f} g/kg (tol {tol_m})")
     if diff_rh_ppmv > tol_rh:
-        print(f"Warning: RH vs ppmv differ by {diff_rh_ppmv:.3f} % (tol {tol_rh})")
+        print(f"Warning ("+tag+"): RH vs ppmv differ by {diff_rh_ppmv:.3f} % (tol {tol_rh})")
 
 ##############################################################################
 
@@ -494,435 +495,6 @@ def derive_date_from_file_name(file):
 
 ##############################################################################
 
-def nearest_ele4elevation(ele_values, azi_values, ele_times,\
-        target_elevation,target_azi,datetime_np,\
-        min_time_diff_thres=min_time_diff_thres):
-    # Boolean Maske für alle Stellen, an denen "ele" exakt target_elevation ist
-    match_mask = (abs(ele_values-target_elevation)<0.05)   
-    if target_azi =="ANY":
-        match_mask2 = [True]*len(ele_values)
-    else:
-        match_mask2 = (abs(azi_values-target_azi)<0.05)
-    final_mask = match_mask & match_mask2
-    
-    if not final_mask.any():
-        nearest_idx = None
-    else:
-        # Zeitwerte, die zu den passenden Elevations gehören
-        candidate_times = ele_times[final_mask]
-        time_diffs = np.abs(candidate_times - datetime_np)
-        min_idx = time_diffs.argmin()
-        nearest_time = candidate_times[min_idx]
-        
-        # Derive time difference:
-        mwr_time = candidate_times[min_idx].astype('M8[us]').astype(datetime)
-        rs_time = datetime_np.astype('M8[us]').astype(datetime)
-        delta = mwr_time - rs_time
-        minutes_diff = delta.total_seconds() / 60
-        if minutes_diff>min_time_diff_thres:
-            print("Excluded due to huge time difference from scan!!")
-            return None
-            
-        
-        # Deterime nearest index:
-        candidate_indices = np.where(final_mask)[0]
-        nearest_idx = candidate_indices[min_idx]
-        
-        # Elevation check:
-        nearest_value = ele_values[nearest_idx]
-        nearest_value2 = azi_values[nearest_idx]
-        if target_azi =="ANY":
-            if abs(nearest_value-target_elevation)>0.05:
-                print("WARNING: Azimuth or Elevation does not agree, as expected!")
-                print("Ele/Azi tagret values: ",target_elevation, target_azi)
-                print("Ele/Azi found values: ",nearest_value,\
-                    nearest_value2)            
-        elif abs(nearest_value-target_elevation)>0.05 or\
-                 (abs(nearest_value2-target_azi)>0.05):
-             print("WARNING: Azimuth or Elevation does not agree, as expected!")
-             print("Ele/Azi tagret values: ",target_elevation, target_azi)
-             print("Ele/Azi found values: ",nearest_value, nearest_value2)
-                    
-    return nearest_idx
-
-##############################################################################
-'''
-def nearest_ele4elevation_mean(ele_values, azi_values, ele_times,
-        target_elevation, target_azi, datetime_np,
-        min_time_diff_thres=min_time_diff_thres, time_window_minutes=2):
-    # Boolean Maske für Elevation und Azimuth
-    match_mask = (abs(ele_values - target_elevation) < 0.05)
-    if target_azi == "ANY":
-        match_mask2 = [True] * len(ele_values)
-    else:
-        match_mask2 = (abs(azi_values - target_azi) < 0.05)
-    final_mask = match_mask & match_mask2
-    
-    if not final_mask.any():
-        nearest_idx_list = None
-    else:
-        # Zeitdifferenzen zu allen passenden Zeitpunkten
-        candidate_times = ele_times[final_mask]
-        print("candidate_times by angle: ", candidate_times)
-        time_diffs = np.abs(candidate_times - datetime_np)
-        minutes_diff_all = time_diffs.astype('timedelta64[s]').astype(float) / 60
-        
-        # Alle Indizes, die innerhalb des Zeitfensters liegen
-        valid_mask = minutes_diff_all <= time_window_minutes
-        if not valid_mask.any():
-            print("Excluded: no measurements within time window.")
-            nearest_idx_list = None
-        else:
-            candidate_indices = np.where(final_mask)[0][valid_mask]
-            nearest_idx_list = candidate_indices
-
-            # Optional: Medianzeitpunkt berechnen (Informativ)
-            
-            print("candidate_times[valid_mask] by time: ", candidate_times[valid_mask])
-            median_time = np.median(candidate_times[valid_mask])
-            
-            mwr_time = np.datetime64(median_time)
-            rs_time = datetime_np.astype('M8[us]').astype(datetime)
-            delta = mwr_time.astype('M8[us]').astype(datetime) - rs_time
-            minutes_diff = delta.total_seconds() / 60
-            
-            if minutes_diff > min_time_diff_thres:
-                print("Excluded due to large median time diff from scan!")
-                nearest_idx_list = None
-                
-    return nearest_idx_list
-'''
-##############################################################################
-    
-def derive_elevation_index(ds_bl, elevation):
-    for index, ele in enumerate(ds_bl["ele"].values):
-        if abs(ele-elevation)<0.05:
-            return index
-    return None
-
-##############################################################################
-
-def get_tbs_from_l1(l1_files, datetime_np, elevations=elevations,\
-        azimuths=azimuths): 
-    tbs = np.full((10, 72, 14), np.nan)
-    lat = np.nan; lon = np.nan
-    
-    for file in l1_files:
-        
-        if "BL" in file:
-            ds_bl = xr.open_dataset(file)
-        
-            for i,elevation in enumerate(elevations):
-                ele_index = derive_elevation_index(ds_bl, elevation)
-                if ele_index==None:
-                    continue
-                else:
-                    time_diffs = np.abs(ds_bl["time"].values - datetime_np)
-                    min_idx = time_diffs.argmin()
-                    tbs[ele_index,0, :] = ds_bl["tb"].values[min_idx,ele_index,:]
-        elif "MWR_1C01" in file:
-            ds_c1 = xr.open_dataset(file)            
-            for i,elevation in enumerate(elevations):
-                for j,azi in enumerate(azimuths):
-                
-                
-                ############################################
-                    ##########################
-                    # if not isinstance(min_idx, int):
-                    '''
-                    # Derive mean value:
-                    time_idx_list = nearest_ele4elevation_mean(ds_c1["elevation_angle"].values,
-                        ds_c1["azimuth_angle"].values,
-                        ds_c1["time"].values, elevation, azi, datetime_np)
-
-                    if time_idx_list is None:
-                        pass
-                    else:
-                        # Mittelwert der TBs über mehrere Zeitpunkte
-                        tbs[i, j, :] = np.nanmean(ds_c1["tb"].values[time_idx_list, :], axis=0)
-                        print("MEan TBs: ", np.nanmean(ds_c1["tb"].values[time_idx_list, :], axis=0))
-                        print("elevation: ", ds_c1["elevation_angle"].values[ime_idx_list])
-                        print("azi: ", ds_c1["azimuth_angle"].values[ime_idx_list])
-                        
-                    '''    
-                    ##########################
-                    # Derive single value:
-                    time_idx = nearest_ele4elevation(ds_c1["elevation_angle"].values,\
-                        ds_c1["azimuth_angle"].values,\
-                        ds_c1["time"].values, elevation,azi, datetime_np)
-                    if time_idx==None:
-                        pass
-                    else:
-                        tbs[i,j, :] = ds_c1["tb"].values[time_idx,:]
-                        '''
-                        print("Point TBs: ", ds_c1["tb"].values[time_idx,:])
-                        print("elevation: ", ds_c1["elevation_angle"].values[time_idx])
-                        print("azi: ", ds_c1["azimuth_angle"].values[time_idx])
-                        '''
-                    ############################################    
-                        
-                        
-            if "latitude" in ds_c1.data_vars:
-                lat = ds_c1["latitude"].values[0]
-                lon = ds_c1["longitude"].values[0]
-            elif "lat" in ds_c1.data_vars:
-                lat = ds_c1["lat"].values
-                lon = ds_c1["lon"].values           
-        else: 
-            ###
-            # Reason for double n_freq warning: 
-            ds_mwr = xr.open_dataset(file)
-            ###
-            for i,elevation in enumerate(elevations):
-                # 
-                for j,azi in enumerate(azimuths):
-                    time_idx = nearest_ele4elevation(ds_mwr["ele"].values,\
-                        ds_mwr["azi"].values,\
-                        ds_mwr["time"].values, elevation,azi, datetime_np)
-                    if time_idx==None:
-                        pass
-                    else:
-                        tbs[i,j, :] = ds_mwr["tb"].values[time_idx,:]
-            if "latitude" in ds_mwr.data_vars:
-                lat = ds_mwr["latitude"].values[0]
-                lon = ds_mwr["longitude"].values[0]
-            elif "lat" in ds_mwr.data_vars:
-                lat = ds_mwr["lat"].values
-                lon = ds_mwr["lon"].values 
-    return tbs, lat, lon
-   
-##############################################################################
-
-def interpolate_preserve_old_points_fix(x_old, new_length):
-    total_new_points = new_length - len(x_old)
-    n_intervals = len(x_old) - 1
-    points_per_interval = total_new_points // n_intervals
-    remainder = total_new_points % n_intervals
-
-    x_new = []
-    for i in range(n_intervals):
-        
-        if i==0:
-            count = remainder + points_per_interval
-        else:
-            count = points_per_interval
-        segment = np.linspace(x_old[i], x_old[i+1], count+2)
-        
-        
-        # Punkte (bis auf letztes Intervall) ohne den letzten Punkt anhängen
-        if i < n_intervals - 1:
-            x_new.extend(segment[:-1])
-        else:
-            x_new.extend(segment)
-    x_new = np.sort(np.array(x_new))        
-    return np.array(x_new)
-
-####################################################################
-
-def interp2_180(x_array, y_array, x_new=None, n_levels=n_levels):
-    # if x_new is None:
-    x_new = interpolate_preserve_old_points_fix(x_array, n_levels)
-    interp_func = interp1d(x_array, y_array, kind='linear', fill_value="extrapolate")
-    y_new = interp_func(x_new)   
-    return x_new, y_new
-    
-##############################################################################
-
-def check_lwp_iwv(lwp, iwv):
-    if isinstance(lwp, np.ndarray):
-        lwp = np.nan    
-    elif lwp<0:
-        lwp = 0.
-    if isinstance(iwv, np.ndarray):
-        iwv = np.nan   
-    elif iwv<0:
-        iwv = 0.        
-    return lwp, iwv
-
-##############################################################################
-
-def get_profs_from_l2(l2_files, datetime_np, n_levels = n_levels):
-    data = np.full((4,n_levels), np.nan)
-    lwp, iwv = np.nan, np.nan
-
-    for file in l2_files:
-    
-        if "single" in file:
-            ds = xr.open_dataset(file)    
-            # time_diffs = np.abs(ds["time"].values - datetime_np)
-            # min_idx = time_diffs.argmin()
-            min_idx = nearest_ele4elevation(ds["elevation_angle"].values,\
-                ds["azimuth_angle"].values,\
-                ds["time"].values, 90., "ANY" , datetime_np)                
-            if not isinstance(min_idx, int):
-                data[0,:] = [np.nan]*n_levels   
-                data[1,:] = [np.nan]*n_levels   
-                data[3,:] = [np.nan]*n_levels   
-            else:                
-                x_new, y_new = interp2_180(ds["height"].values,\
-		        ds["temperature"].values[min_idx, :])
-                data[0,:] = x_new     
-                data[1,:] = y_new    
-                x_new, y_new = interp2_180(ds["height"].values,\
-		        ds["absolute_humidity"].values[min_idx, :])       
-                data[3,:] = y_new   
-            # Only for lwp and iwv:    
-            time_diffs = np.abs(ds["time"].values - datetime_np)
-            min_idx = time_diffs.argmin()
-            lwp = ds["lwp"].values[min_idx]         
-            iwv = ds["iwv"].values[min_idx]  
-                     
-        if "mwr0" in file and "_l2_ta_" in file:
-            ds = xr.open_dataset(file)
-            # time_diffs = np.abs(ds["time"].values - datetime_np)
-            # min_idx = time_diffs.argmin()
-            min_idx = nearest_ele4elevation(ds["ele"].values, ds["azi"].values,\
-                ds["time"].values, 90., "ANY" , datetime_np) 
-            if not isinstance(min_idx, int):
-                data[0,:] = [np.nan]*n_levels   
-                data[1,:] = [np.nan]*n_levels   
-            else:                            
-                x_new, y_new = interp2_180(ds["height"].values,\
-                     ds["ta"].values[min_idx, :])
-                data[0,:] = x_new     
-                data[1,:] = y_new
-                
-        elif "mwrBL0" in file and "_l2_ta_" in file:
-            ds = xr.open_dataset(file)
-            time_diffs = np.abs(ds["time"].values - datetime_np)
-            min_idx = time_diffs.argmin()
-            if not isinstance(min_idx, int):
-                data[2,:] = [np.nan]*n_levels     
-            else: 
-                x_new1, y_new = interp2_180(ds["height"].values,\
-                     ds["ta"].values[min_idx, :]) #, x_new=x_new)
-                data[2,:] = y_new    
-                        
-        elif "_hua_" in file:
-            ds = xr.open_dataset(file)
-            min_idx = nearest_ele4elevation(ds["ele"].values, ds["azi"].values,\
-                ds["time"].values, 90., "ANY" , datetime_np)  
-            if not isinstance(min_idx, int):
-                data[3,:] = [np.nan]*n_levels   
-            else:                 
-                x_new2, y_new = interp2_180(ds["height"].values,\
-                     ds["hua"].values[min_idx, :]) #, x_new=x_new)
-                data[3,:] = y_new  
-                
-        elif "_prw_" in file:
-            ds = xr.open_dataset(file)
-            # time_diffs = np.abs(ds["time"].values - datetime_np)
-            # min_idx = time_diffs.argmin()
-            min_idx = nearest_ele4elevation(ds["ele"].values, ds["azi"].values,\
-                ds["time"].values, 90., "ANY" , datetime_np)                 
-            iwv = ds["prw"].values[min_idx] 
-            
-        elif "_clwvi_" in file:
-            ds = xr.open_dataset(file)
-            min_idx = nearest_ele4elevation(ds["ele"].values, ds["azi"].values,\
-                ds["time"].values, 90., "ANY" , datetime_np)  
-            lwp = ds["clwvi"].values[min_idx] 
-            
-    lwp, iwv = check_lwp_iwv(lwp, iwv)
-    return data[:,::-1], lwp, iwv
-
-##############################################################################
-
-def get_mwr_data(datetime_np, mwrs,n_levels=n_levels):
-    dwdhat_pattern = "/home/aki/PhD_data/FESSTVaL_14GB/dwdhat/l*/*/*/*.nc"
-    foghat_pattern = "/home/aki/PhD_data/FESSTVaL_14GB/foghat/l*/*/*/*.nc"
-    sunhat_pattern = "/home/aki/PhD_data/FESSTVaL_14GB/sunhat/l*/*/*/*.nc"
-    tophat_pattern = "/home/aki/PhD_data/Socles/MWR_tophat/*.nc"
-    joyhat_pattern = "/home/aki/PhD_data/Vital_I/hatpro-joyhat/*.nc"
-    hamhat_pattern = "/home/aki/PhD_data/Vital_I/hamhat/*.nc"
-    datestring = str(datetime_np).replace("T","").replace(":","").replace("-","")[:8]
-    
-    if "dwdhat" in mwrs:
-        dwd_files = glob.glob(dwdhat_pattern)   
-        files = [file for file in dwd_files if datestring in file]   
-        l1_files = [file for file in files if "l1" in file]   
-        l2_files = [file for file in files if "l2" in file] 
-        tbs_dwdhat, lat, lon = get_tbs_from_l1(l1_files, datetime_np)
-        dwd_profiles, lwp_dwd, iwv_dwd = get_profs_from_l2(l2_files, datetime_np)
-        dwd_profiles[0,:] = dwd_profiles[0,:] + 112
-    else:
-        tbs_dwdhat = np.full((10, 72, 14), np.nan)
-        dwd_profiles = np.full((4,n_levels), np.nan)
-        lwp_dwd, iwv_dwd = np.nan, np.nan
-    if "foghat" in mwrs:
-        fog_files = glob.glob(foghat_pattern)
-        files = [file for file in fog_files if datestring in file]   
-        l1_files = [file for file in files if "l1" in file]   
-        l2_files = [file for file in files if "l2" in file] 
-        tbs_foghat, lat, lon = get_tbs_from_l1(l1_files, datetime_np)
-        fog_profiles, lwp_fog, iwv_fog = get_profs_from_l2(l2_files, datetime_np)
-        fog_profiles[0,:] = fog_profiles[0,:] + 112
-    else:
-        tbs_foghat = np.full((10, 72, 14), np.nan)
-        fog_profiles = np.full((4,n_levels), np.nan)
-        lwp_fog, iwv_fog = np.nan, np.nan        
-    if "sunhat" in mwrs:
-        sun_files = glob.glob(sunhat_pattern)
-        files = [file for file in sun_files if datestring in file]   
-        l1_files = [file for file in files if "l1" in file]   
-        l2_files = [file for file in files if "l2" in file] 
-        tbs_sunhat, lat, lon = get_tbs_from_l1(l1_files, datetime_np)
-        sun_profiles, lwp_sun, iwv_sun = get_profs_from_l2(l2_files, datetime_np)
-        sun_profiles[0,:] = sun_profiles[0,:] + 74
-    else:
-        tbs_sunhat = np.full((10, 72, 14), np.nan)    
-        sun_profiles = np.full((4,n_levels), np.nan)
-        lwp_sun, iwv_sun = np.nan, np.nan            
-    if "tophat" in mwrs:
-        top_files = glob.glob(tophat_pattern)
-        files = [file for file in top_files if datestring in file]   
-        l1_files = [file for file in files if "l1" in file]   
-        l2_files = [file for file in files if "l2" in file] 
-        tbs_tophat, lat, lon = get_tbs_from_l1(l1_files, datetime_np)
-        top_profiles, lwp_top, iwv_top = get_profs_from_l2(l2_files, datetime_np)
-        top_profiles[0,:] = top_profiles[0,:] + 110
-    else:
-        tbs_tophat = np.full((10, 72, 14), np.nan)
-        top_profiles = np.full((4,n_levels), np.nan)
-        lwp_top, iwv_top = np.nan, np.nan        
-    if "joyhat" in mwrs:
-        joy_files = glob.glob(joyhat_pattern)
-        files = [file for file in joy_files if datestring in file]   
-        l1_files = [file for file in files if "1C01" in file]   
-        l2_files = [file for file in files if "single" in file] 
-        tbs_joyhat, lat, lon = get_tbs_from_l1(l1_files, datetime_np)
-        joy_profiles, lwp_joy, iwv_joy = get_profs_from_l2(l2_files, datetime_np) 
-    else:
-        tbs_joyhat = np.full((10, 72, 14), np.nan)
-        joy_profiles = np.full((4,n_levels), np.nan)
-        lwp_joy, iwv_joy = np.nan, np.nan        
-    if "hamhat" in mwrs:
-        ham_files = glob.glob(hamhat_pattern)
-        files = [file for file in ham_files if datestring in file]   
-        l1_files = [file for file in files if "1C01" in file]   
-        l2_files = [file for file in files if "single" in file] 
-        tbs_hamhat, lat, lon = get_tbs_from_l1(l1_files, datetime_np)
-        ham_profiles, lwp_ham, iwv_ham = get_profs_from_l2(l2_files, datetime_np)
-    else:
-        tbs_hamhat = np.full((10, 72, 14), np.nan)
-        ham_profiles = np.full((4,n_levels), np.nan)
-        lwp_ham, iwv_ham = np.nan, np.nan        
-        
-    #######################################
-    # Then jsut read l1-files for now
-    # TBs of shape: (elevation x azimuth x n_chans) , for one timestep
-    integrals = [lwp_dwd, iwv_dwd, lwp_fog, iwv_fog, lwp_sun, iwv_sun,\
-        lwp_top, iwv_top, lwp_joy, iwv_joy,lwp_ham, iwv_ham ]
-    # [-0.001904392, 23.411406, -0.004118612, 31.603878, nan, nan, nan, nan, nan, nan, nan, nan]
-    # => Warum habe ich denn für sunhat, tophat, joyhat, hamhat keine sinnvollen Werte???
-    # Was mache ich mit negativen Werten???
-    
-    return tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat, tbs_joyhat,\
-        tbs_hamhat, dwd_profiles,fog_profiles, sun_profiles, top_profiles,\
-        joy_profiles, ham_profiles, integrals, lat, lon
-
-##############################################################################
-
 def check_units_physical_realism(p_array, t_array, ppmv_array,\
                 m_array, z_array, rh):
     if (np.array(p_array)>1100).any() or (np.array(p_array)<0).any():
@@ -943,6 +515,14 @@ def check_units_physical_realism(p_array, t_array, ppmv_array,\
     if (np.array(m_array)>20).any() or (np.array(m_array)<0).any():
         print("WARNING: Encoutered physically unrealistic value for mr in g/kg!!!")
     return 0  
+
+##############################################################################
+
+def check_rh_before_and_after(rh, rh_before):
+    for i, rh_bef in enumerate(rh_before):
+        if abs(rh_bef-rh[-(i+1)])>0.05:
+            print("Warning RH has been altered during processing!")
+    return 0
 
 ##############################################################################
 
@@ -1021,6 +601,7 @@ def summarize_many_profiles(pattern=\
                 length_value, p_array, t_array, ppmv_array, height_in_km,\
                     deg_lat, m_array, z_array, rh, deg_lon =\
                     read_radiosonde_nc_arms(file=file, crop=7, index=i)
+                rh_before = rh
             if length_value<150:
                 invalid_z = True
                 level_ppmvs[:,i,1] = np.array([np.nan]*n_levels)
@@ -1107,10 +688,12 @@ def summarize_many_profiles(pattern=\
             length_value, p_array, t_array, ppmv_array, height_in_km,\
                     deg_lat, m_array, z_array, rh, deg_lon =\
                     read_radiosonde_nc_arms(file=file, index=i)
+            rh_before = rh
         elif "Profile.txt" in file:
             length_value, p_array, t_array, ppmv_array, height_in_km,\
                     deg_lat, m_array, z_array, rh, deg_lon =\
                     read_radiosonde_txt(file=file)
+            rh_before = rh
         if length_value<150:
             invalid_z = True
             level_ppmvs[:,i,0] =    np.array([np.nan]*n_levels)
@@ -1185,11 +768,13 @@ def summarize_many_profiles(pattern=\
         # Check profiles on physical consistency:
         check_units_physical_realism(p_array, t_array, ppmv_array,\
             m_array, z_array, rh)     
-        check_moisture_consistency(m_array, rh, ppmv_array, t_array, p_array)
+        check_moisture_consistency(m_array, rh, ppmv_array,\
+            t_array, p_array, tag="after")
+        check_rh_before_and_after(rh, rh_before)
           
         #######################    
         #if i==6:
-         #  break    
+        #   break    
         ############################
     
     return profile_indices, level_pressures, level_temperatures, level_wvs,\
@@ -1401,7 +986,6 @@ def add_attrs_CF_conform(ds):
             "units": "K",
             "_FillValue": np.nan,
             "coordinates": "time elevation azimuth Latitude Longitude N_Channels",
-            "cell_methods": "time: mean"
         })
 
     # --- Surface variables ---
@@ -1452,7 +1036,6 @@ def add_attrs_CF_conform(ds):
         "history": f"Created {datetime.now(timezone.utc).isoformat()}Z by {os.getlogin()} using xarray",
         "license": "CC BY 4.0",
         "creator_name": "Alexander Pschera",
-        "creator_email": "apscher1@uni-koeln.de",
         "creator_institution": "University of Cologne",
         "contact": "apscher1@uni-koeln.de",
         "geospatial_lat_min": float(np.nanmin(lats)),
