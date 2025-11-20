@@ -82,6 +82,9 @@ if __name__=="__main__":
     # Maybe I will have to add other variables here:
     ds_new["TBs_ARMS_gb"] = ds_ar["TBs_ARMS_gb"]
     ds_new["TBs_PyRTlib_R24"] = ds_py["TBs_PyRTlib_R24"]
+    ds_new["TBs_PyRTlib_R17"] = ds_py["TBs_PyRTlib_R17"]
+    ds_new["TBs_PyRTlib_R98"] = ds_py["TBs_PyRTlib_R98"]
+    ds_new["TBs_PyRTlib_R20"] = ds_py["TBs_PyRTlib_R20"]
 
     # 2nd Print dataset to NetCDF
     ds_new.to_netcdf(args.output, format="NETCDF4_CLASSIC")

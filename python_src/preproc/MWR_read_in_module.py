@@ -41,7 +41,6 @@ azimuths = np.arange(0.,355.1,5.) # Interpoliere dazwischen!
 min_time_diff_thres = 15 
 n_levels=180
 max_elev_azi_diff = 0.05 #°
-time_window_minutes=2 # for averaging TBs
 
 dwdhat_pattern = "/home/aki/PhD_data/FESSTVaL_14GB/dwdhat/l*/*/*/*.nc"
 foghat_pattern = "/home/aki/PhD_data/FESSTVaL_14GB/foghat/l*/*/*/*.nc"
@@ -111,14 +110,14 @@ def nearest_ele4elevation(ele_values, azi_values, ele_times,\
 def nearest_ele4elevation_mean(ele_values, azi_values, ele_times,
         target_elevation, target_azi, datetime_np,\
         min_time_diff_thres=min_time_diff_thres,\
-        time_window_minutes=time_window_minutes):
+        max_elev_azi_diff=max_elev_azi_diff):
         
     # Boolean Maske für Elevation und Azimuth
-    match_mask = (abs(ele_values - target_elevation) < 0.05)
+    match_mask = (abs(ele_values - target_elevation)<max_elev_azi_diff)
     if target_azi == "ANY":
         match_mask2 = [True] * len(ele_values)
     else:
-        match_mask2 = (abs(azi_values - target_azi) < 0.05)
+        match_mask2 = (abs(azi_values - target_azi)<max_elev_azi_diff)
     final_mask = match_mask & match_mask2
     
     if not final_mask.any():
@@ -126,50 +125,17 @@ def nearest_ele4elevation_mean(ele_values, azi_values, ele_times,
     else:
         # Zeitdifferenzen zu allen passenden Zeitpunkten
         candidate_times = ele_times[final_mask]
-        
-        ##########################
-        print("***********************")
-        print("Azi: ", target_azi, "ele: ",target_elevation)
-        print("Input datetime: ", datetime_np)
-        print("candidate_times by angle (first, last, length): ",\
-            np.sort(candidate_times)[0],\
-            np.sort(candidate_times)[-1] , len(candidate_times))
-         
-        ###########################
         time_diffs = np.abs(candidate_times - datetime_np)
         minutes_diff_all = time_diffs.astype('timedelta64[s]').astype(float) / 60
         
         # Alle Indizes, die innerhalb des Zeitfensters liegen
-        valid_mask = minutes_diff_all <= time_window_minutes
+        valid_mask = minutes_diff_all <= min_time_diff_thres
         if not valid_mask.any():
             print("Excluded: no measurements within time window.")
             nearest_idx_list = None
         else:
-            candidate_indices = np.where(final_mask)[0][valid_mask]
-            ##############
-            print("candidate_times by time! (first, last, length): ",\
-                np.sort(candidate_times[candidate_indices])[0],\
-               np.sort(candidate_times[candidate_indices])[-1] , len(candidate_times[candidate_indices]))
-            print("EleAngles of candidate times (min, max): ", min(ele_values[candidate_indices]), max(ele_values[candidate_indices]))
-            print("Aziangles of candidate times (min, max): " ,min(azi_values[candidate_indices]), max(azi_values[candidate_indices]))
-            #################
-            nearest_idx_list = candidate_indices
+            nearest_idx_list = np.where(final_mask)[0][valid_mask]
 
-            '''
-            # Optional: Medianzeitpunkt berechnen (Informativ)
-            print("candidate_times[valid_mask] by time: ", candidate_times[valid_mask])
-            median_time = np.median(candidate_times[valid_mask])
-            
-            mwr_time = np.datetime64(median_time)
-            rs_time = datetime_np.astype('M8[us]').astype(datetime)
-            delta = mwr_time.astype('M8[us]').astype(datetime) - rs_time
-            minutes_diff = delta.total_seconds() / 60
-            
-            
-            if minutes_diff > min_time_diff_thres:
-                print("Excluded due to large median time diff from scan!")
-                nearest_idx_list = None
-            '''
     return nearest_idx_list
 
 ##############################################################################
@@ -179,6 +145,22 @@ def derive_elevation_index(ds_bl, elevation):
         if abs(ele-elevation)<0.05:
             return index
     return None
+    
+##############################################################################
+
+def time_indices_list4BL(ds_bl, datetime_np,\
+        min_time_diff_thres=min_time_diff_thres):
+        
+    time_diffs = np.abs(ds_bl["time"].values - datetime_np)  
+    time_diffs_seconds = time_diffs / np.timedelta64(1, 's') 
+    indices_within_15min =\
+        np.where(time_diffs_seconds <= min_time_diff_thres* 60)[0]  
+    indices_list = indices_within_15min.tolist() 
+    
+    if indices_list:
+        return indices_list
+    else:
+        return None
 
 ##############################################################################
 
@@ -189,100 +171,59 @@ def get_tbs_from_l1(l1_files, datetime_np, elevations=elevations,\
     
     for file in l1_files:
         
+        # BL-files:
         if "BL" in file:
             ds_bl = xr.open_dataset(file)
-        
             for i,elevation in enumerate(elevations):
                 ele_index = derive_elevation_index(ds_bl, elevation)
                 if ele_index==None:
                     continue
                 else:
-                    time_diffs = np.abs(ds_bl["time"].values - datetime_np)
-                    min_idx = time_diffs.argmin()
-                    tbs[ele_index,0, :] = ds_bl["tb"].values[min_idx,ele_index,:]
+                    idx_list = time_indices_list4BL(ds_bl, datetime_np)
+                    if idx_list is not None and len(idx_list) > 0:
+                        for ch in range(len(tbs[ele_index,0,:])):
+                            tbs[ele_index,0, ch] = np.nanmean(ds_bl["tb"].values[idx_list,ele_index,ch])
+                    
+        # 1C01-files:
         elif "MWR_1C01" in file:
             ds_c1 = xr.open_dataset(file)            
             for i,elevation in enumerate(elevations):
                 for j,azi in enumerate(azimuths):
-                
-                
-                ############################################
-                    ##########################
-                    # if not isinstance(min_idx, int):
-                    ##############################
-                    # Indices for mean:
                     time_idx_list = nearest_ele4elevation_mean(ds_c1["elevation_angle"].values,
                         ds_c1["azimuth_angle"].values,
                         ds_c1["time"].values, elevation, azi, datetime_np)
-                    '''
-                    # Derive mean value:
-                    time_idx_list = nearest_ele4elevation_mean(ds_c1["elevation_angle"].values,
-                        ds_c1["azimuth_angle"].values,
-                        ds_c1["time"].values, elevation, azi, datetime_np)
-
-                    if time_idx_list is None:
-                        pass
-                    else:
-                        # Mittelwert der TBs über mehrere Zeitpunkte
-                        tbs[i, j, :] = np.nanmean(ds_c1["tb"].values[time_idx_list, :], axis=0)
-                        print("MEan TBs: ", np.nanmean(ds_c1["tb"].values[time_idx_list, :], axis=0))
-                        print("elevation: ", ds_c1["elevation_angle"].values[ime_idx_list])
-                        print("azi: ", ds_c1["azimuth_angle"].values[ime_idx_list])
-                        
-                    '''    
-                    ##########################
-                    # Derive single value:
-                    time_idx = nearest_ele4elevation(ds_c1["elevation_angle"].values,\
-                        ds_c1["azimuth_angle"].values,\
-                        ds_c1["time"].values, elevation,azi, datetime_np)
-                    if time_idx==None:
-                        pass
-                    else:
-                        tbs[i,j, :] = ds_c1["tb"].values[time_idx,:]
-                        '''
-                        print("Point TBs: ", ds_c1["tb"].values[time_idx,:])
-                        print("elevation: ", ds_c1["elevation_angle"].values[time_idx])
-                        print("azi: ", ds_c1["azimuth_angle"].values[time_idx])
-                        '''
-                    ############################################    
-                        
-                        
+                    if time_idx_list is not None and len(time_idx_list) > 0:                       
+                        for ch in range(len(tbs[i,j, :])):
+                            tbs[i,j, ch] = np.nanmean(ds_c1["tb"].values[time_idx_list,ch])    
             if "latitude" in ds_c1.data_vars:
                 lat = ds_c1["latitude"].values[0]
                 lon = ds_c1["longitude"].values[0]
             elif "lat" in ds_c1.data_vars:
                 lat = ds_c1["lat"].values
-                lon = ds_c1["lon"].values           
+                lon = ds_c1["lon"].values
+                
+        # mwr-files:           
         else: 
             ###
             # Reason for double n_freq warning: 
             ds_mwr = xr.open_dataset(file)
             ###
             for i,elevation in enumerate(elevations):
-                # 
                 for j,azi in enumerate(azimuths):
-                
-                    ###############################
-                    # Indices for mean!
                     time_idx_list = nearest_ele4elevation_mean(ds_mwr["ele"].values,\
                         ds_mwr["azi"].values,\
                         ds_mwr["time"].values, elevation,azi, datetime_np)
-                    ##########################
-                
-                
-                    time_idx = nearest_ele4elevation(ds_mwr["ele"].values,\
-                        ds_mwr["azi"].values,\
-                        ds_mwr["time"].values, elevation,azi, datetime_np)
-                    if time_idx==None:
-                        pass
-                    else:
-                        tbs[i,j, :] = ds_mwr["tb"].values[time_idx,:]
+                        
+                    if time_idx_list is not None and len(time_idx_list) > 0:
+                        for ch in range(len(tbs[i,j, :])):
+                            tbs[i,j, ch] = np.nanmean(ds_mwr["tb"].values[time_idx_list,ch])     
             if "latitude" in ds_mwr.data_vars:
                 lat = ds_mwr["latitude"].values[0]
                 lon = ds_mwr["longitude"].values[0]
             elif "lat" in ds_mwr.data_vars:
                 lat = ds_mwr["lat"].values
                 lon = ds_mwr["lon"].values 
+                
     return tbs, lat, lon
    
 ##############################################################################

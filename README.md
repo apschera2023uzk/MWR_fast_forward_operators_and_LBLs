@@ -25,7 +25,7 @@ This repository provides:
 - Interfaces for running:
   - **RTTOV-gb**
   - **ARMS-gb** (to be integrated)
-  - **LBL models** (e.g. via mwrpy_ret or external)
+  - **LBL models** (e.g. via PyRTlib)
 - Tools for comparing modeled brightness temperatures with observations.
 - Plotting and statistical analysis utilities.
 
