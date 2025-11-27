@@ -284,79 +284,73 @@ def get_profs_from_l2(l2_files, datetime_np, n_levels = n_levels):
     
         if "single" in file:
             ds = xr.open_dataset(file)    
-            # time_diffs = np.abs(ds["time"].values - datetime_np)
-            # min_idx = time_diffs.argmin()
-            min_idx = nearest_ele4elevation(ds["elevation_angle"].values,\
+            time_idx_list = nearest_ele4elevation_mean(\
+                ds["elevation_angle"].values,\
                 ds["azimuth_angle"].values,\
-                ds["time"].values, 90., "ANY" , datetime_np)                
-            if not isinstance(min_idx, int):
-                data[0,:] = [np.nan]*n_levels   
-                data[1,:] = [np.nan]*n_levels   
-                data[3,:] = [np.nan]*n_levels   
-            else:                
+                ds["time"].values, 90., "ANY" , datetime_np)       
+            if time_idx_list is not None and len(time_idx_list) > 0:   
+                mean_temps = np.nanmean(\
+                     ds["temperature"].values[time_idx_list, :], axis=0)
                 x_new, y_new = interp2_180(ds["height"].values,\
-		        ds["temperature"].values[min_idx, :])
+		        mean_temps)
                 data[0,:] = x_new     
-                data[1,:] = y_new    
+                data[1,:] = y_new  
+                mean_hums = np.nanmean(\
+                    ds["absolute_humidity"].values[time_idx_list, :], axis=0)
                 x_new, y_new = interp2_180(ds["height"].values,\
-		        ds["absolute_humidity"].values[min_idx, :])       
-                data[3,:] = y_new   
-            # Only for lwp and iwv:    
-            time_diffs = np.abs(ds["time"].values - datetime_np)
-            min_idx = time_diffs.argmin()
-            lwp = ds["lwp"].values[min_idx]         
-            iwv = ds["iwv"].values[min_idx]  
+		        mean_hums)       
+                data[3,:] = y_new  
+                lwp = np.nanmean(ds["lwp"].values[time_idx_list])         
+                iwv = np.nanmean(ds["iwv"].values[time_idx_list])
                      
         if "mwr0" in file and "_l2_ta_" in file:
             ds = xr.open_dataset(file)
-            # time_diffs = np.abs(ds["time"].values - datetime_np)
-            # min_idx = time_diffs.argmin()
-            min_idx = nearest_ele4elevation(ds["ele"].values, ds["azi"].values,\
-                ds["time"].values, 90., "ANY" , datetime_np) 
-            if not isinstance(min_idx, int):
-                data[0,:] = [np.nan]*n_levels   
-                data[1,:] = [np.nan]*n_levels   
-            else:                            
+            time_idx_list = nearest_ele4elevation_mean(\
+                ds["ele"].values, ds["azi"].values,\
+                ds["time"].values, 90., "ANY" , datetime_np)    
+            if time_idx_list is not None and len(time_idx_list) > 0: 
+                mean_temp = np.nanmean(ds["ta"].values[time_idx_list, :],axis=0)
                 x_new, y_new = interp2_180(ds["height"].values,\
-                     ds["ta"].values[min_idx, :])
+                     mean_temp)
                 data[0,:] = x_new     
                 data[1,:] = y_new
                 
         elif "mwrBL0" in file and "_l2_ta_" in file:
             ds = xr.open_dataset(file)
-            time_diffs = np.abs(ds["time"].values - datetime_np)
-            min_idx = time_diffs.argmin()
-            if not isinstance(min_idx, int):
-                data[2,:] = [np.nan]*n_levels     
-            else: 
-                x_new1, y_new = interp2_180(ds["height"].values,\
-                     ds["ta"].values[min_idx, :]) #, x_new=x_new)
-                data[2,:] = y_new    
+            time_idx_list = time_indices_list4BL(ds, datetime_np)
+            if time_idx_list is not None and len(time_idx_list) > 0:
+                mean_BL = np.nanmean(ds["ta"].values[time_idx_list, :], axis=0)
+                x_new1, y_new_after = interp2_180(
+                    ds["height"].values,
+                    mean_BL
+                )
+                data[2,:] = y_new_after                 
                         
         elif "_hua_" in file:
             ds = xr.open_dataset(file)
-            min_idx = nearest_ele4elevation(ds["ele"].values, ds["azi"].values,\
-                ds["time"].values, 90., "ANY" , datetime_np)  
-            if not isinstance(min_idx, int):
-                data[3,:] = [np.nan]*n_levels   
-            else:                 
-                x_new2, y_new = interp2_180(ds["height"].values,\
-                     ds["hua"].values[min_idx, :]) #, x_new=x_new)
-                data[3,:] = y_new  
+            time_idx_list = time_indices_list4BL(ds, datetime_np)
+            if time_idx_list is not None and len(time_idx_list) > 0:
+                mean_hua = np.nanmean(ds["hua"].values[time_idx_list, :], axis=0)
+                x_new2, y_new_after = interp2_180(
+                    ds["height"].values,
+                    mean_hua
+                )
+                data[3,:] = y_new_after               
                 
         elif "_prw_" in file:
             ds = xr.open_dataset(file)
-            # time_diffs = np.abs(ds["time"].values - datetime_np)
-            # min_idx = time_diffs.argmin()
-            min_idx = nearest_ele4elevation(ds["ele"].values, ds["azi"].values,\
-                ds["time"].values, 90., "ANY" , datetime_np)                 
-            iwv = ds["prw"].values[min_idx] 
+            time_idx_list = time_indices_list4BL(ds, datetime_np)
+
+            if time_idx_list is not None and len(time_idx_list) > 0:
+                iwv_after = np.nanmean(ds["prw"].values[time_idx_list])
+                iwv = iwv_after
             
         elif "_clwvi_" in file:
             ds = xr.open_dataset(file)
-            min_idx = nearest_ele4elevation(ds["ele"].values, ds["azi"].values,\
-                ds["time"].values, 90., "ANY" , datetime_np)  
-            lwp = ds["clwvi"].values[min_idx] 
+            time_idx_list = time_indices_list4BL(ds, datetime_np)
+            if time_idx_list is not None and len(time_idx_list) > 0:
+                lwp_after = np.nanmean(ds["clwvi"].values[time_idx_list])
+                lwp = lwp_after        
             
     lwp, iwv = check_lwp_iwv(lwp, iwv)
     return data[:,::-1], lwp, iwv

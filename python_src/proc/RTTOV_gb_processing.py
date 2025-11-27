@@ -184,7 +184,7 @@ def run_rttov_gb(outfile, valid_indices, args,nlevels = n_levels):
         
     # 3rd run RTTOV-gb
     rttov_dir = os.path.dirname(args.script)
-    subprocess.run(["bash", args.script, "ARCH=gfortran"], cwd=rttov_dir)    
+    subprocess.run(["bash", args.script, "ARCH=gfortran-openmp"], cwd=rttov_dir)    
     
     return 0
     

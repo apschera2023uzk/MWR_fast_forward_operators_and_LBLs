@@ -1,2 +1,3 @@
 python_src/merge_data_into_netCDF/__pycache__
+*/__pycache__/*
 *output.txt
