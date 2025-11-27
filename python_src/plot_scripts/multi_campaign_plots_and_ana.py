@@ -1,0 +1,310 @@
+#!/usr/bin/env python3
+
+##############################################################################
+# 1 Necessary modules
+##############################################################################
+
+import argparse
+import xarray as xr
+import pandas as pd
+import numpy as np
+import glob
+from scipy.stats import pearsonr
+import os
+from scipy.interpolate import interp1d
+from datetime import datetime, timedelta
+import matplotlib.pyplot as plt
+import matplotlib
+import matplotlib.image as mpimg
+from PIL import Image
+
+
+##############################################################################
+# 1.5 Parameters:
+##############################################################################
+# Plotstyles:
+fs = 25
+plt.rc('font', size=fs) 
+plt.style.use('seaborn-poster')
+matplotlib.use("Qt5Agg")
+
+# Clear sky LWP threshold
+thres_lwp=0.04 # kg m-2
+n_chans=14
+model_tbs=["TBs_PyRTlib_R24",'TBs_RTTOV_gb', 'TBs_ARMS_gb',"TBs_PyRTlib_R98"]
+n_elev = 10
+
+
+##############################################################################
+# 2nd Used functions:
+##############################################################################
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+        description="Scatter plots of TB MWR against sondes e.g.."
+    )
+    parser.add_argument(
+        "--NetCDF", "-nc",
+        type=str,
+        default=os.path.expanduser("~/PhD_data/TB_preproc_and_proc_results/3campaigns_3models_all_results.nc"),
+        help="Input data"
+    )
+    parser.add_argument(
+        "--output", "-o",
+        type=str,
+        default=os.path.expanduser("~/PhD_plots/Nov_Dec_2025/"),
+        help="Output plot directory"
+    )
+
+    return parser.parse_args()
+
+##############################################################################
+
+def clear_sky_dataset(ds, thres_lwp=thres_lwp):
+    exclude =False
+    exclude_times = []
+    
+    for i, timestamp in enumerate(ds["time"].values):
+        
+        water_sum = (
+            np.nansum(np.nan_to_num(ds["Dwdhat_LWP"].values[i])) +
+            np.nansum(np.nan_to_num(ds["Foghat_LWP"].values[i])) +
+            np.nansum(np.nan_to_num(ds["Sunhat_LWP"].values[i])) +
+            np.nansum(np.nan_to_num(ds["Tophat_LWP"].values[i])) +
+            np.nansum(np.nan_to_num(ds["Joyhat_LWP"].values[i])) +
+            np.nansum(np.nan_to_num(ds["Hamhat_LWP"].values[i]))
+        )
+        
+        #######################################################
+        # water_sum+=np.nansum(ds["LWP_radiosonde"].values[i,0])
+        ############################################
+        
+        # water_sum in kg m-2
+        # 15-40 g m-2 == 0.015-0.040
+        if water_sum>thres_lwp:
+            exclude=True
+            # print("Water sum: ",water_sum)
+        elif water_sum<=thres_lwp: # or np.isnan(water_sum):
+            exclude=False
+
+        if exclude:
+            exclude_times.append(timestamp)
+            exclude =False
+    
+    # Remove timesteps from ds:
+    for timestamp in exclude_times:
+         ds = ds.sel(time=ds.time != timestamp)
+    
+    return ds
+    
+##############################################################################
+
+def stats_by_channel(values, references, n_chans=n_chans):
+    # Equation taken from Shi et al. 2024 preprint / 2025
+    # different sign than Shi et al!
+    std_array = []
+    bias_array = []
+    rmse_array = []
+    
+    print("values", np.shape(values))
+    print("references", np.shape(references))
+    
+    for i in range(n_chans):
+        deviation = values[:,i] - references[:,i]
+        avg = np.nansum((values[:,i] -references[:,i])/ len(ds["time"]))
+        std = np.sqrt(np.nansum((deviation-avg)**2)/len(ds["time"]))
+        rmse = np.sqrt(np.nansum((values[:,i] -references[:,i])**2/len(ds["time"])))
+        std_array.append(std)
+        bias_array.append(avg)
+        rmse_array.append(rmse)
+        
+    return np.array(std_array), np.array(bias_array), rmse_array
+    
+##############################################################################
+
+def select_ds_camp_loc(ds, campaign, location, crop_index=0):
+    # Filter Datensatz nach Kampagne und Ort
+    mask = (ds["Campaign"] == campaign) & (ds["Location"] == location)
+    ds_sel = ds.sel(time=ds["time"].values[mask.values]).isel(Crop=crop_index)
+    return ds_sel
+
+##############################################################################
+
+def plot_std_bars(stds, labels, channels, channel_labels, elev,
+        n_valid, save_path):
+        
+    colors = ["blue","orange", "green", "red","purple","brown",\
+        "pink", "gray","olive","cyan"]
+    campaign = ds["Campaign"].values[0]
+    location = ds["Location"].values[0]
+    fig, ax = plt.subplots(figsize=(10,6))
+    plt.suptitle(f"Campaign: {campaign}, Location: {location}, Elevation: {elev:.1f}°, (N: {n_valid})")
+    ax.set_title("Standard deviation of Brightness Temperature")
+    
+    width = 0.2  # Width of each bar
+    offsets = np.linspace(-width*1.5, width*1.5, len(stds))
+    
+    for std, lbl, color, offset in zip(stds, labels, colors, offsets):
+        if lbl.strip() != " (MWR)":  # Only plot if label is not empty
+            ax.bar(channels + offset, std, width, label=lbl, color=color, alpha=0.7)
+    
+    ax.set_xticks(channels)
+    ax.set_xticklabels(channel_labels)
+    ax.set_xlabel("Channels")
+    ax.set_xlim(channels.min() - 1, channels.max() + 1)
+    ax.set_ylabel("Standard Deviation [K]")
+    ax.legend()
+    plt.tight_layout()
+    
+    plt.savefig(save_path, dpi=600)
+    plt.close()
+    
+##############################################################################
+
+def analyze_mwr_model_stats(ds, args, elev_idx=0, model_tbs=model_tbs):
+
+    n_chans = ds["TBs_dwdhat"].sizes['N_Channels']
+    n_time = ds["TBs_dwdhat"].sizes['time']
+    
+    # 1. Check which MWRs have valid data (not all NaNs)
+    mwr_vars = ['TBs_dwdhat', 'TBs_foghat', 'TBs_sunhat', 'TBs_tophat',\
+        'TBs_joyhat', 'TBs_hamhat']
+    valid_mwrs = []
+    mwr_labels = []
+    
+    print("Valid timesteps per instrument:")
+    for var in mwr_vars:
+        if var in ds:
+            ################
+            mwr_data = ds[var].values[:, elev_idx, 0, :]  # Take first azimuth
+            ##############
+            valid_times = np.sum(~np.isnan(mwr_data).all(axis=1))
+            print(f"{var}: {valid_times} valid timesteps")
+            if valid_times > 0:  # Include if any valid data
+                valid_mwrs.append(var)
+                # Extract instrument name from variable name
+                name = var.replace('TBs_', '')
+                mwr_labels.append(f"{name.title()} (MWR)")
+    
+    # 2. Check models
+    valid_models = []
+    model_labels = []
+    for var in model_tbs:
+        if var in ds:
+            model_data = ds[var].values[:, :, elev_idx] 
+            valid_times = np.sum(~np.isnan(model_data).all(axis=1))
+            print(f"{var}: {valid_times} valid timesteps")
+            if valid_times > 0:
+                valid_models.append(var)
+                model_labels.append(var.replace('TBs_', '').replace('_gb', '-gb') + " (model)")
+    
+    # 3. n_valid = intersection of valid timesteps across ALL instruments
+    if not valid_mwrs and not valid_models:
+        print("No valid instruments found!")
+        return
+    
+    # Find common valid timesteps
+    common_valid_mask = np.ones(n_time, dtype=bool)
+    for var in valid_mwrs + valid_models:
+        if var in ds and 'TBs_' in var:
+            if var in mwr_vars:
+                data = ds[var].values[:, elev_idx, 0, :]
+            else:  # model
+                data = ds[var].values[:, :, elev_idx]
+            common_valid_mask &= ~np.isnan(data).all(axis=1)
+    
+    n_valid = np.sum(common_valid_mask)
+    print(f"\nCommon valid timesteps (n_valid): {n_valid}")
+    
+    # 4. Calculate statistics: MWRs as reference, models vs MWRs
+    all_values = []  # Model TBs
+    
+    # Stack valid MWRs as references
+    for mwr_var in valid_mwrs:
+        mwr_tb = ds[mwr_var].values[common_valid_mask, elev_idx, 0, :]
+        # Indices: 1. Chosen times, 2. one elev 3. one azimuth 4. all chans
+        all_values.append(mwr_tb)
+    
+    # Models as values to compare against reference
+    for i, model_var in enumerate(valid_models):
+        model_tb = ds[model_var].values[common_valid_mask, :, elev_idx]
+        # Indices: 1. Chosen times, 2. all chs 3. one elv 4. crop already eliminated...
+        if i==0:
+            reference_tb = model_tb
+        else: 
+            all_values.append(model_tb)
+    
+    # 5. Calculate stats
+    if len(all_values) > 0:
+        stds, biases, rmses = stats_by_channel(np.vstack(all_values), reference_tb, n_chans)
+        
+        # Labels for plot
+        plot_labels = model_labels
+        plot_stds = stds
+        
+        # 6. Create plot
+        channels = np.arange(n_chans)
+        channel_labels = [f"Ch{i+1}" for i in range(n_chans)]  # Adjust as needed
+        
+        ###################
+        # Plot stds:
+        save_path = args.output+\
+            f"/{ds['Campaign'].values[0]}_{ds['Location'].values[0]}_elevation_{elev_idx}_std_by_channel.png"
+        plot_std_bars(plot_stds, plot_labels, channels, channel_labels, elev_idx, n_valid, save_path)
+        
+        # Plot Bias:
+        
+        
+        # Plot bias and std:
+        
+        
+        
+        ##################
+        
+        print(f"Plot saved to: {save_path}")
+        return stds, biases, rmses, n_valid
+    
+    else:
+        print("No model data to compare!")
+        return None
+
+##############################################################################
+# 3 Main
+##############################################################################
+
+if __name__ == "__main__":
+    args = parse_arguments()
+    nc_out_path=args.NetCDF
+    ds = xr.open_dataset(nc_out_path)
+    
+    # 1st Filtering dataset:
+    ds_clear = clear_sky_dataset(ds)
+    ds_sel = select_ds_camp_loc(ds_clear, "FESSTVaL", "RAO_Lindenberg")
+    
+    # 2nd Applying statistics to dataset:
+    for elev_idx in range(n_elev):
+        stds, biases, rmses, n_valid = analyze_mwr_model_stats(ds_sel, args,\
+             elev_idx=elev_idx)
+    ##################
+    # How many valid values do I have (also consider elevation!!!)
+    # calc statistics for all instruments / Models...
+    # Ich sollte die instrumente nicht selbst auswählen müssen...
+    # aber ich sollte ein paar PyRTlib Rs und RTTOV oder ARMS-gb an und ausstellen können....
+    ###############
+    
+
+    # 3rd plotting dataset: 
+    # Apply std plottig
+    
+    # Further functions for bias and bias + std frame
+    
+    # make some scatter plots - with RMSE std and bias
+
+    
+
+
+
+
+
+
+
