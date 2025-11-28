@@ -23,7 +23,7 @@ from PIL import Image
 # 1.5 Parameters:
 ##############################################################################
 # Plotstyles:
-fs = 25
+fs = 20
 plt.rc('font', size=fs) 
 plt.style.use('seaborn-poster')
 matplotlib.use("Qt5Agg")
@@ -31,8 +31,12 @@ matplotlib.use("Qt5Agg")
 # Clear sky LWP threshold
 thres_lwp=0.04 # kg m-2
 n_chans=14
-model_tbs=["TBs_PyRTlib_R24",'TBs_RTTOV_gb', 'TBs_ARMS_gb',"TBs_PyRTlib_R98"]
+model_tbs=["TBs_PyRTlib_R24",'TBs_RTTOV_gb', 'TBs_ARMS_gb']
+mwr_vars = ['TBs_dwdhat', 'TBs_foghat', 'TBs_sunhat', 'TBs_tophat',\
+        'TBs_joyhat', 'TBs_hamhat']
+ref_label = "PyRTlib R24 LBL"
 n_elev = 10
+elevations = np.array([90., 30, 19.2, 14.4, 11.4, 8.4,  6.6,  5.4, 4.8,  4.2])
 
 
 ##############################################################################
@@ -106,9 +110,6 @@ def stats_by_channel(values, references, n_chans=n_chans):
     bias_array = []
     rmse_array = []
     
-    print("values", np.shape(values))
-    print("references", np.shape(references))
-    
     for i in range(n_chans):
         deviation = values[:,i] - references[:,i]
         avg = np.nansum((values[:,i] -references[:,i])/ len(ds["time"]))
@@ -131,15 +132,15 @@ def select_ds_camp_loc(ds, campaign, location, crop_index=0):
 ##############################################################################
 
 def plot_std_bars(stds, labels, channels, channel_labels, elev,
-        n_valid, save_path):
+        n_valid, save_path,elevations=elevations, thres_lwp=thres_lwp):
         
-    colors = ["blue","orange", "green", "red","purple","brown",\
+    colors = ["blue", "green", "red","orange","purple","brown",\
         "pink", "gray","olive","cyan"]
     campaign = ds["Campaign"].values[0]
     location = ds["Location"].values[0]
-    fig, ax = plt.subplots(figsize=(10,6))
-    plt.suptitle(f"Campaign: {campaign}, Location: {location}, Elevation: {elev:.1f}°, (N: {n_valid})")
-    ax.set_title("Standard deviation of Brightness Temperature")
+    fig, ax = plt.subplots(figsize=(14,9))
+    plt.suptitle(f"Campaign: {campaign}, location: {location}, \nelevation: {elevations[elev]:.1f}°, (N: {n_valid} / LWP > {thres_lwp} kg m-2)")
+    ax.set_title("Standard deviation of brightness temperature deviation")
     
     width = 0.2  # Width of each bar
     offsets = np.linspace(-width*1.5, width*1.5, len(stds))
@@ -152,32 +153,106 @@ def plot_std_bars(stds, labels, channels, channel_labels, elev,
     ax.set_xticklabels(channel_labels)
     ax.set_xlabel("Channels")
     ax.set_xlim(channels.min() - 1, channels.max() + 1)
-    ax.set_ylabel("Standard Deviation [K]")
+    ax.set_ylabel("Standard Deviation of Brightness Temperature [K]")
     ax.legend()
     plt.tight_layout()
     
     plt.savefig(save_path, dpi=600)
     plt.close()
+
+##############################################################################
+    
+def plot_bias_lines(all_biases, all_labels, channels, channel_labels, elev,
+                   n_valid, save_path, elevations=elevations,\
+                   thres_lwp=thres_lwp, ref_label=ref_label):
+    
+    colors = ["blue", "green", "red","orange","purple","brown",\
+        "pink", "gray","olive","cyan"]
+    campaign = ds["Campaign"].values[0]
+    location = ds["Location"].values[0]
+    
+    fig, ax = plt.subplots(figsize=(14, 9))
+    elev_label = elevations[elev] if elevations is not None else elev
+    
+    title_campaign = campaign if campaign is not None else "Unknown Campaign"
+    title_location = location if location is not None else "Unknown Location"
+    
+    plt.suptitle(f"Campaign: {title_campaign}, location: {title_location}, \n"
+                 f"elevation: {elev_label:.1f}°, (N: {n_valid})")
+    ax.set_title("Bias of brightness temperature (MWR-R24) / (model-R24)")
+    
+    ax.plot(channels, [0.] * len(channels), label=ref_label, color="black", linewidth=2)
+    
+    for bias, label, color in zip(all_biases, all_labels, colors):
+        if label.strip() != "":  # Only plot if label is not empty
+            ax.plot(channels, bias, label=label, color=color, alpha=0.8, linewidth=2)
+    
+    ax.set_xticks(channels)
+    ax.set_xticklabels(channel_labels)
+    ax.set_xlabel("Channels")
+    ax.set_xlim(channels.min() - 1, channels.max() + 1)
+    ax.set_ylabel("Bias of Brightness Temperature [K]")
+    ax.legend()
+    ax.grid(True)
+    ax.set_ylim([-10, 10])  # Adjust as needed for your data
+    
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=600)
+    plt.close()
+
+##############################################################################
+
+def plot_bias_std_lines(all_biases, all_stds, all_labels, channels,\
+        channel_labels, elev,n_valid, save_path, elevations=elevations,\
+        thres_lwp=thres_lwp, ref_label=ref_label):
+    
+    colors = ["blue", "green", "red", "orange", "purple", "brown",
+              "pink", "gray", "olive", "cyan"]
+    campaign = ds["Campaign"].values[0]
+    location = ds["Location"].values[0]
+    
+    elev_label = elevations[elev] if elevations is not None else elev
+    
+    plt.figure(figsize=(14, 9))
+    plt.suptitle(f"Campaign: {campaign}, location: {location}, \n"
+                 f"elevation: {elev_label:.1f}°, (N: {n_valid} / LWP > {thres_lwp} kg m-2)")
+    
+    plt.title("Bias and standard deviation of brightness temperature error")
+    plt.xlabel("Channels")
+    plt.ylabel("Bias of Brightness Temperature [K]")
+    
+    # Plot zero reference line
+    plt.plot(channels, [0.] * len(channels), label=ref_label, color="black", linewidth=2)
+    
+    # Plot biases with lines and their std with fill_between shaded areas
+    for bias, std, label, color in zip(all_biases, all_stds, all_labels, colors):
+        if label.strip() != "":
+            plt.plot(channels, bias, label=label, color=color, alpha=0.8, linewidth=2)
+            plt.fill_between(channels, bias - std, bias + std, color=color, alpha=0.2)
+    
+    plt.xticks(channels, channel_labels)
+    plt.xlim(channels.min() - 1, channels.max() + 1)
+    plt.ylim([-10, 10])  # Adjust as needed
+    
+    plt.legend(fontsize=12)
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=600)
+    plt.close()
     
 ##############################################################################
 
-def analyze_mwr_model_stats(ds, args, elev_idx=0, model_tbs=model_tbs):
-
-    n_chans = ds["TBs_dwdhat"].sizes['N_Channels']
-    n_time = ds["TBs_dwdhat"].sizes['time']
-    
-    # 1. Check which MWRs have valid data (not all NaNs)
-    mwr_vars = ['TBs_dwdhat', 'TBs_foghat', 'TBs_sunhat', 'TBs_tophat',\
-        'TBs_joyhat', 'TBs_hamhat']
+def check_model_and_mwr_data_availability(ds, elev_idx, ref_mod,\
+        model_tbs,azi_idx=0, mwr_vars=mwr_vars):
+        
+    # 1. Check MWRs:
     valid_mwrs = []
     mwr_labels = []
     
     print("Valid timesteps per instrument:")
     for var in mwr_vars:
         if var in ds:
-            ################
-            mwr_data = ds[var].values[:, elev_idx, 0, :]  # Take first azimuth
-            ##############
+            mwr_data = ds[var].values[:, elev_idx, azi_idx, :]  # Take first azimuth
             valid_times = np.sum(~np.isnan(mwr_data).all(axis=1))
             print(f"{var}: {valid_times} valid timesteps")
             if valid_times > 0:  # Include if any valid data
@@ -197,76 +272,122 @@ def analyze_mwr_model_stats(ds, args, elev_idx=0, model_tbs=model_tbs):
             if valid_times > 0:
                 valid_models.append(var)
                 model_labels.append(var.replace('TBs_', '').replace('_gb', '-gb') + " (model)")
-    
-    # 3. n_valid = intersection of valid timesteps across ALL instruments
-    if not valid_mwrs and not valid_models:
-        print("No valid instruments found!")
-        return
-    
+    if ref_mod in valid_models:
+        valid_models.remove(ref_mod)
+    if ref_mod.replace('TBs_', '').replace('_gb', '-gb') + " (model)" in model_labels:
+        model_labels.remove(ref_mod.replace('TBs_', '').replace('_gb', '-gb') + " (model)")
+        
+    return valid_mwrs, mwr_labels, valid_models, model_labels
+
+##############################################################################
+
+def valid_indices_and_count(ds, valid_mwrs, mwr_labels, valid_models,\
+        model_labels,azi_idx=0):
+
     # Find common valid timesteps
+    n_time = ds[valid_mwrs[0]].sizes['time']
     common_valid_mask = np.ones(n_time, dtype=bool)
     for var in valid_mwrs + valid_models:
         if var in ds and 'TBs_' in var:
             if var in mwr_vars:
-                data = ds[var].values[:, elev_idx, 0, :]
+                data = ds[var].values[:, elev_idx, azi_idx, :]
             else:  # model
                 data = ds[var].values[:, :, elev_idx]
             common_valid_mask &= ~np.isnan(data).all(axis=1)
-    
     n_valid = np.sum(common_valid_mask)
-    print(f"\nCommon valid timesteps (n_valid): {n_valid}")
-    
-    # 4. Calculate statistics: MWRs as reference, models vs MWRs
+    print(f"Common valid timesteps (n_valid): {n_valid}\n")
+
+    return common_valid_mask, n_valid
+
+##############################################################################
+
+def get_all_TB_values_and_ref_TBs(ds, valid_mwrs, mwr_labels, valid_models,\
+        model_labels,common_valid_mask,azi_idx=0, ref_mod=model_tbs[0]):
     all_values = []  # Model TBs
     
     # Stack valid MWRs as references
     for mwr_var in valid_mwrs:
-        mwr_tb = ds[mwr_var].values[common_valid_mask, elev_idx, 0, :]
+        mwr_tb = ds[mwr_var].values[common_valid_mask, elev_idx, azi_idx, :]
         # Indices: 1. Chosen times, 2. one elev 3. one azimuth 4. all chans
         all_values.append(mwr_tb)
     
     # Models as values to compare against reference
     for i, model_var in enumerate(valid_models):
         model_tb = ds[model_var].values[common_valid_mask, :, elev_idx]
-        # Indices: 1. Chosen times, 2. all chs 3. one elv 4. crop already eliminated...
-        if i==0:
-            reference_tb = model_tb
-        else: 
-            all_values.append(model_tb)
+        all_values.append(model_tb)
+            
+    # Get reference TBs:
+    reference_tb = ds[ref_mod].values[common_valid_mask, :, elev_idx]
+            
+    return all_values, reference_tb
+
+##############################################################################
+
+def analyze_mwr_model_stats(ds, args, elev_idx=0, model_tbs=model_tbs,\
+        elevations=elevations, ref_mod=model_tbs[0],\
+        n_chans=n_chans,mwr_vars=mwr_vars,azi_idx=0, thres_lwp=thres_lwp):
+  
+    # 1st Derive available MWRs and models:  
+    valid_mwrs, mwr_labels, valid_models, model_labels =\
+           check_model_and_mwr_data_availability(ds,\
+           elev_idx, ref_mod, model_tbs)
+
+    # 2nd Find number of valid timesteps and their indices:
+    common_valid_mask, n_valid = valid_indices_and_count(ds, valid_mwrs,\
+          mwr_labels, valid_models,model_labels)
     
-    # 5. Calculate stats
-    if len(all_values) > 0:
-        stds, biases, rmses = stats_by_channel(np.vstack(all_values), reference_tb, n_chans)
-        
-        # Labels for plot
-        plot_labels = model_labels
-        plot_stds = stds
-        
-        # 6. Create plot
-        channels = np.arange(n_chans)
-        channel_labels = [f"Ch{i+1}" for i in range(n_chans)]  # Adjust as needed
-        
-        ###################
-        # Plot stds:
-        save_path = args.output+\
-            f"/{ds['Campaign'].values[0]}_{ds['Location'].values[0]}_elevation_{elev_idx}_std_by_channel.png"
-        plot_std_bars(plot_stds, plot_labels, channels, channel_labels, elev_idx, n_valid, save_path)
-        
-        # Plot Bias:
-        
-        
-        # Plot bias and std:
-        
-        
-        
-        ##################
-        
-        print(f"Plot saved to: {save_path}")
-        return stds, biases, rmses, n_valid
+    # 3rd Get all TB values of valid timestep and reference TBs:
+    all_values, reference_tb = get_all_TB_values_and_ref_TBs(ds,\
+        valid_mwrs, mwr_labels, valid_models, model_labels, common_valid_mask)
+         
+    ####   
+    # 4th Calculate stats using loop
+    all_stds = []
+    all_biases = []
+    all_rmses = []
+    all_labels = []
+
+    for values, label in zip(all_values, mwr_labels+model_labels):
     
-    else:
-        print("No model data to compare!")
-        return None
+        # print("Label: ", label)
+        # print("value shape: ", np.shape(values))
+    
+        stds, biases, rmses = stats_by_channel(values, reference_tb, n_chans)
+        all_stds.append(stds)
+        all_labels.append(label)
+        all_biases.append(biases)
+        all_rmses.append(rmses)
+
+    # Convert to numpy arrays for plotting (assuming all_stds is list of arrays)
+    plot_stds = np.array(all_stds)  # Shape: (n_datasets, n_chans)
+    plot_labels = all_labels
+     ####  
+
+    # 5th Create plots:
+    channels = np.arange(n_chans)
+    channel_labels = [f"Ch{i+1}" for i in range(n_chans)]  # Adjust as needed
+
+    # Plot stds:
+    save_path = args.output + \
+        f"{ds['Campaign'].values[0]}_{ds['Location'].values[0]}_elevation_{elevations[elev_idx]}_std_by_channel_{thres_lwp}.png"
+    plot_std_bars(plot_stds, plot_labels, channels, channel_labels,\
+          elev_idx, n_valid, save_path)
+
+    # Plot Bias:
+    save_path = args.output + \
+        f"{ds['Campaign'].values[0]}_{ds['Location'].values[0]}_elevation_{elevations[elev_idx]}_bias_by_channel_{thres_lwp}.png"
+    plot_bias_lines(all_biases, all_labels, channels, channel_labels,\
+         elev_idx, n_valid, save_path)
+        
+        
+    # Plot bias and std:
+    save_path = args.output + \
+        f"{ds['Campaign'].values[0]}_{ds['Location'].values[0]}_elevation_{elevations[elev_idx]}_bias_std_by_channel_{thres_lwp}.png"    
+    plot_bias_std_lines(all_biases, all_stds, all_labels, channels,\
+        channel_labels, elev_idx,n_valid, save_path)
+
+        
+    return stds, biases, rmses, n_valid
 
 ##############################################################################
 # 3 Main
@@ -283,6 +404,7 @@ if __name__ == "__main__":
     
     # 2nd Applying statistics to dataset:
     for elev_idx in range(n_elev):
+        print("\nElevation index: ",elev_idx, " : ", elevations[elev_idx])
         stds, biases, rmses, n_valid = analyze_mwr_model_stats(ds_sel, args,\
              elev_idx=elev_idx)
     ##################
