@@ -524,10 +524,10 @@ if __name__=="__main__":
     ds = xr.open_dataset(args.input)
     
     # 1 Derive TBs for all elevations  for RTTOV-gb
-    ds = derive_TBs4RTTOV_gb(ds, args)
+    ds_new = derive_TBs4RTTOV_gb(ds, args)
 
     # 2 Print dataset to NetCDF
-    ds.to_netcdf(args.output, format="NETCDF4_CLASSIC")
+    ds_new.to_netcdf(args.output, format="NETCDF4_CLASSIC")
         
 
         

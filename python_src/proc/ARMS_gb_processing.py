@@ -332,6 +332,7 @@ def derive_TBs4ARMS_gb_per_elevation(ds, args, n_levels=n_levels,\
         
         # 3rd Read TBs:
         tbs1 = read_outputs_arms_gb(ds, infile, list_of_valid_lists[elev_index])
+        tbs1[tbs1 == 0] = np.nan
         all_tbs[:,:,elev_index,:] = tbs1[:,:,elev_index,:]
         
         #################################

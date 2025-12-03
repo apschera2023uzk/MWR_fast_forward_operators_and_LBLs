@@ -1,0 +1,18 @@
+=> Solve Duplicate Dimensions warning in preproc script.
+
+=> Scheibe hardcode paramter irgendwie in argparse meinetwegen auch als default!
+MWR:
++ number of elevations (10)
++ number of azimuths (72)
++ number of channels (14)
+=> DO the smae for whole preproc
+
+
+Additional plots:
+- Data Availability...
+
+
+=> Vielleicht wäre es im preprocessing sinnvoll die FT interpolation der Radiosonden auf maximal 10-15000 m zu begrenzen und darüber Klimatologiewerte zu nutzen...
++ da wir a) jetzt wissen, dass Radiosonden dort sowieso eher 0 % voraussetzen als messen und b) meine Werte auch genauso aussehen, als gäbe es keine Messung.
+
+

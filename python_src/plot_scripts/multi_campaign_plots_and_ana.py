@@ -38,6 +38,15 @@ ref_label = "PyRTlib R24 LBL"
 n_elev = 10
 elevations = np.array([90., 30, 19.2, 14.4, 11.4, 8.4,  6.6,  5.4, 4.8,  4.2])
 
+label_colors = {'Dwdhat (MWR)': "blue",
+        'Foghat (MWR)': "green",'RTTOV-gb (model)': "red",
+        'ARMS-gb (model)': "orange",'Sunhat (MWR)': "purple",
+        'Tophat (MWR)': "brown", 'Joyhat (MWR)': "pink",
+        'Hamhat (MWR)': "gray",
+         "LABEL_9": "olive",
+        "LABEL_10": "cyan"
+}
+
 
 ##############################################################################
 # 2nd Used functions:
@@ -131,13 +140,13 @@ def select_ds_camp_loc(ds, campaign, location, crop_index=0):
 
 ##############################################################################
 
-def plot_std_bars(stds, labels, channels, channel_labels, elev,
-        n_valid, save_path,elevations=elevations, thres_lwp=thres_lwp):
+def plot_std_bars(ds, stds, labels, channels, channel_labels, elev,
+        n_valid, save_path,elevations=elevations, thres_lwp=thres_lwp,\
+        label_colors=label_colors):
         
-    colors = ["blue", "green", "red","orange","purple","brown",\
-        "pink", "gray","olive","cyan"]
     campaign = ds["Campaign"].values[0]
     location = ds["Location"].values[0]
+    
     fig, ax = plt.subplots(figsize=(14,9))
     plt.suptitle(f"Campaign: {campaign}, location: {location}, \nelevation: {elevations[elev]:.1f}°, (N: {n_valid} / LWP > {thres_lwp} kg m-2)")
     ax.set_title("Standard deviation of brightness temperature deviation")
@@ -145,14 +154,18 @@ def plot_std_bars(stds, labels, channels, channel_labels, elev,
     width = 0.2  # Width of each bar
     offsets = np.linspace(-width*1.5, width*1.5, len(stds))
     
-    for std, lbl, color, offset in zip(stds, labels, colors, offsets):
+    for std, lbl, offset in zip(stds, labels,offsets):
         if lbl.strip() != " (MWR)":  # Only plot if label is not empty
+            lbl = lbl.strip()
+            if lbl == "":
+                continue  # Skip empty labels
+            color = label_colors.get(lbl, "black")  
             ax.bar(channels + offset, std, width, label=lbl, color=color, alpha=0.7)
     
     ax.set_xticks(channels)
     ax.set_xticklabels(channel_labels)
     ax.set_xlabel("Channels")
-    ax.set_xlim(channels.min() - 1, channels.max() + 1)
+    ax.set_xlim(0, 5)
     ax.set_ylabel("Standard Deviation of Brightness Temperature [K]")
     ax.legend()
     plt.tight_layout()
@@ -162,12 +175,11 @@ def plot_std_bars(stds, labels, channels, channel_labels, elev,
 
 ##############################################################################
     
-def plot_bias_lines(all_biases, all_labels, channels, channel_labels, elev,
+def plot_bias_lines(ds, all_biases, all_labels, channels, channel_labels, elev,
                    n_valid, save_path, elevations=elevations,\
-                   thres_lwp=thres_lwp, ref_label=ref_label):
-    
-    colors = ["blue", "green", "red","orange","purple","brown",\
-        "pink", "gray","olive","cyan"]
+                   thres_lwp=thres_lwp, ref_label=ref_label,\
+                   label_colors=label_colors): 
+
     campaign = ds["Campaign"].values[0]
     location = ds["Location"].values[0]
     
@@ -183,9 +195,23 @@ def plot_bias_lines(all_biases, all_labels, channels, channel_labels, elev,
     
     ax.plot(channels, [0.] * len(channels), label=ref_label, color="black", linewidth=2)
     
-    for bias, label, color in zip(all_biases, all_labels, colors):
-        if label.strip() != "":  # Only plot if label is not empty
-            ax.plot(channels, bias, label=label, color=color, alpha=0.8, linewidth=2)
+    for bias, label in zip(all_biases, all_labels):
+        label = label.strip()
+
+        if label == "":
+            continue  # Skip empty labels
+
+        # Get color from dictionary, use fallback if missing
+        color = label_colors.get(label, "black")  
+
+        ax.plot(
+            channels,
+            bias,
+            label=label,
+            color=color,
+            alpha=0.8,
+            linewidth=2
+        )
     
     ax.set_xticks(channels)
     ax.set_xticklabels(channel_labels)
@@ -194,7 +220,7 @@ def plot_bias_lines(all_biases, all_labels, channels, channel_labels, elev,
     ax.set_ylabel("Bias of Brightness Temperature [K]")
     ax.legend()
     ax.grid(True)
-    ax.set_ylim([-10, 10])  # Adjust as needed for your data
+    ax.set_ylim([-5, 5])  # Adjust as needed for your data
     
     plt.tight_layout()
     plt.savefig(save_path, dpi=600)
@@ -202,12 +228,11 @@ def plot_bias_lines(all_biases, all_labels, channels, channel_labels, elev,
 
 ##############################################################################
 
-def plot_bias_std_lines(all_biases, all_stds, all_labels, channels,\
+def plot_bias_std_lines(ds, all_biases, all_stds, all_labels, channels,\
         channel_labels, elev,n_valid, save_path, elevations=elevations,\
-        thres_lwp=thres_lwp, ref_label=ref_label):
-    
-    colors = ["blue", "green", "red", "orange", "purple", "brown",
-              "pink", "gray", "olive", "cyan"]
+        thres_lwp=thres_lwp, ref_label=ref_label,\
+        label_colors=label_colors):
+ 
     campaign = ds["Campaign"].values[0]
     location = ds["Location"].values[0]
     
@@ -225,14 +250,18 @@ def plot_bias_std_lines(all_biases, all_stds, all_labels, channels,\
     plt.plot(channels, [0.] * len(channels), label=ref_label, color="black", linewidth=2)
     
     # Plot biases with lines and their std with fill_between shaded areas
-    for bias, std, label, color in zip(all_biases, all_stds, all_labels, colors):
-        if label.strip() != "":
-            plt.plot(channels, bias, label=label, color=color, alpha=0.8, linewidth=2)
-            plt.fill_between(channels, bias - std, bias + std, color=color, alpha=0.2)
+    for bias, std, label in zip(all_biases, all_stds, all_labels):
+        label = label.strip()
+        if label == "":
+            continue  # Skip empty labels
+        # Get color from dictionary, use fallback if missing
+        color = label_colors.get(label, "black")  
+        plt.plot(channels, bias, label=label, color=color, alpha=0.8, linewidth=2)
+        plt.fill_between(channels, bias - std, bias + std, color=color, alpha=0.2)
     
     plt.xticks(channels, channel_labels)
     plt.xlim(channels.min() - 1, channels.max() + 1)
-    plt.ylim([-10, 10])  # Adjust as needed
+    plt.ylim([-5, 5])  # Adjust as needed
     
     plt.legend(fontsize=12)
     plt.grid(True)
@@ -285,7 +314,7 @@ def valid_indices_and_count(ds, valid_mwrs, mwr_labels, valid_models,\
         model_labels,azi_idx=0):
 
     # Find common valid timesteps
-    n_time = ds[valid_mwrs[0]].sizes['time']
+    n_time = ds.sizes['time']
     common_valid_mask = np.ones(n_time, dtype=bool)
     for var in valid_mwrs + valid_models:
         if var in ds and 'TBs_' in var:
@@ -320,13 +349,30 @@ def get_all_TB_values_and_ref_TBs(ds, valid_mwrs, mwr_labels, valid_models,\
     reference_tb = ds[ref_mod].values[common_valid_mask, :, elev_idx]
             
     return all_values, reference_tb
+    
+##############################################################################
+
+def create_plot_dirs(ds, args):
+
+    campaign = ds["Campaign"].values[0]
+    location = ds["Location"].values[0]   
+    site_dir       = os.path.join(args.output, campaign+"_"+location)
+    os.makedirs(site_dir, exist_ok=True)
+        
+    std_dir       = os.path.join(site_dir, "std")
+    bias_dir      = os.path.join(site_dir, "bias")
+    bias_std_dir  = os.path.join(site_dir, "bias_std")
+    os.makedirs(std_dir, exist_ok=True)
+    os.makedirs(bias_dir, exist_ok=True)
+    os.makedirs(bias_std_dir, exist_ok=True)
+    return std_dir, bias_dir, bias_std_dir
 
 ##############################################################################
 
 def analyze_mwr_model_stats(ds, args, elev_idx=0, model_tbs=model_tbs,\
         elevations=elevations, ref_mod=model_tbs[0],\
         n_chans=n_chans,mwr_vars=mwr_vars,azi_idx=0, thres_lwp=thres_lwp):
-  
+      
     # 1st Derive available MWRs and models:  
     valid_mwrs, mwr_labels, valid_models, model_labels =\
            check_model_and_mwr_data_availability(ds,\
@@ -368,22 +414,23 @@ def analyze_mwr_model_stats(ds, args, elev_idx=0, model_tbs=model_tbs,\
     channel_labels = [f"Ch{i+1}" for i in range(n_chans)]  # Adjust as needed
 
     # Plot stds:
-    save_path = args.output + \
+    std_dir, bias_dir, bias_std_dir = create_plot_dirs(ds, args)
+    save_path = std_dir +"/" \
         f"{ds['Campaign'].values[0]}_{ds['Location'].values[0]}_elevation_{elevations[elev_idx]}_std_by_channel_{thres_lwp}.png"
-    plot_std_bars(plot_stds, plot_labels, channels, channel_labels,\
+    plot_std_bars(ds, plot_stds, plot_labels, channels, channel_labels,\
           elev_idx, n_valid, save_path)
 
     # Plot Bias:
-    save_path = args.output + \
+    save_path = bias_dir+"/" \
         f"{ds['Campaign'].values[0]}_{ds['Location'].values[0]}_elevation_{elevations[elev_idx]}_bias_by_channel_{thres_lwp}.png"
-    plot_bias_lines(all_biases, all_labels, channels, channel_labels,\
+    plot_bias_lines(ds, all_biases, all_labels, channels, channel_labels,\
          elev_idx, n_valid, save_path)
         
         
     # Plot bias and std:
-    save_path = args.output + \
+    save_path = bias_std_dir+"/" \
         f"{ds['Campaign'].values[0]}_{ds['Location'].values[0]}_elevation_{elevations[elev_idx]}_bias_std_by_channel_{thres_lwp}.png"    
-    plot_bias_std_lines(all_biases, all_stds, all_labels, channels,\
+    plot_bias_std_lines(ds, all_biases, all_stds, all_labels, channels,\
         channel_labels, elev_idx,n_valid, save_path)
 
         
@@ -396,29 +443,26 @@ def analyze_mwr_model_stats(ds, args, elev_idx=0, model_tbs=model_tbs,\
 if __name__ == "__main__":
     args = parse_arguments()
     nc_out_path=args.NetCDF
+    
+    # Open dataset and clear sky filtering
     ds = xr.open_dataset(nc_out_path)
-    
-    # 1st Filtering dataset:
     ds_clear = clear_sky_dataset(ds)
-    ds_sel = select_ds_camp_loc(ds_clear, "FESSTVaL", "RAO_Lindenberg")
     
-    # 2nd Applying statistics to dataset:
-    for elev_idx in range(n_elev):
-        print("\nElevation index: ",elev_idx, " : ", elevations[elev_idx])
-        stds, biases, rmses, n_valid = analyze_mwr_model_stats(ds_sel, args,\
-             elev_idx=elev_idx)
-    ##################
-    # How many valid values do I have (also consider elevation!!!)
-    # calc statistics for all instruments / Models...
-    # Ich sollte die instrumente nicht selbst auswählen müssen...
-    # aber ich sollte ein paar PyRTlib Rs und RTTOV oder ARMS-gb an und ausstellen können....
-    ###############
-    
+    for campaign in np.unique(ds['Campaign'].values):
+        for location in np.unique(ds['Location'].values):
+       
+            # Filter data for campaign and location:
+            ds_sel = select_ds_camp_loc(ds_clear, campaign, location)
+            if len(ds_sel['time'])==0 or len(ds_sel["Campaign"].values)==0:
+                continue
+            print("\n\nCampaign / Location: ",campaign, "/", location)
 
-    # 3rd plotting dataset: 
-    # Apply std plottig
-    
-    # Further functions for bias and bias + std frame
+            # 2nd Applying statistics to dataset:
+            for elev_idx in range(n_elev):
+                print("\nElevation index: ",elev_idx, " : ", elevations[elev_idx])
+                stds, biases, rmses, n_valid = analyze_mwr_model_stats(ds_sel, args,\
+                     elev_idx=elev_idx)
+
     
     # make some scatter plots - with RMSE std and bias
 

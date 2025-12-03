@@ -1083,7 +1083,7 @@ def produce_dataset(profile_indices, level_pressures,
     # Setze Dummy-Werte für Dimensionsgrößen
     n_times = len(profile_indices)
     n_channels = 14  # Beispielwert
-
+ 
     ds = xr.Dataset(
         data_vars={
             
@@ -1101,7 +1101,7 @@ def produce_dataset(profile_indices, level_pressures,
             "TBs_hamhat":           (("time","elevation",\
                                      "azimuth","N_Channels"), tbs_hamhat),
                                      
-            "Dwdhat_z":           (( "time","N_Levels"), dwd_profiles[:,0,:]),    
+            "Dwdhat_z":           (( "time","N_Levels"), dwd_profiles[:,0,:]), 
             "Dwdhat_ta":           (( "time","N_Levels"), dwd_profiles[:,1,:]), 
             # "Dwdhat_taBL":           (( "time","N_Levels"), dwd_profiles[:,2,:]), 
             "Dwdhat_hua":           (( "time","N_Levels"), dwd_profiles[:,3,:]), 
