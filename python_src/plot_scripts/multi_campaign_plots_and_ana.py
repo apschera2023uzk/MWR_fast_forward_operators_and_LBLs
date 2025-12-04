@@ -37,6 +37,8 @@ mwr_vars = ['TBs_dwdhat', 'TBs_foghat', 'TBs_sunhat', 'TBs_tophat',\
 ref_label = "PyRTlib R24 LBL"
 n_elev = 10
 elevations = np.array([90., 30, 19.2, 14.4, 11.4, 8.4,  6.6,  5.4, 4.8,  4.2])
+grid_params = (-4,4.0001, 0.5)
+ylims_bias = [-4, 4]
 
 label_colors = {'Dwdhat (MWR)': "blue",
         'Foghat (MWR)': "green",'RTTOV-gb (model)': "red",
@@ -119,6 +121,12 @@ def stats_by_channel(values, references, n_chans=n_chans):
     bias_array = []
     rmse_array = []
     
+    print("Dimensions (values)", np.shape(values)) # (8, 14)Dimensions (values) (270, 14)
+    print("Dimensions (references)", np.shape(references)) # (8, 14)Dimensions (references) (270, 14)
+    print("Average values: ", np.nanmean(values, axis=0)) # collapsing axis 0 needs input axis=0!!!
+    print("Average reference: ", np.nanmean(references, axis=0))
+
+    
     for i in range(n_chans):
         deviation = values[:,i] - references[:,i]
         avg = np.nansum((values[:,i] -references[:,i])/ len(ds["time"]))
@@ -128,6 +136,10 @@ def stats_by_channel(values, references, n_chans=n_chans):
         bias_array.append(avg)
         rmse_array.append(rmse)
         
+    print("Len of averages: ", len(rmse_array), len(std_array),len(bias_array)) # 14 14 14 (other)
+    # Len of averages:  14 14 14 (RAO
+    print("***************")        
+    
     return np.array(std_array), np.array(bias_array), rmse_array
     
 ##############################################################################
@@ -142,7 +154,8 @@ def select_ds_camp_loc(ds, campaign, location, crop_index=0):
 
 def plot_std_bars(ds, stds, labels, channels, channel_labels, elev,
         n_valid, save_path,elevations=elevations, thres_lwp=thres_lwp,\
-        label_colors=label_colors):
+        label_colors=label_colors,grid_params=grid_params,\
+        ylims_bias=ylims_bias):
         
     campaign = ds["Campaign"].values[0]
     location = ds["Location"].values[0]
@@ -162,10 +175,11 @@ def plot_std_bars(ds, stds, labels, channels, channel_labels, elev,
             color = label_colors.get(lbl, "black")  
             ax.bar(channels + offset, std, width, label=lbl, color=color, alpha=0.7)
     
+    ax.set_yticks(np.arange(*grid_params)) 
     ax.set_xticks(channels)
     ax.set_xticklabels(channel_labels)
     ax.set_xlabel("Channels")
-    ax.set_xlim(0, 5)
+    ax.set_xlim(0, ylims_bias[1])
     ax.set_ylabel("Standard Deviation of Brightness Temperature [K]")
     ax.legend()
     plt.tight_layout()
@@ -178,7 +192,7 @@ def plot_std_bars(ds, stds, labels, channels, channel_labels, elev,
 def plot_bias_lines(ds, all_biases, all_labels, channels, channel_labels, elev,
                    n_valid, save_path, elevations=elevations,\
                    thres_lwp=thres_lwp, ref_label=ref_label,\
-                   label_colors=label_colors): 
+                   label_colors=label_colors, ylims_bias=ylims_bias): 
 
     campaign = ds["Campaign"].values[0]
     location = ds["Location"].values[0]
@@ -213,6 +227,7 @@ def plot_bias_lines(ds, all_biases, all_labels, channels, channel_labels, elev,
             linewidth=2
         )
     
+    ax.set_yticks(np.arange(*grid_params)) 
     ax.set_xticks(channels)
     ax.set_xticklabels(channel_labels)
     ax.set_xlabel("Channels")
@@ -220,7 +235,7 @@ def plot_bias_lines(ds, all_biases, all_labels, channels, channel_labels, elev,
     ax.set_ylabel("Bias of Brightness Temperature [K]")
     ax.legend()
     ax.grid(True)
-    ax.set_ylim([-5, 5])  # Adjust as needed for your data
+    ax.set_ylim(ylims_bias)  # Adjust as needed for your data
     
     plt.tight_layout()
     plt.savefig(save_path, dpi=600)
@@ -231,7 +246,7 @@ def plot_bias_lines(ds, all_biases, all_labels, channels, channel_labels, elev,
 def plot_bias_std_lines(ds, all_biases, all_stds, all_labels, channels,\
         channel_labels, elev,n_valid, save_path, elevations=elevations,\
         thres_lwp=thres_lwp, ref_label=ref_label,\
-        label_colors=label_colors):
+        label_colors=label_colors, ylims_bias=ylims_bias):
  
     campaign = ds["Campaign"].values[0]
     location = ds["Location"].values[0]
@@ -259,9 +274,10 @@ def plot_bias_std_lines(ds, all_biases, all_stds, all_labels, channels,\
         plt.plot(channels, bias, label=label, color=color, alpha=0.8, linewidth=2)
         plt.fill_between(channels, bias - std, bias + std, color=color, alpha=0.2)
     
+    plt.yticks(np.arange(*grid_params)) 
     plt.xticks(channels, channel_labels)
     plt.xlim(channels.min() - 1, channels.max() + 1)
-    plt.ylim([-5, 5])  # Adjust as needed
+    plt.ylim(ylims_bias)  # Adjust as needed
     
     plt.legend(fontsize=12)
     plt.grid(True)
@@ -346,7 +362,10 @@ def get_all_TB_values_and_ref_TBs(ds, valid_mwrs, mwr_labels, valid_models,\
         all_values.append(model_tb)
             
     # Get reference TBs:
+    print("ref model: ", ref_mod)
+    print("len common_valid and elev_index: ", len(common_valid_mask), elev_idx)
     reference_tb = ds[ref_mod].values[common_valid_mask, :, elev_idx]
+    print("Shape of reference TBs before mean: ", np.shape(reference_tb))
             
     return all_values, reference_tb
     
@@ -395,7 +414,8 @@ def analyze_mwr_model_stats(ds, args, elev_idx=0, model_tbs=model_tbs,\
 
     for values, label in zip(all_values, mwr_labels+model_labels):
     
-        # print("Label: ", label)
+        print("***")
+        print("Label: ", label)
         # print("value shape: ", np.shape(values))
     
         stds, biases, rmses = stats_by_channel(values, reference_tb, n_chans)
