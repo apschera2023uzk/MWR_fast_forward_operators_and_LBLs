@@ -82,13 +82,21 @@ def check4NANs_in_time_crop_ele(ds, t_index, crop_index):
     else:
         return False
         
+####################################################################
+
+def interp_any(x_array, y_array, x_new=None):
+    interp_func = interp1d(x_array, y_array, kind='linear', fill_value="extrapolate")
+    y_new = interp_func(x_new)   
+    return x_new, y_new
+    
 ##############################################################################
 
-def get_O3_profile():
+def get_O3_profile(x_new):
     z, p, _, t, md = atmp.gl_atm(atmp.MIDLATITUDE_SUMMER)
     # Ozone is usually identified by atmp.O3 index in molecular species array
     o3_profile_ppmv = md[:, atmp.O3]
-    return 0
+    z_new, O3_new = interp_any(z*1000, o3_profile_ppmv, x_new=x_new)
+    return z_new, O3_new
     
 ##############################################################################
 
@@ -120,10 +128,14 @@ def write_armsgb_input_nc(profile_indices, level_pressures,
     ZA = np.array(ZA, dtype=np.float32)
     profile_indices = np.array(profile_indices, dtype=np.int32)
     
-    ######################################
-    # Determine O3 as static value 0.06 ppmv:
+    ##################
+    # Static value of O3 0.06 ppmv is now replaced by climatology profile:
     level_o3s = np.empty(np.shape(level_wvs))
-    level_o3s[:,:] = 0.06 
+    z_new, O3_new = get_O3_profile(level_z)
+    # level_o3s[:,:] = 0.06 
+    level_o3s[:,:] = O3_new
+
+
     ####################
 
     # Setze Dummy-Werte für Dimensionsgrößen

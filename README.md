@@ -15,7 +15,8 @@ Slant path microwave observations (4–30° elevation) from ground-based radiome
 
 1. Download RTTOV-gb code from here: https://nwp-saf.eumetsat.int/site/software/rttov-gb/.
 2. Download git of pyrtlib: https://github.com/SatCloP/pyrtlib.
-3. Install python packages from requirements.txt
+3. Install ARMS-gb with FORTRAN intel compiler.
+4. Install python packages from requirements.txt
 
 ## Scope of the Repository
 
@@ -24,7 +25,7 @@ This repository provides:
 - Scripts to pre-process input from radiosondes and microwave radiometers.
 - Interfaces for running:
   - **RTTOV-gb**
-  - **ARMS-gb** (to be integrated)
+  - **ARMS-gb** (exact version not freely available yet)
   - **LBL models** (e.g. via PyRTlib)
 - Tools for comparing modeled brightness temperatures with observations.
 - Plotting and statistical analysis utilities.

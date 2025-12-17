@@ -161,7 +161,7 @@ def plot_std_bars(ds, stds, labels, channels, channel_labels, elev,
     location = ds["Location"].values[0]
     
     fig, ax = plt.subplots(figsize=(14,9))
-    plt.suptitle(f"Campaign: {campaign}, location: {location}, \nelevation: {elevations[elev]:.1f}°, (N: {n_valid} / LWP > {thres_lwp} kg m-2)")
+    plt.suptitle(f"Campaign: {campaign}, location: {location}, \nelevation: {elevations[elev]:.1f}°, (N: {n_valid} / LWP < {thres_lwp} kg m-2)")
     ax.set_title("Standard deviation of brightness temperature deviation")
     
     width = 0.2  # Width of each bar
@@ -255,7 +255,7 @@ def plot_bias_std_lines(ds, all_biases, all_stds, all_labels, channels,\
     
     plt.figure(figsize=(14, 9))
     plt.suptitle(f"Campaign: {campaign}, location: {location}, \n"
-                 f"elevation: {elev_label:.1f}°, (N: {n_valid} / LWP > {thres_lwp} kg m-2)")
+                 f"elevation: {elev_label:.1f}°, (N: {n_valid} / LWP < {thres_lwp} kg m-2)")
     
     plt.title("Bias and standard deviation of brightness temperature error")
     plt.xlabel("Channels")

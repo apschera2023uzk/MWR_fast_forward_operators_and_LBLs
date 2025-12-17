@@ -4,7 +4,10 @@
 # 1 Necessary modules
 ##############################################################################
 
-# Describe this file...
+# Wrapper für PyRTlib processing of NetCDF file with radiosonde profiles. 
+# Radiosonde profiles are read for every rs within the dataset and
+# TBs are calculated according to these profiles and HATPRO channels.
+# All of this is saved in a NetCDF file...
 
 ##############################################################
 
