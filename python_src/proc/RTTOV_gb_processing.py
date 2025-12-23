@@ -191,7 +191,7 @@ def run_rttov_gb(outfile, valid_indices, args,nlevels = n_levels):
 ##############################################################################
 
 def get_rttov_outputs(valid_indices, rttovgb_outfile=\
-        "/home/aki/RTTOV-gb/rttov_test/test_example_k.1/output_example_k.dat.gfortran",\
+        "/home/aki/RTTOV-gb/rttov_test/test_example_k.1/output_example_k.dat.gfortran-openmp",\
                    batch_size=batch_size,n_levels=n_levels):
     print("Reading in RTTOV-gb output from: ", rttovgb_outfile)
     
@@ -457,7 +457,7 @@ def derive_TBs4RTTOV_gb(ds, args, batch_size=batch_size):
         tbs, trans, trans_by_lev, jacs_by_lev = get_rttov_outputs(valid_indices,\
             batch_size=len(batch),\
             rttovgb_outfile=\
-            "/home/aki/RTTOV-gb/rttov_test/test_example_k.1/output_example_k.dat.gfortran")
+            "/home/aki/RTTOV-gb/rttov_test/test_example_k.1/output_example_k.dat.gfortran-openmp")
             
         # Smaller Jacobian files:
         #write_jacobians_and_level_transmissions_to_file(trans_by_lev,\
