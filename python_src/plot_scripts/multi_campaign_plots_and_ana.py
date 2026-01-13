@@ -486,7 +486,11 @@ if __name__ == "__main__":
     
     # make some scatter plots - with RMSE std and bias
 
-    
+    # Plot std and bias by elevation angle by channel?
+
+    # Get correlations between channels as many others before.
+    # Which pairs but 2/13 are low correlated?
+    # Which other channel pairs have good std / bias characteristica?    
 
 
 
