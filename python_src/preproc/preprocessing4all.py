@@ -40,7 +40,7 @@ matplotlib.use("Agg")
 elevations = np.array([90., 30, 19.2, 14.4, 11.4, 8.4,  6.6,  5.4, 4.8,  4.2])
 azimuths = np.arange(0.,355.1,5.) # Interpoliere dazwischen!
 n_levels=180
-min_p = 5
+min_p = 100
 # min_time_diff_thres = 30 # => Leads to 520 remaining sondes 
 min_time_diff_thres = 15 
 
@@ -240,7 +240,7 @@ def read_radiosonde_nc_arms(file=\
     # 3 Fangen Profile auch in Höhge an? 
     max_index = np.nanargmax(ds[height_var].values)
     if ds[p_var].values[max_index]/p_factor<min_p:
-        max_index = np.nanargmin(np.abs(ds[p_var].values/p_factor-min_p))    
+        max_index = np.nanargmin(np.abs(ds[p_var].values[:max_index]/p_factor-min_p))    
     index3000 = np.nanargmin(abs(ds[height_var].values[:max_index]-3000))
     
    # Or just find 132 m height:
@@ -266,18 +266,18 @@ def read_radiosonde_nc_arms(file=\
         
     if max_index<300:
         print("Low max index!!!")
-        return 0, [np.nan]*170, [np.nan]*170, [np.nan]*170, \
-           float('nan'), float('nan'), [np.nan]*170, [np.nan]*170, \
-           [np.nan]*170, float('nan')    
+        return 0, [np.nan]*180, [np.nan]*180, [np.nan]*180, \
+           float('nan'), float('nan'), [np.nan]*180, [np.nan]*180, \
+           [np.nan]*180, float('nan')    
     elif np.nanmax(ds[height_var].values)<10000:
         print("No 10000 m reached!")
-        return 0, [np.nan]*170, [np.nan]*170, [np.nan]*170, \
-           float('nan'), float('nan'), [np.nan]*170, [np.nan]*170, \
-           [np.nan]*170, float('nan')    
+        return 0, [np.nan]*180, [np.nan]*180, [np.nan]*180, \
+           float('nan'), float('nan'), [np.nan]*180, [np.nan]*180, \
+           [np.nan]*180, float('nan')    
         
     # Thinning pattern:
     datapoints_bl = 75
-    datapoints_ft = 100
+    datapoints_ft = 105
     increment_bl = int(np.ceil((index3000-crop)/datapoints_bl))
     increment_ft = int(np.ceil((max_index-index3000)/datapoints_ft))
     inds = np.r_[crop:index3000:increment_bl, index3000:max_index:increment_ft]
@@ -347,9 +347,9 @@ def read_radiosonde_txt(file=\
     # Bodenlevel ist bei Index -1 - Umkehr der Profile!
     
     if file==None:
-        return 0, [np.nan]*170, [np.nan]*170, [np.nan]*170, \
-           float('nan'), float('nan'), [np.nan]*170, [np.nan]*170, \
-           [np.nan]*170, float('nan')    
+        return 0, [np.nan]*180, [np.nan]*180, [np.nan]*180, \
+           float('nan'), float('nan'), [np.nan]*180, [np.nan]*180, \
+           [np.nan]*180, float('nan')    
     df = pd.read_table(file, encoding_errors="ignore", engine='python',\
         skiprows=20,\
         skipfooter=10, header=None , names=["Time", "P", "T", "Hu", "Ws",\
@@ -357,7 +357,7 @@ def read_radiosonde_txt(file=\
         "Azimuth", "Range"])
     max_index = np.nanargmax(df["Alt"].values)
     if df["P"].values[max_index]<min_p:
-        max_index = np.nanargmin(np.abs(df["P"].values-min_p))       
+        max_index = np.nanargmin(np.abs(df["P"].values[:max_index]-min_p))       
     index3000 = np.nanargmin(abs(df["Alt"].values[:max_index]-3000))
                 
     # AccRate / Height change crop:
@@ -379,18 +379,18 @@ def read_radiosonde_txt(file=\
         
     if max_index<300:
         print("Low max index!!!")
-        return 0, [np.nan]*170, [np.nan]*170, [np.nan]*170, \
-           float('nan'), float('nan'), [np.nan]*170, [np.nan]*170, \
-           [np.nan]*170, float('nan')    
+        return 0, [np.nan]*180, [np.nan]*180, [np.nan]*180, \
+           float('nan'), float('nan'), [np.nan]*180, [np.nan]*180, \
+           [np.nan]*180, float('nan')    
     elif np.nanmax(df["Alt"].values)<10000:
         print("No 10000 m reached!")
-        return 0, [np.nan]*170, [np.nan]*170, [np.nan]*170, \
-           float('nan'), float('nan'), [np.nan]*170, [np.nan]*170, \
-           [np.nan]*170, float('nan')    
+        return 0, [np.nan]*180, [np.nan]*180, [np.nan]*180, \
+           float('nan'), float('nan'), [np.nan]*180, [np.nan]*180, \
+           [np.nan]*180, float('nan')    
         
     # Thinning pattern:
     datapoints_bl = 75
-    datapoints_ft = 100
+    datapoints_ft = 105
     increment_bl = int(np.ceil((index3000-crop)/datapoints_bl))
     increment_ft = int(np.ceil((max_index-index3000)/datapoints_ft))
     inds = np.r_[crop:index3000:increment_bl, index3000:max_index:increment_ft]
@@ -456,17 +456,26 @@ def add_clim2profiles(p_array, t_array, ppmv_array, m_array, z_array, rh):
     # 2nd Add upper extrapolation of profile by climatology:
     # Kombiniere beide ProfileXXX
     p_threshold = np.nanmin(p_array)
+    if p_threshold<100:
+        p_threshold = 100
     z, p, d, t, md = atmp.gl_atm(atm=1) # midlatitude summer!
     gkg = ppmv2gkg(md[:, atmp.H2O], atmp.H2O)
     rhs_clim = mr2rh(p, t, gkg)[0]
-    mask = p_threshold>np.array(p)
     
-    p_array = np.concatenate([p_array, np.array(p)[mask]])
-    t_array = np.concatenate([t_array ,np.array(t)[mask]])
-    m_array = np.concatenate([m_array , np.array(gkg)[mask]/1000])
-    z_array = np.concatenate([z_array , np.array(z*1000)[mask]])
-    rh = np.concatenate([rh , np.array(rhs_clim)[mask]])
-    # ppmv_array = np.concatenate([ppmv_array , np.array(md[:, atmp.H2O])[mask]])
+    if (np.all(np.isnan(p_array)) and np.all(np.isnan(t_array)) and
+            np.all(np.isnan(ppmv_array)) and np.all(np.isnan(m_array))):
+        mask_clim = np.zeros_like(p, dtype=bool)   # only False
+        mask_rs   = np.ones_like(p_array, dtype=bool)  # only True
+    else:
+        mask_clim = p_threshold>np.array(p)
+        mask_rs = np.array(p_array)>p_threshold
+    
+    p_array = np.concatenate([p_array[mask_rs], np.array(p)[mask_clim]])
+    t_array = np.concatenate([t_array[mask_rs] ,np.array(t)[mask_clim]])
+    m_array = np.concatenate([m_array[mask_rs], np.array(gkg)[mask_clim]/1000])
+    z_array = np.concatenate([z_array[mask_rs], np.array(z*1000)[mask_clim]])
+    rh = np.concatenate([rh[mask_rs], np.array(rhs_clim)[mask_clim]])
+    # ppmv_array = np.concatenate([ppmv_array[mask_rs], np.array(md[:, atmp.H2O])[mask_clim]])
     ppmv_array = []
     for rh_lev, t_lev, p_lev in zip (rh, t_array, p_array):
         ppmv_array.append(rh2ppmv(RH=rh_lev, abs_T=t_lev, p=p_lev*100))  
@@ -520,8 +529,8 @@ def check_units_physical_realism(p_array, t_array, ppmv_array,\
 
 def check_rh_before_and_after(rh, rh_before):
     for i, rh_bef in enumerate(rh_before):
-        if abs(rh_bef-rh[-(i+1)])>0.05:
-            print("Warning RH has been altered during processing!")
+        if abs(rh_bef-rh[-(i+1)])>0.05 and i<160:
+            print("Warning RH below index 160 has been altered during processing!")
     return 0
 
 ##############################################################################
