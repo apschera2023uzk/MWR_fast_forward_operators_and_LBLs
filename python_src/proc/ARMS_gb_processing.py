@@ -340,7 +340,8 @@ def derive_TBs4ARMS_gb_per_elevation(ds, args, n_levels=n_levels,\
                 valid_indices=list_of_valid_lists[elev_index])
         
         # 2nd Modell ausführen
-        subprocess.run("./run_arms_gb.sh")
+        ex_script = str(os.path.expanduser("~/MWR_fast_forward_operators_and_LBLs/python_src/proc/run_arms_gb.sh"))
+        subprocess.run(ex_script)
         
         # 3rd Read TBs:
         tbs1 = read_outputs_arms_gb(ds, infile, list_of_valid_lists[elev_index])
