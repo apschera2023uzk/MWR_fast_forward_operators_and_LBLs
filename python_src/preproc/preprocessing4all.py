@@ -40,7 +40,7 @@ matplotlib.use("Agg")
 elevations = np.array([90., 30, 19.2, 14.4, 11.4, 8.4,  6.6,  5.4, 4.8,  4.2])
 azimuths = np.arange(0.,355.1,5.) # Interpoliere dazwischen!
 n_levels=180
-min_p = 100
+min_p = 25
 # min_time_diff_thres = 30 # => Leads to 520 remaining sondes 
 min_time_diff_thres = 15 
 
@@ -289,6 +289,9 @@ def read_radiosonde_nc_arms(file=\
         z_array = ds[height_var].isel(Time=inds).values
     elif "zg" in ds.data_vars or "zsl" in ds.data_vars:
         z_array = ds[height_var].isel(time=inds).values
+    if "Vital_I/radiosondes" in file:
+        # print("Vital rs found, z will be adjusted by 20 m: ", file)
+        z_array = z_array-20
     t_array = running_mean_from_arrays(inds, ds[height_var].values,\
         ds[t_var].values)
     p_array = running_mean_from_arrays(inds, ds[height_var].values,\
@@ -452,12 +455,13 @@ def read_radiosonde_txt(file=\
 
 ##############################################################################
 
-def add_clim2profiles(p_array, t_array, ppmv_array, m_array, z_array, rh):
+def add_clim2profiles(p_array, t_array, ppmv_array, m_array, z_array, rh,\
+        min_p=min_p):
     # 2nd Add upper extrapolation of profile by climatology:
     # Kombiniere beide ProfileXXX
     p_threshold = np.nanmin(p_array)
-    if p_threshold<100:
-        p_threshold = 100
+    if p_threshold<min_p:
+        p_threshold = min_p
     z, p, d, t, md = atmp.gl_atm(atm=1) # midlatitude summer!
     gkg = ppmv2gkg(md[:, atmp.H2O], atmp.H2O)
     rhs_clim = mr2rh(p, t, gkg)[0]
