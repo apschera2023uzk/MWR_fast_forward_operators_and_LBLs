@@ -29,7 +29,7 @@ plt.style.use('seaborn-poster')
 matplotlib.use("Qt5Agg")
 
 # Clear sky LWP threshold
-thres_lwp=0.04 # kg m-2
+thres_lwp=0.005 # kg m-2 fitting with Moritz' threshold of 5 g m-2
 n_chans=14
 model_tbs=["TBs_PyRTlib_R24",'TBs_RTTOV_gb', 'TBs_ARMS_gb']
 mwr_vars = ['TBs_dwdhat', 'TBs_foghat', 'TBs_sunhat', 'TBs_tophat',\

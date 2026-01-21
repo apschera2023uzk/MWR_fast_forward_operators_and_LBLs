@@ -35,9 +35,9 @@ def parse_arguments():
     )
     # Define default output path and file:
     outpath = "~/PhD_data/TB_preproc_and_proc_results/"
-    outfile_py = "3_campaigns_PyRTlib_R24_processed_TBs_from rs.nc"    
-    outfile_a = "3_campaigns_ARMS_gb_processed_TBs_from rs.nc"    
-    outfile_r = "3_campaigns_RTTOV_gb_processed_TBs_from rs.nc"       
+    outfile_py = "3_campaigns_PyRTlib_R24_processed_TBs_from_rs.nc"    
+    outfile_a = "3_campaigns_ARMS_gb_processed_TBs_from_rs.nc"    
+    outfile_r = "3_campaigns_RTTOV_gb_processed_TBs_from_rs.nc"       
     outfile = "3campaigns_3models_all_results.nc"
     
     parser.add_argument(

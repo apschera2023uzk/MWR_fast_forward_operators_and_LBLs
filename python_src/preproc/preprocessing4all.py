@@ -40,7 +40,9 @@ matplotlib.use("Agg")
 elevations = np.array([90., 30, 19.2, 14.4, 11.4, 8.4,  6.6,  5.4, 4.8,  4.2])
 azimuths = np.arange(0.,355.1,5.) # Interpoliere dazwischen!
 n_levels=180
-min_p = 25
+min_p = 10 # 70
+datapoints_bl = 75
+datapoints_ft = 100
 # min_time_diff_thres = 30 # => Leads to 520 remaining sondes 
 min_time_diff_thres = 15 
 
@@ -195,7 +197,8 @@ RS_hum_interpolation/"+str(h_var)+"_"+str(index)+\
 
 def read_radiosonde_nc_arms(file=\
         "/home/aki/PhD_data/Vital_I/radiosondes/20240805_102936.nc",\
-         crop=0, min_p=min_p, index=7):
+         crop=0, min_p=min_p, index=7, datapoints_bl=datapoints_bl,\
+         datapoints_ft=datapoints_ft):
     
     if file==None:
         return 0, [np.nan]*170, [np.nan]*170, [np.nan]*170, \
@@ -276,8 +279,6 @@ def read_radiosonde_nc_arms(file=\
            [np.nan]*180, float('nan')    
         
     # Thinning pattern:
-    datapoints_bl = 75
-    datapoints_ft = 105
     increment_bl = int(np.ceil((index3000-crop)/datapoints_bl))
     increment_ft = int(np.ceil((max_index-index3000)/datapoints_ft))
     inds = np.r_[crop:index3000:increment_bl, index3000:max_index:increment_ft]
@@ -346,7 +347,8 @@ def read_radiosonde_nc_arms(file=\
 
 def read_radiosonde_txt(file=\
         "/home/aki/PhD_data/Socles/radiosondes/2021072106/'SOUNDING DATA'/20210721060020068041_Profile.txt",\
-         crop=0,min_p=min_p):
+         crop=0,min_p=min_p, datapoints_bl=datapoints_bl,\
+         datapoints_ft=datapoints_ft):
     # Bodenlevel ist bei Index -1 - Umkehr der Profile!
     
     if file==None:
@@ -392,8 +394,6 @@ def read_radiosonde_txt(file=\
            [np.nan]*180, float('nan')    
         
     # Thinning pattern:
-    datapoints_bl = 75
-    datapoints_ft = 105
     increment_bl = int(np.ceil((index3000-crop)/datapoints_bl))
     increment_ft = int(np.ceil((max_index-index3000)/datapoints_ft))
     inds = np.r_[crop:index3000:increment_bl, index3000:max_index:increment_ft]

@@ -47,7 +47,7 @@ def parse_arguments():
     
     # Define default output path and file:
     outpath = "~/PhD_data/TB_preproc_and_proc_results/"
-    outfile = "3_campaigns_PyRTlib_R24_processed_TBs_from rs.nc"
+    outfile = "3_campaigns_PyRTlib_R24_processed_TBs_from_rs.nc"
     
     parser.add_argument(
         "--input", "-i",
