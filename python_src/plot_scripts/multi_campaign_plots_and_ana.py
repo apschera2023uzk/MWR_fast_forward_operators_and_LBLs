@@ -32,19 +32,19 @@ matplotlib.use("Qt5Agg")
 thres_lwp=0.005 # kg m-2 fitting with Moritz' threshold of 5 g m-2
 n_chans=14
 model_tbs=["TBs_PyRTlib_R24",'TBs_RTTOV_gb', 'TBs_ARMS_gb']
-mwr_vars = ['TBs_dwdhat', 'TBs_foghat', 'TBs_sunhat', 'TBs_tophat',\
-        'TBs_joyhat', 'TBs_hamhat']
+mwr_vars = ['TBs_dwdhat', 'TBs_sunhat', 'TBs_tophat',\
+        'TBs_joyhat'] #, 'TBs_foghat', 'TBs_hamhat']
 ref_label = "PyRTlib R24 LBL"
 n_elev = 10
 elevations = np.array([90., 30, 19.2, 14.4, 11.4, 8.4,  6.6,  5.4, 4.8,  4.2])
-grid_params = (-4,4.0001, 0.5)
-ylims_bias = [-4, 4]
+grid_params = (-3,3.0001, 0.5)
+ylims_bias = [-3, 3]
 
 label_colors = {'Dwdhat (MWR)': "blue",
         'Foghat (MWR)': "green",'RTTOV-gb (model)': "red",
-        'ARMS-gb (model)': "orange",'Sunhat (MWR)': "purple",
-        'Tophat (MWR)': "brown", 'Joyhat (MWR)': "pink",
-        'Hamhat (MWR)': "gray",
+        'ARMS-gb (model)': "orange",'Sunhat (MWR)': "blue",
+        'Tophat (MWR)': "blue", 'Joyhat (MWR)': "green",
+        'Hamhat (MWR)': "blue",
          "LABEL_9": "olive",
         "LABEL_10": "cyan"
 }
@@ -154,7 +154,7 @@ def select_ds_camp_loc(ds, campaign, location, crop_index=0):
 
 def plot_std_bars(ds, stds, labels, channels, channel_labels, elev,
         n_valid, save_path,elevations=elevations, thres_lwp=thres_lwp,\
-        label_colors=label_colors,grid_params=grid_params,\
+        label_colors=label_colors,\
         ylims_bias=ylims_bias):
         
     campaign = ds["Campaign"].values[0]
@@ -165,7 +165,7 @@ def plot_std_bars(ds, stds, labels, channels, channel_labels, elev,
     ax.set_title("Standard deviation of brightness temperature deviation")
     
     width = 0.2  # Width of each bar
-    offsets = np.linspace(-width*1.5, width*1.5, len(stds))
+    offsets = np.linspace(-0.3,0.3,len(stds))
     
     for std, lbl, offset in zip(stds, labels,offsets):
         if lbl.strip() != " (MWR)":  # Only plot if label is not empty
@@ -175,12 +175,13 @@ def plot_std_bars(ds, stds, labels, channels, channel_labels, elev,
             color = label_colors.get(lbl, "black")  
             ax.bar(channels + offset, std, width, label=lbl, color=color, alpha=0.7)
     
-    ax.set_yticks(np.arange(*grid_params)) 
+    ax.set_yticks(np.arange(0,4.01,0.5)) 
     ax.set_xticks(channels)
     ax.set_xticklabels(channel_labels)
     ax.set_xlabel("Channels")
-    ax.set_xlim(0, ylims_bias[1])
+    ax.set_ylim(0, 3)
     ax.set_ylabel("Standard Deviation of Brightness Temperature [K]")
+    ax.grid(True)
     ax.legend()
     plt.tight_layout()
     
@@ -288,7 +289,8 @@ def plot_bias_std_lines(ds, all_biases, all_stds, all_labels, channels,\
 ##############################################################################
 
 def check_model_and_mwr_data_availability(ds, elev_idx, ref_mod,\
-        model_tbs,azi_idx=0, mwr_vars=mwr_vars):
+        model_tbs,azi_idx=0, mwr_vars=mwr_vars,
+        old_valid_mwrs=[]):
         
     # 1. Check MWRs:
     valid_mwrs = []
@@ -305,6 +307,18 @@ def check_model_and_mwr_data_availability(ds, elev_idx, ref_mod,\
                 # Extract instrument name from variable name
                 name = var.replace('TBs_', '')
                 mwr_labels.append(f"{name.title()} (MWR)")
+
+            '''
+            ###############################
+            # What happens, if I allow nans?
+            elif var in old_valid_mwrs:
+                valid_mwrs.append(var)
+                # Extract instrument name from variable name
+                name = var.replace('TBs_', '')
+                mwr_labels.append(f"{name.title()} (MWR)")
+             ##########################
+            '''
+
     
     # 2. Check models
     valid_models = []
@@ -390,12 +404,18 @@ def create_plot_dirs(ds, args):
 
 def analyze_mwr_model_stats(ds, args, elev_idx=0, model_tbs=model_tbs,\
         elevations=elevations, ref_mod=model_tbs[0],\
-        n_chans=n_chans,mwr_vars=mwr_vars,azi_idx=0, thres_lwp=thres_lwp):
+        n_chans=n_chans,mwr_vars=mwr_vars,azi_idx=0, thres_lwp=thres_lwp,
+        old_valid_mwrs=[]):
       
     # 1st Derive available MWRs and models:  
     valid_mwrs, mwr_labels, valid_models, model_labels =\
            check_model_and_mwr_data_availability(ds,\
            elev_idx, ref_mod, model_tbs)
+
+    print("valid_mwrs: ", valid_mwrs)
+    print("mwr_labels: ", mwr_labels)
+    print("model_labels: ", model_labels)
+    print("valid_models: ", valid_models)
 
     # 2nd Find number of valid timesteps and their indices:
     common_valid_mask, n_valid = valid_indices_and_count(ds, valid_mwrs,\
@@ -454,7 +474,18 @@ def analyze_mwr_model_stats(ds, args, elev_idx=0, model_tbs=model_tbs,\
         channel_labels, elev_idx,n_valid, save_path)
 
         
-    return stds, biases, rmses, n_valid
+    return plot_stds, all_biases, all_rmses, n_valid, plot_labels, valid_mwrs
+
+##############################################################################
+
+def create_plot_by_chan_and_ele(camp_loc_stat_dict):
+    
+    #["biases"] = biases_by_ch_ele
+    #            result_dict[campaign][location]["rmses"] = rmses_by_ch_ele
+    #            result_dict[campaign][location]["stds"] = stds_by_ch_ele
+    #           result_dict[campaign][location]["n_valid"] = all_valid
+    #          result_dict[campaign][location]["labels"]
+    return 0
 
 ##############################################################################
 # 3 Main
@@ -467,10 +498,14 @@ if __name__ == "__main__":
     # Open dataset and clear sky filtering
     ds = xr.open_dataset(nc_out_path)
     ds_clear = clear_sky_dataset(ds)
+    result_dict = {}
     
     for campaign in np.unique(ds['Campaign'].values):
-        for location in np.unique(ds['Location'].values):
-       
+        result_dict[campaign] = {}
+        for location in np.unique(ds['Location'].values): 
+            result_dict[campaign][location] = {}
+            labels_by_ele = []
+            
             # Filter data for campaign and location:
             ds_sel = select_ds_camp_loc(ds_clear, campaign, location)
             if len(ds_sel['time'])==0 or len(ds_sel["Campaign"].values)==0:
@@ -480,9 +515,42 @@ if __name__ == "__main__":
             # 2nd Applying statistics to dataset:
             for elev_idx in range(n_elev):
                 print("\nElevation index: ",elev_idx, " : ", elevations[elev_idx])
-                stds, biases, rmses, n_valid = analyze_mwr_model_stats(ds_sel, args,\
+                plot_stds, all_biases, all_rmses, n_valid, plot_labels,\
+                    old_valid_mwrs = analyze_mwr_model_stats(ds_sel, args,\
                      elev_idx=elev_idx)
 
+                if campaign=="Socles":
+                    continue
+
+                if elev_idx==0:
+                    ####
+                    shapei = np.shape(plot_stds)
+                    stds_by_ch_ele = np.full((*shapei, 8), np.nan)                    
+                    biases_by_ch_ele = np.full((*shapei, 8), np.nan)
+                    rmses_by_ch_ele = np.full((*shapei, 8), np.nan)
+                    all_valid = 0
+###############################################
+# Error:
+#    biases_by_ch_ele[:,:,elev_idx] = all_biases
+#ValueError: could not broadcast input array from shape (2,14) into shape (3,14)
+##############################################
+                if elev_idx<8:
+                    biases_by_ch_ele[:,:,elev_idx] = all_biases
+                    rmses_by_ch_ele[:,:,elev_idx] = all_rmses
+                    stds_by_ch_ele[:,:,elev_idx] = plot_stds
+                    all_valid+=n_valid 
+                    labels_by_ele.append(plot_labels)
+
+            #####
+            if campaign=="Socles":
+                continue
+            result_dict[campaign][location]["biases"] = biases_by_ch_ele
+            result_dict[campaign][location]["rmses"] = rmses_by_ch_ele
+            result_dict[campaign][location]["stds"] = stds_by_ch_ele
+            result_dict[campaign][location]["n_valid"] = all_valid
+            result_dict[campaign][location]["labels"] = labels_by_ele
+            create_plot_by_chan_and_ele(result_dict[campaign][location])
+     
     
     # make some scatter plots - with RMSE std and bias
 
