@@ -238,7 +238,7 @@ def get_rttov_outputs(valid_indices, rttovgb_outfile=\
             tb_string = ""
             switch_count = 0
             tbs[rs_time_idx, :, ele_idx, crop_idx] = np.array(tbs_rs)
-            print("TBs rs: ", np.array(tbs_rs))
+            # print("TBs rs: ", np.array(tbs_rs))
             
         # Read in Tot Transmittances:     
         if switch_t and switcht_count<2:
