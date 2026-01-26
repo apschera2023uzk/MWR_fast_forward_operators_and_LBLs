@@ -81,14 +81,14 @@ def clear_sky_dataset(ds, thres_lwp=thres_lwp):
     
     for i, timestamp in enumerate(ds["time"].values):
         
-        water_sum = (
-            np.nansum(np.nan_to_num(ds["Dwdhat_LWP"].values[i])) +
-            np.nansum(np.nan_to_num(ds["Foghat_LWP"].values[i])) +
-            np.nansum(np.nan_to_num(ds["Sunhat_LWP"].values[i])) +
-            np.nansum(np.nan_to_num(ds["Tophat_LWP"].values[i])) +
-            np.nansum(np.nan_to_num(ds["Joyhat_LWP"].values[i])) +
-            np.nansum(np.nan_to_num(ds["Hamhat_LWP"].values[i]))
-        )
+        water_sum = np.nanmean(np.array([
+            np.nansum(np.nan_to_num(ds["Dwdhat_LWP"].values[i])),
+            np.nansum(np.nan_to_num(ds["Foghat_LWP"].values[i])),
+            np.nansum(np.nan_to_num(ds["Sunhat_LWP"].values[i])),
+            np.nansum(np.nan_to_num(ds["Tophat_LWP"].values[i])),
+            np.nansum(np.nan_to_num(ds["Joyhat_LWP"].values[i])),
+            np.nansum(np.nan_to_num(ds["Hamhat_LWP"].values[i]))]
+        ))
         
         #######################################################
         # water_sum+=np.nansum(ds["LWP_radiosonde"].values[i,0])
@@ -499,7 +499,7 @@ if __name__ == "__main__":
     ds = xr.open_dataset(nc_out_path)
     ds_clear = clear_sky_dataset(ds)
     result_dict = {}
-    
+
     for campaign in np.unique(ds['Campaign'].values):
         result_dict[campaign] = {}
         for location in np.unique(ds['Location'].values): 
@@ -551,7 +551,6 @@ if __name__ == "__main__":
             result_dict[campaign][location]["labels"] = labels_by_ele
             create_plot_by_chan_and_ele(result_dict[campaign][location])
      
-    
     # make some scatter plots - with RMSE std and bias
 
     # Plot std and bias by elevation angle by channel?
