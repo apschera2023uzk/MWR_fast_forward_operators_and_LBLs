@@ -67,7 +67,7 @@ def parse_arguments():
     parser.add_argument(
         "--output", "-o",
         type=str,
-        default=os.path.expanduser("~/PhD_plots/Nov_Dec_2025/"),
+        default=os.path.expanduser("~/PhD_plots/2026/"),
         help="Output plot directory"
     )
 
@@ -385,10 +385,11 @@ def get_all_TB_values_and_ref_TBs(ds, valid_mwrs, mwr_labels, valid_models,\
     
 ##############################################################################
 
-def create_plot_dirs(ds, args):
+def create_plot_dirs(ds, args, campaign=None, location=None):
 
-    campaign = ds["Campaign"].values[0]
-    location = ds["Location"].values[0]   
+    if not campaign:
+        campaign = ds["Campaign"].values[0]
+        location = ds["Location"].values[0]   
     site_dir       = os.path.join(args.output, campaign+"_"+location)
     os.makedirs(site_dir, exist_ok=True)
         
@@ -478,13 +479,137 @@ def analyze_mwr_model_stats(ds, args, elev_idx=0, model_tbs=model_tbs,\
 
 ##############################################################################
 
-def create_plot_by_chan_and_ele(camp_loc_stat_dict):
-    
-    #["biases"] = biases_by_ch_ele
-    #            result_dict[campaign][location]["rmses"] = rmses_by_ch_ele
-    #            result_dict[campaign][location]["stds"] = stds_by_ch_ele
-    #           result_dict[campaign][location]["n_valid"] = all_valid
-    #          result_dict[campaign][location]["labels"]
+def create_plot_by_chan_and_ele(camp_loc_stat_dict, elevations=elevations,\
+        campaign="any_campaign", location="any_location",args=None):
+    stds_array=camp_loc_stat_dict["stds"]
+    rmses_array=camp_loc_stat_dict["rmses"]
+    biases_array=camp_loc_stat_dict["biases"]
+    n_valid=np.min(np.array(camp_loc_stat_dict["n_valid"]))
+    labels=camp_loc_stat_dict["labels"]
+    channels = np.arange(14)+1
+    elev_idcs = np.arange(8)
+
+    # print(labels); 8-times the same instruments / models
+    std_dir, bias_dir, bias_std_dir = create_plot_dirs(ds, args,\
+        campaign=campaign, location=location)
+
+    for i, label in enumerate(labels[0]):
+        
+        stds = stds_array[i, :, :]
+        rmses = rmses_array[i, :, :]
+        biases = biases_array[i, :, :]
+
+        '''
+        stds = stds_array[i]
+        rmses = rmses_array[i]
+        biases = biases_array[i]
+        '''
+
+        ###
+        # Plot of Std:
+        fig, ax = plt.subplots(figsize=(16, 9))
+        c = ax.pcolormesh(
+            channels,
+            elev_idcs,
+            stds.T,          
+            cmap="viridis",
+            vmin=0.0,
+            vmax=1.0,       
+            shading="auto"
+        )
+        CS = ax.contour(
+            channels,
+            elev_idcs,
+            stds.T,     
+            levels=[0.25, 0.5],
+            colors=["white", "black"],
+            linewidths=1.0
+        )
+        ax.clabel(CS, inline=True, fontsize=8, fmt="%.2f")
+        ax.set_xlabel("Channel")
+        ax.set_ylabel("Elevation [deg]")
+        elev_tags = [str(elev) for elev in elevations[:8]]
+        ax.set_yticks(elev_idcs, elev_tags)
+        title = f"Standard deviation of TB per Channel/Elevation\n\
+            n_valid={n_valid}, {location}, {campaign}, {label}"
+        ax.set_title(title)
+        cb = fig.colorbar(c, ax=ax)
+        cb.set_label("Standard deviation TB [K]")
+        out_path = f"{std_dir}/std_chan_ele_{campaign}_{location}_{label}.png"
+        plt.tight_layout()
+        plt.savefig(out_path, dpi=600)
+        plt.close(fig)
+
+        ###
+        # Plot of Bias:
+        fig, ax = plt.subplots(figsize=(16, 9))
+        c = ax.pcolormesh(
+            channels,
+            elev_idcs,
+            biases.T,          
+            cmap="viridis",
+            vmin=0.0,
+            vmax=1.0,       
+            shading="auto"
+        )
+        CS = ax.contour(
+            channels,
+            elev_idcs,
+            biases.T,     
+            levels=[0.25, 0.5],
+            colors=["white", "black"],
+            linewidths=1.0
+        )
+        ax.clabel(CS, inline=True, fontsize=8, fmt="%.2f")
+        ax.set_xlabel("Channel")
+        ax.set_ylabel("Elevation [deg]")
+        elev_tags = [str(elev) for elev in elevations[:8]]
+        ax.set_yticks(elev_idcs, elev_tags)
+        title = f"Bias of TB per Channel/Elevation\n\
+            n_valid={n_valid}, {location}, {campaign}, {label}"
+        ax.set_title(title)
+        cb = fig.colorbar(c, ax=ax)
+        cb.set_label("Bias TB [K]")
+        out_path = f"{bias_dir}/bias_chan_ele_{campaign}_{location}_{label}.png"
+        plt.tight_layout()
+        plt.savefig(out_path, dpi=600)
+        plt.close(fig)
+
+        ###
+        # Plot of RMSE:
+        fig, ax = plt.subplots(figsize=(16, 9))
+        c = ax.pcolormesh(
+            channels,
+            elev_idcs,
+            rmses.T,          
+            cmap="viridis",
+            vmin=0.0,
+            vmax=1.0,       
+            shading="auto"
+        )
+        CS = ax.contour(
+            channels,
+            elev_idcs,
+            rmses.T,     
+            levels=[0.25, 0.5],
+            colors=["white", "black"],
+            linewidths=1.0
+        )
+        ax.clabel(CS, inline=True, fontsize=8, fmt="%.2f")
+        ax.set_xlabel("Channel")
+        ax.set_ylabel("Elevation [deg]")
+        elev_tags = [str(elev) for elev in elevations[:8]]
+        ax.set_yticks(elev_idcs, elev_tags)
+        title = f"RMSE of TB per Channel/Elevation\n\
+            n_valid={n_valid}, {location}, {campaign}, {label}"
+        ax.set_title(title)
+        cb = fig.colorbar(c, ax=ax)
+        cb.set_label("RMSE TB [K]")
+        out_path = f"{bias_std_dir}/RMSE_chan_ele_{campaign}_{location}_{label}.png"
+        plt.tight_layout()
+        plt.savefig(out_path, dpi=600)
+        plt.close(fig)
+
     return 0
 
 ##############################################################################
@@ -524,24 +649,38 @@ if __name__ == "__main__":
 
                 if elev_idx==0:
                     ####
+                    
                     shapei = np.shape(plot_stds)
                     stds_by_ch_ele = np.full((*shapei, 8), np.nan)                    
                     biases_by_ch_ele = np.full((*shapei, 8), np.nan)
                     rmses_by_ch_ele = np.full((*shapei, 8), np.nan)
-                    all_valid = 0
+                    '''
+                    stds_by_ch_ele = []                  
+                    biases_by_ch_ele = []
+                    rmses_by_ch_ele = []
+                    '''
+                    all_valid = []
 ###############################################
 # Error:
 #    biases_by_ch_ele[:,:,elev_idx] = all_biases
 #ValueError: could not broadcast input array from shape (2,14) into shape (3,14)
+# Just append list of arrays instead of one np-array!
 ##############################################
                 if elev_idx<8:
+                    
                     biases_by_ch_ele[:,:,elev_idx] = all_biases
                     rmses_by_ch_ele[:,:,elev_idx] = all_rmses
                     stds_by_ch_ele[:,:,elev_idx] = plot_stds
-                    all_valid+=n_valid 
+                    '''
+                    biases_by_ch_ele.append(all_biases)
+                    rmses_by_ch_ele.append(all_rmses)
+                    stds_by_ch_ele.append(plot_stds)
+                    '''
+                    all_valid.append(n_valid) 
                     labels_by_ele.append(plot_labels)
 
             #####
+            # Plot std and bias by elevation angle by channel?
             if campaign=="Socles":
                 continue
             result_dict[campaign][location]["biases"] = biases_by_ch_ele
@@ -549,11 +688,14 @@ if __name__ == "__main__":
             result_dict[campaign][location]["stds"] = stds_by_ch_ele
             result_dict[campaign][location]["n_valid"] = all_valid
             result_dict[campaign][location]["labels"] = labels_by_ele
-            create_plot_by_chan_and_ele(result_dict[campaign][location])
+            create_plot_by_chan_and_ele(result_dict[campaign][location],\
+                campaign=campaign, location=location,args=args)
+
+    
      
     # make some scatter plots - with RMSE std and bias
 
-    # Plot std and bias by elevation angle by channel?
+
 
     # Get correlations between channels as many others before.
     # Which pairs but 2/13 are low correlated?
