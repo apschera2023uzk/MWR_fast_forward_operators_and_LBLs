@@ -514,15 +514,15 @@ def create_plot_by_chan_and_ele(camp_loc_stat_dict, elevations=elevations,\
             stds.T,          
             cmap="viridis",
             vmin=0.0,
-            vmax=1.0,       
+            vmax=3.0,       
             shading="auto"
         )
         CS = ax.contour(
             channels,
             elev_idcs,
             stds.T,     
-            levels=[0.25, 0.5],
-            colors=["white", "black"],
+            levels=[0.25, 0.5,1, 2],
+            colors=["white", "red", "black", "purple"],
             linewidths=1.0
         )
         ax.clabel(CS, inline=True, fontsize=8, fmt="%.2f")
@@ -547,17 +547,17 @@ def create_plot_by_chan_and_ele(camp_loc_stat_dict, elevations=elevations,\
             channels,
             elev_idcs,
             biases.T,          
-            cmap="viridis",
-            vmin=0.0,
-            vmax=1.0,       
+            cmap="bwr",
+            vmin=-2.0,
+            vmax=2.0,       
             shading="auto"
         )
         CS = ax.contour(
             channels,
             elev_idcs,
             biases.T,     
-            levels=[0.25, 0.5],
-            colors=["white", "black"],
+            levels=[0.25, 0.5, 1],
+            colors=["red", "black", "purple"],
             linewidths=1.0
         )
         ax.clabel(CS, inline=True, fontsize=8, fmt="%.2f")
@@ -584,15 +584,15 @@ def create_plot_by_chan_and_ele(camp_loc_stat_dict, elevations=elevations,\
             rmses.T,          
             cmap="viridis",
             vmin=0.0,
-            vmax=1.0,       
+            vmax=3.0,       
             shading="auto"
         )
         CS = ax.contour(
             channels,
             elev_idcs,
             rmses.T,     
-            levels=[0.25, 0.5],
-            colors=["white", "black"],
+            levels=[0.25, 0.5,1, 2],
+            colors=["white", "red", "black", "purple"],
             linewidths=1.0
         )
         ax.clabel(CS, inline=True, fontsize=8, fmt="%.2f")
