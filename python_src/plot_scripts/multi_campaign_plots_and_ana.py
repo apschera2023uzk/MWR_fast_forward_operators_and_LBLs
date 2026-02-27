@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 import matplotlib
 import matplotlib.image as mpimg
 from PIL import Image
-
+import matplotlib.colors as colors
 
 ##############################################################################
 # 1.5 Parameters:
@@ -475,7 +475,7 @@ def analyze_mwr_model_stats(ds, args, elev_idx=0, model_tbs=model_tbs,\
     plot_bias_std_lines(ds, all_biases, all_stds, all_labels, channels,\
         channel_labels, elev_idx,n_valid, save_path, tag=tag)
 
-        
+    plt.close("all")
     return plot_stds, all_biases, all_rmses, n_valid, plot_labels, valid_mwrs,\
         all_values, reference_tb, common_valid_mask
 
@@ -505,21 +505,25 @@ def create_plot_by_chan_and_ele(camp_loc_stat_dict, elevations=elevations,\
         ###
         # Plot of Std:
         fig, ax = plt.subplots(figsize=(16, 9))
+        norm = colors.LogNorm(vmin=0.25, vmax=10.) 
         c = ax.pcolormesh(
             channels,
             elev_idcs,
             stds.T,          
             cmap="viridis",
-            vmin=0.0,
-            vmax=3.0,       
+            #################
+            # vmin=0.0,
+            # vmax=3.0,      
+            norm=norm ,
+            ###################
             shading="auto"
         )
         CS = ax.contour(
             channels,
             elev_idcs,
             stds.T,     
-            levels=[0.25, 0.5,1, 2],
-            colors=["white", "red", "black", "purple"],
+            levels=[0.25, 0.5,1, 2, 3],
+            colors=["white", "red", "black", "purple", "black"],
             linewidths=1.0
         )
         ax.clabel(CS, inline=True, fontsize=8, fmt="%.2f")
@@ -531,6 +535,9 @@ def create_plot_by_chan_and_ele(camp_loc_stat_dict, elevations=elevations,\
             n_valid={n_valid}, {location}, {campaign}, {label}, {tag}"
         ax.set_title(title)
         cb = fig.colorbar(c, ax=ax)
+        ticks = [0.25, 0.5, 1, 2, 3, 5,7.5, 10]
+        cb.set_ticks(ticks)
+        cb.set_ticklabels([str(t) for t in ticks])  # explizit lineare Labels
         cb.set_label("Standard deviation TB [K]")
         out_path = f"{std_dir}/{tag}_std_chan_ele_{campaign}_{location}_{label}.png"
         plt.tight_layout()
@@ -540,20 +547,24 @@ def create_plot_by_chan_and_ele(camp_loc_stat_dict, elevations=elevations,\
         ###
         # Plot of Bias:
         fig, ax = plt.subplots(figsize=(16, 9))
+        norm = colors.SymLogNorm(linthresh=0.25, vmin=-15, vmax=15.) 
         c = ax.pcolormesh(
             channels,
             elev_idcs,
             biases.T,          
             cmap="bwr",
-            vmin=-2.0,
-            vmax=2.0,       
+            ##############
+            #vmin=-2.0,
+            #vmax=2.0,
+            norm=norm,      
+            ############## 
             shading="auto"
         )
         CS = ax.contour(
             channels,
             elev_idcs,
             biases.T,     
-            levels=[0.25, 0.5, 1],
+            levels=[-2, -1,-0.5,-0.25,0.25, 0.5,1, 2],
             colors=["red", "black", "purple"],
             linewidths=1.0
         )
@@ -566,6 +577,9 @@ def create_plot_by_chan_and_ele(camp_loc_stat_dict, elevations=elevations,\
             n_valid={n_valid}, {location}, {campaign}, {label}, {tag}"
         ax.set_title(title)
         cb = fig.colorbar(c, ax=ax)
+        ticks = [-15,-7.5, -5,-3, -2,-1,-0.5,-0.25, 0.25, 0.5, 1, 2, 3,5,7.5,15]
+        cb.set_ticks(ticks)
+        cb.set_ticklabels([str(t) for t in ticks])  # explizit lineare Labels
         cb.set_label("Bias TB [K]")
         out_path = f"{bias_dir}/{tag}_bias_chan_ele_{campaign}_{location}_{label}.png"
         plt.tight_layout()
@@ -575,21 +589,24 @@ def create_plot_by_chan_and_ele(camp_loc_stat_dict, elevations=elevations,\
         ###
         # Plot of RMSE:
         fig, ax = plt.subplots(figsize=(16, 9))
+        norm = colors.LogNorm(vmin=0.25, vmax=10.)
         c = ax.pcolormesh(
             channels,
             elev_idcs,
             rmses.T,          
             cmap="viridis",
-            vmin=0.0,
-            vmax=3.0,       
+            ##########
+            #vmin=0.0,
+            # vmax=3.0,       
+            norm = norm,
             shading="auto"
         )
         CS = ax.contour(
             channels,
             elev_idcs,
             rmses.T,     
-            levels=[0.25, 0.5,1, 2],
-            colors=["white", "red", "black", "purple"],
+            levels=[0.25, 0.5,1, 2, 3],
+            colors=["white", "red", "black", "purple", "black"],
             linewidths=1.0
         )
         ax.clabel(CS, inline=True, fontsize=8, fmt="%.2f")
@@ -601,12 +618,16 @@ def create_plot_by_chan_and_ele(camp_loc_stat_dict, elevations=elevations,\
             n_valid={n_valid}, {location}, {campaign}, {label}, {tag}"
         ax.set_title(title)
         cb = fig.colorbar(c, ax=ax)
+        ticks = [0.25, 0.5, 1, 2, 3, 5,7.5, 10]
+        cb.set_ticks(ticks)
+        cb.set_ticklabels([str(t) for t in ticks])  # explizit lineare Labels
         cb.set_label("RMSE TB [K]")
         out_path = f"{bias_std_dir}/{tag}_RMSE_chan_ele_{campaign}_{location}_{label}.png"
         plt.tight_layout()
         plt.savefig(out_path, dpi=600)
         plt.close(fig)
 
+    plt.close("all")
     return 0
 
 ##############################################################################
@@ -659,6 +680,196 @@ def extract_IWV_timelines_of_camp_loc(ds_sel, campaign, location):
 
 ##############################################################################
 
+def ensure_folder_exists(base_path, folder_name):
+    # Join the base path with the folder name
+    folder_path = os.path.join(base_path, folder_name)
+    # Create the directory if it does not exist
+    os.makedirs(folder_path, exist_ok=True)
+
+    return os.path.abspath(folder_path)
+
+##############################################################################
+
+def plot_departures_vs_iwv(camp_loc_stat_dict, all_departures_arms_gb,\
+        all_departures_rttov_gb, all_iwvs, elevations=None, channels=14,\
+        campaign="any", location="any", tag="any_tag",
+                          outpath="./"):
+
+    ###
+    # 1st plots:
+    # RTTOV-gb vs. IWV:
+    # all channels all elevations!   
+    fig1, ax1 = plt.subplots(figsize=(10, 10))
+    # y_all = np.nanmean(all_departures_rttov_gb, axis=1)   # (288*14,)    
+    y_all = (all_departures_rttov_gb).flatten() 
+    x_all = np.tile(all_iwvs, 14) 
+    scatter1 = ax1.scatter(x_all, y_all,marker="X",color="red")
+    ax1.axvline(x=0, color='black', linestyle='--', linewidth=2)
+    ax1.axhline(y=0, color='black', linestyle='--', linewidth=2)
+    ax1.set_ylabel('RTTOV-gb deviations from R24 [K]')
+    ax1.set_xlabel('IWV [kg m-2]')
+    ax1.set_xlim(0,45)
+    if np.nanmax(np.abs(y_all))<14:
+        ax1.set_ylim(-13,+13)
+    ax1.set_title(f'RTTOV-gb deviations from reference by IWV\n\
+            ({campaign}_{location}_{tag})')
+    plt.savefig(outpath+\
+        f"{tag}_All_elevs_chans_RTTOV_by_IWV_{location}_{campaign}.png",\
+         dpi=300, bbox_inches='tight')
+    plt.close("all")
+
+    ###
+    # 1st plots:
+    # ARMS-gb vs. IWV:
+    # all channels all elevations!   
+    fig1, ax1 = plt.subplots(figsize=(10, 10))
+    # y_all = np.nanmean(all_departures_arms_gb, axis=1)   # (288*14,)  
+    y_all = (all_departures_arms_gb).flatten()
+    x_all = np.tile(all_iwvs, 14) 
+    scatter1 = ax1.scatter(x_all, y_all,marker="X",color="red")
+    ax1.axvline(x=0, color='black', linestyle='--', linewidth=2)
+    ax1.axhline(y=0, color='black', linestyle='--', linewidth=2)
+    ax1.set_ylabel('ARMS-gb deviations from R24 [K]')
+    ax1.set_xlabel('IWV [kg m-2]')
+    ax1.set_xlim(0,45)
+    if np.nanmax(np.abs(y_all))<14:
+        ax1.set_ylim(-13,+13)
+    ax1.set_title(f'ARMS-gb deviations from reference by IWV\n\
+            ({campaign}_{location}_{tag})')
+    plt.savefig(outpath+\
+        f"{tag}_All_elevs_chans_ARMS_by_IWV_{location}_{campaign}.png",\
+         dpi=300, bbox_inches='tight')
+    plt.close("all")
+
+    for i in range(channels):
+
+        ###
+        # 1st plots:
+        # RTTOV-gb vs. IWV:
+        # Each channel all elevations!   
+        fig1, ax1 = plt.subplots(figsize=(10, 10))
+        y_all = all_departures_rttov_gb[:,i]   
+        scatter1 = ax1.scatter(all_iwvs, y_all,marker="X",color="red")
+        ax1.axvline(x=0, color='black', linestyle='--', linewidth=2)
+        ax1.axhline(y=0, color='black', linestyle='--', linewidth=2)
+        ax1.set_ylabel('RTTOV-gb deviations from R24 [K]')
+        ax1.set_xlabel('IWV [kg m-2]')
+        ax1.set_xlim(0,45)
+        if idx>6:
+            axis_len = 4
+        elif idx<=6:
+            axis_len = 13
+        if np.nanmax(np.abs(y_all))<axis_len:
+            ax1.set_ylim(-axis_len,+axis_len)
+        ax1.set_title(f'Channel {i+1} RTTOV-gb deviations from reference by IWV\n\
+                ({campaign}_{location}_{tag})')
+        plt.savefig(outpath+\
+            f"{tag}_ch{i+1}_RTTOV_by_IWV_{location}_{campaign}.png",\
+             dpi=300, bbox_inches='tight')
+        plt.close("all")
+
+        ###
+        # 1st plots:
+        # ARMS-gb vs. IWV:
+        # Each channel all elevations!     
+        fig1, ax1 = plt.subplots(figsize=(10, 10))
+        y_all = all_departures_arms_gb[:,i]      
+        scatter1 = ax1.scatter(all_iwvs, y_all,marker="X",color="red")
+        ax1.axvline(x=0, color='black', linestyle='--', linewidth=2)
+        ax1.axhline(y=0, color='black', linestyle='--', linewidth=2)
+        ax1.set_ylabel('ARMS-gb deviations from R24 [K]')
+        ax1.set_xlabel('IWV [kg m-2]')
+        ax1.set_xlim(0,45)
+        if idx>6:
+            axis_len = 4
+        elif idx<=6:
+            axis_len = 13
+        if np.nanmax(np.abs(y_all))<axis_len:
+            ax1.set_ylim(-axis_len,+axis_len)
+        ax1.set_title(f'Channel {i+1} ARMS-gb deviations from reference by IWV\n\
+                ({campaign}_{location}_{tag})')
+        plt.savefig(outpath+\
+            f"{tag}_ch{i+1}_ARMS_by_IWV_{location}_{campaign}.png",\
+             dpi=300, bbox_inches='tight')
+        plt.close("all")
+
+    #############################################
+    # Read variables form dictionary:
+    stds_array=camp_loc_stat_dict["stds"]
+    rmses_array=camp_loc_stat_dict["rmses"]
+    biases_array=camp_loc_stat_dict["biases"]
+    iwv_np_array = camp_loc_stat_dict["IWV"].values
+    n_valid=np.min(np.array(camp_loc_stat_dict["n_valid"]))
+    labels=camp_loc_stat_dict["labels"]
+    non_ref_tbs = camp_loc_stat_dict["all_non_ref_tbs"]
+    ref_tbs = camp_loc_stat_dict["all_ref_tbs"]
+    com_val_mask = camp_loc_stat_dict["vald_masks"]
+
+    for i, (labelset,ref_tbs, tbs, val_mask) in\
+            enumerate(zip(labels,ref_tbs, non_ref_tbs, com_val_mask)):
+        for j in range(len(labelset)):
+            if "ARMS" in labelset[j]:
+                arms_idx = j
+            elif "RTTOV" in labelset[j]:
+                rttov_idx = j
+        if i==0:
+            all_departures_rttov_gb = tbs[rttov_idx]-ref_tbs
+            all_departures_arms_gb = tbs[arms_idx]-ref_tbs
+            all_iwvs = iwv_np_array[val_mask]
+        else:
+            all_departures_arms_gb = np.concatenate(\
+                    [all_departures_arms_gb, tbs[arms_idx]-ref_tbs], axis=0)
+            all_departures_rttov_gb = np.concatenate(\
+                    [all_departures_rttov_gb, tbs[rttov_idx]-ref_tbs], axis=0)
+            all_iwvs = np.concatenate([all_iwvs,iwv_np_array[val_mask]], axis=0)
+
+        ##################
+        ###
+        # 8 plots for each elevation and every channel
+        fig1, ax1 = plt.subplots(figsize=(10, 10))
+        # y_all = np.nanmean((tbs[rttov_idx]-ref_tbs), axis=1)
+        y_all = (tbs[rttov_idx]-ref_tbs).flatten()
+        x_all = np.tile(iwv_np_array[val_mask], 14)
+        scatter1 = ax1.scatter(x_all, y_all,marker="X",color="red")
+        ax1.axvline(x=0, color='black', linestyle='--', linewidth=2)
+        ax1.axhline(y=0, color='black', linestyle='--', linewidth=2)
+        ax1.set_xlabel('RTTOV-gb deviations from R24 [K]')
+        ax1.set_xlabel('IWV [kg m-2]')
+        ax1.set_xlim(0,45)
+        if np.nanmax(np.abs(y_all))<14:
+            ax1.set_ylim(-13,+13)
+        ax1.set_title(f'RTTOV-gb deviations from reference by IWV\n\
+                Elevation: {elevations[i]}°_{campaign}_{location}_{tag})')
+        plt.savefig(outpath+\
+            f"{tag}_each_ele_RTTOV_by_IWV_{location}_{campaign}_{elevations[i]}.png",\
+             dpi=300, bbox_inches='tight')
+
+        ##################
+        ###
+        # 8 plots for each elevation and every channel
+        fig1, ax1 = plt.subplots(figsize=(10, 10))
+        # y_all = np.nanmean((tbs[arms_idx]-ref_tbs), axis=1)
+        y_all = (tbs[arms_idx]-ref_tbs).flatten()
+        x_all = np.tile(iwv_np_array[val_mask], 14)
+        scatter1 = ax1.scatter(x_all, y_all,marker="X",color="red")
+        ax1.axvline(x=0, color='black', linestyle='--', linewidth=2)
+        ax1.axhline(y=0, color='black', linestyle='--', linewidth=2)
+        ax1.set_xlabel('ARMS-gb deviations from R24 [K]')
+        ax1.set_xlabel('IWV [kg m-2]')
+        if np.nanmax(np.abs(y_all))<14:
+            ax1.set_ylim(-13,+13)
+        ax1.set_xlim(0,45)
+        ax1.set_title(f'ARMS-gb deviations from reference by IWV\n\
+                Elevation: {elevations[i]}°_{campaign}_{location}_{tag})')
+        plt.savefig(outpath+\
+            f"{tag}_each_ele_ARMS_by_IWV_{location}_{campaign}_{elevations[i]}.png",\
+             dpi=300, bbox_inches='tight')
+        plt.close("all")
+
+    return 0
+
+##############################################################################
+
 def armsgb_vs_rttov_by_IWV(camp_loc_stat_dict, elevations=elevations,\
         campaign="any_campaign", location="any_location",args=None,\
         tag="any_tag"):
@@ -674,8 +885,10 @@ def armsgb_vs_rttov_by_IWV(camp_loc_stat_dict, elevations=elevations,\
     ref_tbs = camp_loc_stat_dict["all_ref_tbs"]
     com_val_mask = camp_loc_stat_dict["vald_masks"]
     folder="ARMS_and_RTTOV_departures_against_IWV/"
-    outpath = args.output+folder
+    outpath = ensure_folder_exists(args.output+folder, campaign+"_"+location)+"/"
+    ensure_folder_exists(outpath, "err_by_iwv")
 
+    # First loop by elevation angle: 90° - 5.4°
     for i, (labelset,ref_tbs, tbs, val_mask) in\
             enumerate(zip(labels,ref_tbs, non_ref_tbs, com_val_mask)):
         for j in range(len(labelset)):
@@ -702,17 +915,24 @@ def armsgb_vs_rttov_by_IWV(camp_loc_stat_dict, elevations=elevations,\
         y_all = (tbs[rttov_idx]-ref_tbs).flatten()
         colors_all = np.tile(iwv_np_array[val_mask], 14)
         scatter1 = ax1.scatter(x_all, y_all, c=colors_all, cmap='viridis',\
-                s=20, alpha=0.7)
+                s=40, alpha=0.7)
         ax1.axvline(x=0, color='black', linestyle='--', linewidth=2)
         ax1.axhline(y=0, color='black', linestyle='--', linewidth=2)
         ax1.set_xlabel('ARMS-gb deviations from R24 [K]')
         ax1.set_ylabel('RTTOV-gb deviations from R24 [K]')
         ax1.set_title(f'RTTOV-gb and ARMS-gb TB deviations from reference by IWV\n\
                 Elevation: {elevations[i]}°_{campaign}_{location}_{tag})')
-        ax1.set_aspect('equal')
+        ############
+        if np.nanmax(np.abs(y_all))<14:
+            ax1.set_ylim(-13,+13)
+        if np.nanmax(np.abs(x_all))<14:
+            ax1.set_xlim(-13,+13)
+        if np.nanmax(np.abs(x_all))<14 and np.nanmax(np.abs(y_all))<14:
+            ax1.set_aspect('equal')
+        ##############
         plt.colorbar(scatter1, ax=ax1, label='IWV [kg m-2]')
         plt.savefig(outpath+\
-            f"{tag}_Each_elev_ARMS_RTTOV_by_IWV_{location}_{campaign}_ch{i+1}.png",\
+            f"{tag}_Each_elev_ARMS_RTTOV_by_IWV_{location}_{campaign}_{elevations[i]}.png",\
              dpi=300, bbox_inches='tight')
 
     ###
@@ -724,14 +944,22 @@ def armsgb_vs_rttov_by_IWV(camp_loc_stat_dict, elevations=elevations,\
     y_all = all_departures_rttov_gb.flatten()    # (288*14,)
     colors_all = np.tile(all_iwvs, 14)            
     scatter1 = ax1.scatter(x_all, y_all, c=colors_all, cmap='viridis',\
-            s=20, alpha=0.7)
+            s=40, alpha=0.7)
     ax1.axvline(x=0, color='black', linestyle='--', linewidth=2)
     ax1.axhline(y=0, color='black', linestyle='--', linewidth=2)
     ax1.set_xlabel('ARMS-gb deviations from R24 [K]')
     ax1.set_ylabel('RTTOV-gb deviations from R24 [K]')
+    ############
+    if np.nanmax(np.abs(y_all))<14:
+        ax1.set_ylim(-13,+13)
+    if np.nanmax(np.abs(x_all))<14:
+        ax1.set_xlim(-13,+13)
+    if np.nanmax(np.abs(x_all))<14 and np.nanmax(np.abs(y_all))<14:
+        ax1.set_aspect('equal')
+    ##############
     ax1.set_title(f'RTTOV-gb and ARMS-gb TB deviations from reference by IWV\n\
             ({campaign}_{location}_{tag})')
-    ax1.set_aspect('equal')
+    # ax1.set_aspect('equal')
     plt.colorbar(scatter1, ax=ax1, label='IWV [kg m-2]')
     plt.savefig(outpath+\
         f"{tag}_All_elevs_chans_ARMS_RTTOV_by_IWV_{location}_{campaign}.png",\
@@ -743,10 +971,10 @@ def armsgb_vs_rttov_by_IWV(camp_loc_stat_dict, elevations=elevations,\
     # 14 plots for each channel and every elevation!
     for idx in range(14):
         fig, ax = plt.subplots(figsize=(12, 10))  # Großes Format
-        x_idx = all_departures_arms_gb[:, idx]
-        y_idx = all_departures_rttov_gb[:, idx]
+        x_all = all_departures_arms_gb[:, idx]
+        y_all = all_departures_rttov_gb[:, idx]
         colors_idx = all_iwvs[:]  # (288,)
-        scatter = ax.scatter(x_idx, y_idx, c=colors_idx, cmap='viridis', 
+        scatter = ax.scatter(x_all, y_all, c=colors_idx, cmap='viridis', 
                             s=40, alpha=0.7)
         ax.set_xlabel('ARMS-gb deviations from R24 [K]')
         ax.set_ylabel('RTTOV-gb deviations from R24 [K]')
@@ -754,9 +982,18 @@ def armsgb_vs_rttov_by_IWV(camp_loc_stat_dict, elevations=elevations,\
             ({campaign}_{location}_{tag})')
         ax.axvline(x=0, color='black', linestyle='--', linewidth=2)
         ax.axhline(y=0, color='black', linestyle='--', linewidth=2)
-        # Quadratisches Aspect Ratio
-        ax.set_aspect('equal')
-        # Colorbar
+        ############
+        if idx>6:
+            axis_len = 4
+        elif idx<=6:
+            axis_len = 13
+        if np.nanmax(np.abs(y_all))<axis_len:
+            ax.set_ylim(-axis_len,+axis_len)
+        if np.nanmax(np.abs(x_all))<axis_len:
+            ax.set_xlim(-axis_len,+axis_len)
+        if np.nanmax(np.abs(x_all))<axis_len and np.nanmax(np.abs(y_all))<axis_len:
+            ax.set_aspect('equal')
+        ##############
         cbar = plt.colorbar(scatter, ax=ax, label='IWV [kg m$^{-2}$]')
         cbar.ax.tick_params(labelsize=10)
         plt.tight_layout()
@@ -765,8 +1002,11 @@ def armsgb_vs_rttov_by_IWV(camp_loc_stat_dict, elevations=elevations,\
                     f"{tag}_Channel_{idx+1}_ARMS_RTTOV_by_IWV_scatter_{location}_{campaign}.png", dpi=300, bbox_inches='tight')
         plt.close(fig)
 
-    ####
-    # 8*14 plots for every channel and elevation combination!
+    plot_departures_vs_iwv(camp_loc_stat_dict, all_departures_arms_gb,\
+         all_departures_rttov_gb,\
+        all_iwvs, elevations=elevations, channels=14, campaign=campaign,\
+        location=location, tag=tag, outpath=outpath+"err_by_iwv/")
+
     plt.close("all")
     return 0
 
@@ -847,6 +1087,8 @@ if __name__ == "__main__":
             result_dict[campaign][location]["all_non_ref_tbs"] = all_tbs_frtm_mwr
             result_dict[campaign][location]["all_ref_tbs"] = all_tb_references
             result_dict[campaign][location]["vald_masks"] = validity_masks
+            
+
             create_plot_by_chan_and_ele(result_dict[campaign][location],\
                 campaign=campaign, location=location,args=args, tag="clear_sky")
 
@@ -857,6 +1099,8 @@ if __name__ == "__main__":
 
     ###########################################################################
     # ===== CLOUDY PROCESSING (IDENTISCH wie clear, nur ds_cloudy) =====
+    '''
+    '''
     result_dict_cloudy = {}
     
     for campaign in np.unique(ds['Campaign'].values):
@@ -924,6 +1168,7 @@ if __name__ == "__main__":
             result_dict_cloudy[campaign][location]["all_ref_tbs"] = all_tb_references
             result_dict_cloudy[campaign][location]["vald_masks"] = validity_masks
             
+
             # Plotting für cloudy:
             create_plot_by_chan_and_ele(result_dict_cloudy[campaign][location],\
                 campaign=campaign, location=location,args=args, tag="cloudy_sky")
@@ -931,7 +1176,147 @@ if __name__ == "__main__":
             # ARMS-gb vs RTTOV-gb für cloudy:
             armsgb_vs_rttov_by_IWV(result_dict_cloudy[campaign][location],\
                 campaign=campaign, location=location,args=args, tag="cloudy_sky")
+
+
+    ###########################################################################
+    # Check RAO again for different periods!
+
+    campaign = "FESSTVaL"
+    location = "RAO_Lindenberg"
+
+    #1st May:
+    # Filter data for campaign and location:
+    ds_sel = select_ds_camp_loc(ds_clear, "FESSTVaL", "RAO_Lindenberg")
+    ##################################
+    # print("time values: ",ds_sel["time"].values[0:20])
+    # print("time type: ",type(ds_sel["time"].values[0]))
+    ds_sel = ds_sel.sortby("time")
+    ds_sel = ds_sel.sel(time=slice('2021-05-10T00:00:00','2021-05-31T00:00:00'))
+    ###################################
+
+    iwv_da, lwp_da, hua_da = extract_IWV_timelines_of_camp_loc(\
+        ds_sel, "FESSTVaL", "RAO_Lindenberg")
+
+    # 2nd Applying statistics to dataset:
+    for elev_idx in range(n_elev):
+        print("\nElevation index: ",elev_idx, " : ", elevations[elev_idx])
+        plot_stds, all_biases, all_rmses, n_valid, plot_labels,\
+            old_valid_mwrs, all_values, reference_tb,\
+            common_valid_mask =\
+            analyze_mwr_model_stats(ds_sel, args,\
+             elev_idx=elev_idx, tag="May_dry_RAO")
+
+        if campaign=="Socles":
+            continue
+
+        if elev_idx==0:
+            ####
+            
+            shapei = np.shape(plot_stds)
+            stds_by_ch_ele = np.full((*shapei, 8), np.nan)                    
+            biases_by_ch_ele = np.full((*shapei, 8), np.nan)
+            rmses_by_ch_ele = np.full((*shapei, 8), np.nan)
+            all_valid = []
+        if elev_idx<8:
+            
+            biases_by_ch_ele[:,:,elev_idx] = all_biases
+            rmses_by_ch_ele[:,:,elev_idx] = all_rmses
+            stds_by_ch_ele[:,:,elev_idx] = plot_stds
+            all_valid.append(n_valid) 
+            labels_by_ele.append(plot_labels)
+            all_tbs_frtm_mwr.append(all_values)
+            all_tb_references.append(reference_tb)
+            validity_masks.append(common_valid_mask)
+
+    #####
+    # Plot std and bias by elevation angle by channel?
+    result_dict[campaign][location]["biases"] = biases_by_ch_ele
+    result_dict[campaign][location]["rmses"] = rmses_by_ch_ele
+    result_dict[campaign][location]["stds"] = stds_by_ch_ele
+    result_dict[campaign][location]["n_valid"] = all_valid
+    result_dict[campaign][location]["labels"] = labels_by_ele
+    result_dict[campaign][location]["IWV"] = iwv_da
+    result_dict[campaign][location]["LWP"] = lwp_da
+    result_dict[campaign][location]["hua"] = hua_da
+    result_dict[campaign][location]["all_non_ref_tbs"] = all_tbs_frtm_mwr
+    result_dict[campaign][location]["all_ref_tbs"] = all_tb_references
+    result_dict[campaign][location]["vald_masks"] = validity_masks
     
+    create_plot_by_chan_and_ele(result_dict[campaign][location],\
+        campaign=campaign, location=location,args=args, tag="May_dry_RAO")
+
+    
+    ###
+    # Create ARMS-gb vs. RTTOV-gb plots by IWV:
+    armsgb_vs_rttov_by_IWV(result_dict[campaign][location],\
+         campaign=campaign, location=location,args=args, tag="May_dry_RAO")
+
+    ######################################################################
+    # 2nd June/July:
+    # Filter data for campaign and location:
+    ds_sel = select_ds_camp_loc(ds_clear, "FESSTVaL", "RAO_Lindenberg")
+    ##################################
+    ds_sel = ds_sel.sortby("time")
+    ds_sel = ds_sel.sel(time=slice("2021-06-19T00:00:00","2021-07-18T00:00:00"))
+    ###################################
+
+    iwv_da, lwp_da, hua_da = extract_IWV_timelines_of_camp_loc(\
+        ds_sel, "FESSTVaL", "RAO_Lindenberg")
+
+    # 2nd Applying statistics to dataset:
+    for elev_idx in range(n_elev):
+        print("\nElevation index: ",elev_idx, " : ", elevations[elev_idx])
+        plot_stds, all_biases, all_rmses, n_valid, plot_labels,\
+            old_valid_mwrs, all_values, reference_tb,\
+            common_valid_mask =\
+            analyze_mwr_model_stats(ds_sel, args,\
+             elev_idx=elev_idx, tag="JJ_humid_RAO")
+
+        if campaign=="Socles":
+            continue
+
+        if elev_idx==0:
+            ####
+            
+            shapei = np.shape(plot_stds)
+            stds_by_ch_ele = np.full((*shapei, 8), np.nan)                    
+            biases_by_ch_ele = np.full((*shapei, 8), np.nan)
+            rmses_by_ch_ele = np.full((*shapei, 8), np.nan)
+            all_valid = []
+        if elev_idx<8:
+            
+            biases_by_ch_ele[:,:,elev_idx] = all_biases
+            rmses_by_ch_ele[:,:,elev_idx] = all_rmses
+            stds_by_ch_ele[:,:,elev_idx] = plot_stds
+            all_valid.append(n_valid) 
+            labels_by_ele.append(plot_labels)
+            all_tbs_frtm_mwr.append(all_values)
+            all_tb_references.append(reference_tb)
+            validity_masks.append(common_valid_mask)
+
+    #####
+    # Plot std and bias by elevation angle by channel?
+    result_dict[campaign][location]["biases"] = biases_by_ch_ele
+    result_dict[campaign][location]["rmses"] = rmses_by_ch_ele
+    result_dict[campaign][location]["stds"] = stds_by_ch_ele
+    result_dict[campaign][location]["n_valid"] = all_valid
+    result_dict[campaign][location]["labels"] = labels_by_ele
+    result_dict[campaign][location]["IWV"] = iwv_da
+    result_dict[campaign][location]["LWP"] = lwp_da
+    result_dict[campaign][location]["hua"] = hua_da
+    result_dict[campaign][location]["all_non_ref_tbs"] = all_tbs_frtm_mwr
+    result_dict[campaign][location]["all_ref_tbs"] = all_tb_references
+    result_dict[campaign][location]["vald_masks"] = validity_masks
+    
+    create_plot_by_chan_and_ele(result_dict[campaign][location],\
+        campaign=campaign, location=location,args=args, tag="JJ_humid_RAO")
+    
+
+    ###
+    # Create ARMS-gb vs. RTTOV-gb plots by IWV:
+    # armsgb_vs_rttov_by_IWV(result_dict[campaign][location],\
+    #     campaign=campaign, location=location,args=args, tag="JJ_humid_RAO")
+
     ###########################################################################
      
     # make some scatter plots - with RMSE std and bias
