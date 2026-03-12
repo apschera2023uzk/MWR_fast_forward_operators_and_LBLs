@@ -532,7 +532,7 @@ def create_plot_by_chan_and_ele(camp_loc_stat_dict, elevations=elevations,\
         elev_tags = [str(elev) for elev in elevations[:8]]
         ax.set_yticks(elev_idcs, elev_tags)
         title = f"Standard deviation of TB per Channel/Elevation\n\
-            n_valid={n_valid}, {location}, {campaign}, {label}, {tag}"
+            n_valid={n_valid}, {location}, {campaign}, {label}-R24 PyRTlib, {tag}"
         ax.set_title(title)
         cb = fig.colorbar(c, ax=ax)
         ticks = [0.25, 0.5, 1, 2, 3, 5,7.5, 10]
@@ -574,7 +574,7 @@ def create_plot_by_chan_and_ele(camp_loc_stat_dict, elevations=elevations,\
         elev_tags = [str(elev) for elev in elevations[:8]]
         ax.set_yticks(elev_idcs, elev_tags)
         title = f"Bias of TB per Channel/Elevation\n\
-            n_valid={n_valid}, {location}, {campaign}, {label}, {tag}"
+            n_valid={n_valid}, {location}, {campaign}, {label}-R24 PyRTlib, {tag}"
         ax.set_title(title)
         cb = fig.colorbar(c, ax=ax)
         ticks = [-15,-7.5, -5,-3, -2,-1,-0.5,-0.25, 0.25, 0.5, 1, 2, 3,5,7.5,15]
@@ -615,7 +615,7 @@ def create_plot_by_chan_and_ele(camp_loc_stat_dict, elevations=elevations,\
         elev_tags = [str(elev) for elev in elevations[:8]]
         ax.set_yticks(elev_idcs, elev_tags)
         title = f"RMSE of TB per Channel/Elevation\n\
-            n_valid={n_valid}, {location}, {campaign}, {label}, {tag}"
+            n_valid={n_valid}, {location}, {campaign}, {label}-R24 PyRTlib, {tag}"
         ax.set_title(title)
         cb = fig.colorbar(c, ax=ax)
         ticks = [0.25, 0.5, 1, 2, 3, 5,7.5, 10]
@@ -711,7 +711,7 @@ def plot_departures_vs_iwv(camp_loc_stat_dict, all_departures_arms_gb,\
     ax1.set_xlim(0,45)
     if np.nanmax(np.abs(y_all))<14:
         ax1.set_ylim(-13,+13)
-    ax1.set_title(f'RTTOV-gb deviations from reference by IWV\n\
+    ax1.set_title(f'RTTOV-gb deviations from R24 PyRTlib by IWV\n\
             ({campaign}_{location}_{tag})')
     plt.savefig(outpath+\
         f"{tag}_All_elevs_chans_RTTOV_by_IWV_{location}_{campaign}.png",\
@@ -734,7 +734,7 @@ def plot_departures_vs_iwv(camp_loc_stat_dict, all_departures_arms_gb,\
     ax1.set_xlim(0,45)
     if np.nanmax(np.abs(y_all))<14:
         ax1.set_ylim(-13,+13)
-    ax1.set_title(f'ARMS-gb deviations from reference by IWV\n\
+    ax1.set_title(f'ARMS-gb deviations from R24 PyRTlib by IWV\n\
             ({campaign}_{location}_{tag})')
     plt.savefig(outpath+\
         f"{tag}_All_elevs_chans_ARMS_by_IWV_{location}_{campaign}.png",\
@@ -755,13 +755,13 @@ def plot_departures_vs_iwv(camp_loc_stat_dict, all_departures_arms_gb,\
         ax1.set_ylabel('RTTOV-gb deviations from R24 [K]')
         ax1.set_xlabel('IWV [kg m-2]')
         ax1.set_xlim(0,45)
-        if idx>6:
+        if np.nanmax(np.abs(y_all))<=4:
             axis_len = 4
-        elif idx<=6:
+        elif np.nanmax(np.abs(y_all))<=13:
             axis_len = 13
-        if np.nanmax(np.abs(y_all))<axis_len:
+        if np.nanmax(np.abs(y_all))<=13:
             ax1.set_ylim(-axis_len,+axis_len)
-        ax1.set_title(f'Channel {i+1} RTTOV-gb deviations from reference by IWV\n\
+        ax1.set_title(f'Channel {i+1} RTTOV-gb deviations from R24 PyRTlib by IWV\n\
                 ({campaign}_{location}_{tag})')
         plt.savefig(outpath+\
             f"{tag}_ch{i+1}_RTTOV_by_IWV_{location}_{campaign}.png",\
@@ -780,13 +780,13 @@ def plot_departures_vs_iwv(camp_loc_stat_dict, all_departures_arms_gb,\
         ax1.set_ylabel('ARMS-gb deviations from R24 [K]')
         ax1.set_xlabel('IWV [kg m-2]')
         ax1.set_xlim(0,45)
-        if idx>6:
+        if np.nanmax(np.abs(y_all))<=4:
             axis_len = 4
-        elif idx<=6:
+        elif np.nanmax(np.abs(y_all))<=13:
             axis_len = 13
-        if np.nanmax(np.abs(y_all))<axis_len:
+        if np.nanmax(np.abs(y_all))<=13:
             ax1.set_ylim(-axis_len,+axis_len)
-        ax1.set_title(f'Channel {i+1} ARMS-gb deviations from reference by IWV\n\
+        ax1.set_title(f'Channel {i+1} ARMS-gb deviations from R24 PyRTlib by IWV\n\
                 ({campaign}_{location}_{tag})')
         plt.savefig(outpath+\
             f"{tag}_ch{i+1}_ARMS_by_IWV_{location}_{campaign}.png",\
@@ -838,7 +838,7 @@ def plot_departures_vs_iwv(camp_loc_stat_dict, all_departures_arms_gb,\
         ax1.set_xlim(0,45)
         if np.nanmax(np.abs(y_all))<14:
             ax1.set_ylim(-13,+13)
-        ax1.set_title(f'RTTOV-gb deviations from reference by IWV\n\
+        ax1.set_title(f'RTTOV-gb deviations from R24 PyRTlib by IWV\n\
                 Elevation: {elevations[i]}°_{campaign}_{location}_{tag})')
         plt.savefig(outpath+\
             f"{tag}_each_ele_RTTOV_by_IWV_{location}_{campaign}_{elevations[i]}.png",\
@@ -859,7 +859,7 @@ def plot_departures_vs_iwv(camp_loc_stat_dict, all_departures_arms_gb,\
         if np.nanmax(np.abs(y_all))<14:
             ax1.set_ylim(-13,+13)
         ax1.set_xlim(0,45)
-        ax1.set_title(f'ARMS-gb deviations from reference by IWV\n\
+        ax1.set_title(f'ARMS-gb deviations from R24 PyRTlib by IWV\n\
                 Elevation: {elevations[i]}°_{campaign}_{location}_{tag})')
         plt.savefig(outpath+\
             f"{tag}_each_ele_ARMS_by_IWV_{location}_{campaign}_{elevations[i]}.png",\
@@ -920,7 +920,7 @@ def armsgb_vs_rttov_by_IWV(camp_loc_stat_dict, elevations=elevations,\
         ax1.axhline(y=0, color='black', linestyle='--', linewidth=2)
         ax1.set_xlabel('ARMS-gb deviations from R24 [K]')
         ax1.set_ylabel('RTTOV-gb deviations from R24 [K]')
-        ax1.set_title(f'RTTOV-gb and ARMS-gb TB deviations from reference by IWV\n\
+        ax1.set_title(f'RTTOV-gb and ARMS-gb TB deviations from R24 PyRTlib by IWV\n\
                 Elevation: {elevations[i]}°_{campaign}_{location}_{tag})')
         ############
         if np.nanmax(np.abs(y_all))<14:
@@ -957,7 +957,7 @@ def armsgb_vs_rttov_by_IWV(camp_loc_stat_dict, elevations=elevations,\
     if np.nanmax(np.abs(x_all))<14 and np.nanmax(np.abs(y_all))<14:
         ax1.set_aspect('equal')
     ##############
-    ax1.set_title(f'RTTOV-gb and ARMS-gb TB deviations from reference by IWV\n\
+    ax1.set_title(f'RTTOV-gb and ARMS-gb TB deviations from R24 PyRTlib by IWV\n\
             ({campaign}_{location}_{tag})')
     # ax1.set_aspect('equal')
     plt.colorbar(scatter1, ax=ax1, label='IWV [kg m-2]')

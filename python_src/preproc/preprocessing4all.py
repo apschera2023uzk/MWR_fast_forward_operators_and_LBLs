@@ -40,9 +40,9 @@ matplotlib.use("Agg")
 elevations = np.array([90., 30, 19.2, 14.4, 11.4, 8.4,  6.6,  5.4, 4.8,  4.2])
 azimuths = np.arange(0.,355.1,5.) # Interpoliere dazwischen!
 n_levels=180
-min_p = 10 # 70
-datapoints_bl = 75
-datapoints_ft = 100
+min_p = 137 # Do not change this threshold to lower value!!!
+datapoints_bl = 80
+datapoints_ft = 120
 # min_time_diff_thres = 30 # => Leads to 520 remaining sondes 
 min_time_diff_thres = 15 
 
@@ -421,14 +421,6 @@ def read_radiosonde_txt(file=\
     m_array = np.array(m_array)    
     ppmv_array = np.array(ppmv_array)
 
-    # Old conversion to ppmv:
-    '''    
-    m_array = []
-    for rh_lev, t_lev, p_lev in zip (rh, t_array, p_array):
-        m_array.append(rh2mixing_ratio(RH=rh_lev, abs_T=t_lev, p=p_lev*100))
-    ppmv_array = np.array(m_array) * (28.9644e6 / 18.0153)
-    '''    
-    
     height_in_km = df["Alt"].values[0]/1000
     deg_lat = df["Lat."].values[0]
     deg_lon = df["Long."].values[0]
@@ -459,9 +451,30 @@ def add_clim2profiles(p_array, t_array, ppmv_array, m_array, z_array, rh,\
         min_p=min_p):
     # 2nd Add upper extrapolation of profile by climatology:
     # Kombiniere beide ProfileXXX
-    p_threshold = np.nanmin(p_array)
+
+    ##############################
+    # Strikter Top-Threshold for RS:
+    p_index = np.nanargmin(p_array)
+    wv_index = np.nanargmin(ppmv_array)
+    z_index = np.nanargmax(z_array)
+    thres_idx = np.nanmin(np.array([p_index, wv_index, z_index]))
+    p_threshold = p_array[thres_idx]
+    print("********************")
+    print("p_threshold by p_min: ", np.nanmin(p_array))
+    print("p_threshold by p_min-Index: ", p_threshold)
+    print("=> Should be the same!")
+    print("old_index: ", p_index)
+    print("new index: ", thres_idx)
+    print("Old threshold: ", np.nanmin(p_array))
+    print("New threshold: ", p_array[thres_idx])
+    print("***********************")
     if p_threshold<min_p:
         p_threshold = min_p
+    if p_threshold>250:
+        print("WARNING: pressure Threshold found by z, ppmv and p is higher than 250 hPa!!!")
+        p_threshold = 250 
+    #####################
+
     z, p, d, t, md = atmp.gl_atm(atm=1) # midlatitude summer!
     gkg = ppmv2gkg(md[:, atmp.H2O], atmp.H2O)
     rhs_clim = mr2rh(p, t, gkg)[0]
@@ -473,7 +486,7 @@ def add_clim2profiles(p_array, t_array, ppmv_array, m_array, z_array, rh,\
     else:
         mask_clim = p_threshold>np.array(p)
         mask_rs = np.array(p_array)>p_threshold
-    
+
     p_array = np.concatenate([p_array[mask_rs], np.array(p)[mask_clim]])
     t_array = np.concatenate([t_array[mask_rs] ,np.array(t)[mask_clim]])
     m_array = np.concatenate([m_array[mask_rs], np.array(gkg)[mask_clim]/1000])
@@ -528,14 +541,6 @@ def check_units_physical_realism(p_array, t_array, ppmv_array,\
     if (np.array(m_array)>20).any() or (np.array(m_array)<0).any():
         print("WARNING: Encoutered physically unrealistic value for mr in g/kg!!!")
     return 0  
-
-##############################################################################
-
-def check_rh_before_and_after(rh, rh_before):
-    for i, rh_bef in enumerate(rh_before):
-        if abs(rh_bef-rh[-(i+1)])>0.05 and i<160:
-            print("Warning RH below index 160 has been altered during processing!")
-    return 0
 
 ##############################################################################
 
@@ -631,7 +636,8 @@ def summarize_many_profiles(pattern=\
                 srf_wvs[i,1] = np.nan
                 srf_altitude[i,1] = np.nan
                 continue                       
-            p_array, t_array, ppmv_array, m_array, z_array, rh = add_clim2profiles(\
+            p_array, t_array, ppmv_array, m_array, z_array, rh =\
+                                    add_clim2profiles(\
                                     p_array, t_array, ppmv_array,\
                                     m_array, z_array, rh)  
             # derive liquid water content:
@@ -724,7 +730,8 @@ def summarize_many_profiles(pattern=\
             srf_altitude[i,0] = np.nan
             continue 
         # Add climatology at top to fill profiles:
-        p_array, t_array, ppmv_array, m_array, z_array, rh = add_clim2profiles(\
+        p_array, t_array, ppmv_array, m_array, z_array, rh =\
+                                    add_clim2profiles(\
                                     p_array, t_array, ppmv_array,\
                                     m_array, z_array, rh)                                                       
         # derive liquid water content:
@@ -783,12 +790,6 @@ def summarize_many_profiles(pattern=\
             m_array, z_array, rh)     
         check_moisture_consistency(m_array, rh, ppmv_array,\
             t_array, p_array, tag="after")
-        check_rh_before_and_after(rh, rh_before)
-          
-        #######################    
-        #if i==6:
-        #   break    
-        ############################
     
     return profile_indices, level_pressures, level_temperatures, level_wvs,\
         srf_pressures, srf_temps, srf_wvs, srf_altitude, sza,\
@@ -1243,6 +1244,7 @@ if __name__=="__main__":
         n_levels=n_levels, campaign="FESSTVaL",\
         location="RAO_Lindenberg")
 
+
     # Read FESSTVaL 2 UHH:
     print("Processing FESSTVaL UHH:")
     profile_indices2, level_pressures, level_temperatures, level_wvs,\
@@ -1362,7 +1364,4 @@ if __name__=="__main__":
     new_ds = xr.concat(ds_list , dim="time")
     print(new_ds)
     new_ds.to_netcdf(args.output, format="NETCDF4_CLASSIC")
-        
-
-        
 
