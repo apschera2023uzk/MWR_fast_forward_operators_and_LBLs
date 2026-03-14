@@ -447,32 +447,57 @@ def read_radiosonde_txt(file=\
 
 ##############################################################################
 
+def lowest2tenhPa(p_array, t_array, ppmv_array, m_array,z_array, rh):
+    # Here they still go from 0: ground to -1: TOA:
+    if p_array[179]>10:
+        n_levels = p_array.size
+
+        # Index of first p < 10 hPa:
+        idx_10 = np.where(p_array < 10)[0]
+        idx_10 = idx_10[0]
+        # Levels of profile to modify
+        start = 173
+        end   = 179  
+        span_indices = np.arange(start, end + 1)
+        span_len = span_indices.size  
+
+        # Äquidistant indices from climatology and radiosonde resampled on highest of 180 levels
+        target_indices = np.linspace(173, idx_10, span_len).round().astype(int)
+        target_indices = np.clip(target_indices, 0, n_levels - 1)
+        p_array[span_indices]    = p_array[target_indices]
+        t_array[span_indices]    = t_array[target_indices]
+        ppmv_array[span_indices] = ppmv_array[target_indices]
+        m_array[span_indices]    = m_array[target_indices]
+        z_array[span_indices]    = z_array[target_indices]
+        rh[span_indices]         = rh[target_indices]
+
+    return p_array, t_array, ppmv_array, m_array,z_array, rh
+
+##############################################################################
+
 def add_clim2profiles(p_array, t_array, ppmv_array, m_array, z_array, rh,\
         min_p=min_p):
     # 2nd Add upper extrapolation of profile by climatology:
     # Kombiniere beide ProfileXXX
 
-    ##############################
-    # Strikter Top-Threshold for RS:
+    # Strict Top-Threshold for RS:
     p_index = np.nanargmin(p_array)
-    wv_index = np.nanargmin(ppmv_array)
+    ###
+    # Special WV Index derival:
+    wv_min = np.nanmin(ppmv_array)
+    threshold = 2 * wv_min
+    candidates = np.where(ppmv_array <= threshold)[0]
+    wv_index = candidates[-1]
+    ###
     z_index = np.nanargmax(z_array)
     thres_idx = np.nanmin(np.array([p_index, wv_index, z_index]))
     p_threshold = p_array[thres_idx]
-    print("********************")
-    print("p_threshold by p_min: ", np.nanmin(p_array))
-    print("p_threshold by p_min-Index: ", p_threshold)
-    print("=> Should be the same!")
-    print("old_index: ", p_index)
-    print("new index: ", thres_idx)
-    print("Old threshold: ", np.nanmin(p_array))
-    print("New threshold: ", p_array[thres_idx])
-    print("***********************")
     if p_threshold<min_p:
         p_threshold = min_p
-    if p_threshold>250:
-        print("WARNING: pressure Threshold found by z, ppmv and p is higher than 250 hPa!!!")
-        p_threshold = 250 
+    if p_threshold>200:
+        # 8x mit hPa 250; hPa 200: 
+        print("WARNING: pressure Threshold found by z, ppmv and p is higher than 200 hPa!!!")
+        p_threshold = 200 
     #####################
 
     z, p, d, t, md = atmp.gl_atm(atm=1) # midlatitude summer!
@@ -497,6 +522,10 @@ def add_clim2profiles(p_array, t_array, ppmv_array, m_array, z_array, rh,\
     for rh_lev, t_lev, p_lev in zip (rh, t_array, p_array):
         ppmv_array.append(rh2ppmv(RH=rh_lev, abs_T=t_lev, p=p_lev*100))  
     ppmv_array = np.array(ppmv_array)    
+
+    # Make sure highest value is below 10 hPa:
+    p_array, t_array, ppmv_array, m_array,z_array, rh = lowest2tenhPa(\
+            p_array, t_array, ppmv_array, m_array,z_array, rh)
     
     return p_array[::-1], t_array[::-1], ppmv_array[::-1], m_array[::-1],\
         z_array[::-1], rh[::-1]
@@ -640,10 +669,19 @@ def summarize_many_profiles(pattern=\
                                     add_clim2profiles(\
                                     p_array, t_array, ppmv_array,\
                                     m_array, z_array, rh)  
-            # derive liquid water content:
-            lwc_kg_m3, lwc_kg_kg, lwp_kg_m2,iwc_kg_m3, iwc_kg_kg, iwp_kg_m2 =\
-                derive_cloud_features(\
-                p_array, t_array, ppmv_array, m_array, z_array, rh)   
+            try:
+                # derive liquid water content:
+                lwc_kg_m3, lwc_kg_kg, lwp_kg_m2, iwc_kg_m3, iwc_kg_kg, iwp_kg_m2 = \
+                    derive_cloud_features(
+                        p_array, t_array, ppmv_array, m_array, z_array, rh
+                    )
+            except Exception:
+                lwc_kg_m3 = np.full(180, np.nan)
+                lwc_kg_kg = np.full(180, np.nan)
+                lwp_kg_m2 = np.nan
+                iwc_kg_m3 = np.full(180, np.nan)
+                iwc_kg_kg = np.full(180, np.nan)
+                iwp_kg_m2 = np.nan
             #################
             # p in hPa as in other inputs!
             # mixing ratio in g/kg
@@ -733,11 +771,20 @@ def summarize_many_profiles(pattern=\
         p_array, t_array, ppmv_array, m_array, z_array, rh =\
                                     add_clim2profiles(\
                                     p_array, t_array, ppmv_array,\
-                                    m_array, z_array, rh)                                                       
-        # derive liquid water content:
-        lwc_kg_m3, lwc_kg_kg, lwp_kg_m2,iwc_kg_m3, iwc_kg_kg, iwp_kg_m2 =\
-            derive_cloud_features(\
-            p_array, t_array, ppmv_array, m_array, z_array, rh)                     
+                                    m_array, z_array, rh)  
+        try:
+            # derive liquid water content:
+            lwc_kg_m3, lwc_kg_kg, lwp_kg_m2, iwc_kg_m3, iwc_kg_kg, iwp_kg_m2 = \
+                derive_cloud_features(
+                    p_array, t_array, ppmv_array, m_array, z_array, rh
+                )
+        except Exception:
+            lwc_kg_m3 = np.full(180, np.nan)
+            lwc_kg_kg = np.full(180, np.nan)
+            lwp_kg_m2 = np.nan
+            iwc_kg_m3 = np.full(180, np.nan)
+            iwc_kg_kg = np.full(180, np.nan)
+            iwp_kg_m2 = np.nan
         #################
         # p in hPa as in other inputs!
         # mixing ratio in g/kg

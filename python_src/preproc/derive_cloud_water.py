@@ -133,7 +133,12 @@ def calc_lwc(tops, bases, p_array, t_array, ppmv_array, m_array,\
     
     lwp_kg_m2 = np.abs(np.sum(lwc_kg_m3 * np.gradient(z_array)))  # [kg/m²]
     iwp_kg_m2 = np.abs(np.sum(iwc_kg_m3 * np.gradient(z_array)))  # [kg/m²]
-        
+    '''
+    if len(lwp_kg_m2)>1:
+        lwp_kg_m2 = np.nan
+    if len(iwp_kg_m2)>1:
+        iwp_kg_m2 = np.nan
+    '''
     return lwc_kg_m3, lwc_kg_kg, lwp_kg_m2, iwc_kg_m3, iwc_kg_kg, iwp_kg_m2
 
 ##############################################################################
