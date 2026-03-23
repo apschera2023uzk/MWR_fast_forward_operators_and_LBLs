@@ -669,19 +669,11 @@ def summarize_many_profiles(pattern=\
                                     add_clim2profiles(\
                                     p_array, t_array, ppmv_array,\
                                     m_array, z_array, rh)  
-            try:
-                # derive liquid water content:
-                lwc_kg_m3, lwc_kg_kg, lwp_kg_m2, iwc_kg_m3, iwc_kg_kg, iwp_kg_m2 = \
-                    derive_cloud_features(
-                        p_array, t_array, ppmv_array, m_array, z_array, rh
-                    )
-            except Exception:
-                lwc_kg_m3 = np.full(180, np.nan)
-                lwc_kg_kg = np.full(180, np.nan)
-                lwp_kg_m2 = np.nan
-                iwc_kg_m3 = np.full(180, np.nan)
-                iwc_kg_kg = np.full(180, np.nan)
-                iwp_kg_m2 = np.nan
+            # derive liquid water content:
+            lwc_kg_m3, lwc_kg_kg, lwp_kg_m2, iwc_kg_m3, iwc_kg_kg, iwp_kg_m2 = \
+                derive_cloud_features(
+                    p_array, t_array, ppmv_array, m_array, z_array, rh
+                )
             #################
             # p in hPa as in other inputs!
             # mixing ratio in g/kg
@@ -772,19 +764,11 @@ def summarize_many_profiles(pattern=\
                                     add_clim2profiles(\
                                     p_array, t_array, ppmv_array,\
                                     m_array, z_array, rh)  
-        try:
-            # derive liquid water content:
-            lwc_kg_m3, lwc_kg_kg, lwp_kg_m2, iwc_kg_m3, iwc_kg_kg, iwp_kg_m2 = \
-                derive_cloud_features(
-                    p_array, t_array, ppmv_array, m_array, z_array, rh
-                )
-        except Exception:
-            lwc_kg_m3 = np.full(180, np.nan)
-            lwc_kg_kg = np.full(180, np.nan)
-            lwp_kg_m2 = np.nan
-            iwc_kg_m3 = np.full(180, np.nan)
-            iwc_kg_kg = np.full(180, np.nan)
-            iwp_kg_m2 = np.nan
+        # derive liquid water content:
+        lwc_kg_m3, lwc_kg_kg, lwp_kg_m2, iwc_kg_m3, iwc_kg_kg, iwp_kg_m2 = \
+            derive_cloud_features(
+                p_array, t_array, ppmv_array, m_array, z_array, rh
+            )
         #################
         # p in hPa as in other inputs!
         # mixing ratio in g/kg

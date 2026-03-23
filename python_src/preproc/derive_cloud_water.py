@@ -296,18 +296,34 @@ def derive_cloud_features(p_array, t_array, ppmv_array, m_array,\
         elif 12000<base:
             rh_inter = above_12km[2]           
         if i!=0:
-           z_index_base = np.nanargmin(abs(z_array-bases[i-1]))
-           z_index_top = np.nanargmin(abs(z_array-top))
-           if 1==abs(z_index_base-z_index_top):
+            z_index_base = np.nanargmin(abs(z_array-bases[i-1]))
+            z_index_top = np.nanargmin(abs(z_array-top))
+            if 1==abs(z_index_base-z_index_top):
                if rh[z_index_base]>rh_inter:  
                    cloud_bools[z_index_base] = True
                    to_remove_base.append(i-1)
-                   to_remove_top.append(i)                   
-           elif abs(bases[i-1]-top)<300 or\
+                   to_remove_top.append(i)             
+            ###################
+            # New work around without -1 Indices:
+            # (Not tested sufficiently!)
+            elif abs(bases[i-1]-top) < 300:
+                cloud_bools[z_index_base:z_index_top] = True
+                to_remove_base.append(i-1)
+                to_remove_top.append(i)
+            else:
+                gap_rh = rh[z_index_base:z_index_top]   # Note: no -1 here either!
+                if gap_rh.size > 0 and np.nanmin(gap_rh) > rh_inter:
+                    cloud_bools[z_index_base:z_index_top] = True
+                    to_remove_base.append(i-1)
+                    to_remove_top.append(i)
+            '''
+            elif abs(bases[i-1]-top)<300 or\
                    np.nanmin(rh[z_index_base:z_index_top-1])>rh_inter:    
                cloud_bools[z_index_base:z_index_top-1] = True
                to_remove_base.append(i-1)
-               to_remove_top.append(i)               
+               to_remove_top.append(i)       
+            '''
+            ############################
     for i in sorted(to_remove_base, reverse=True):
         bases.pop(i)
     for i in sorted(to_remove_top, reverse=True):
