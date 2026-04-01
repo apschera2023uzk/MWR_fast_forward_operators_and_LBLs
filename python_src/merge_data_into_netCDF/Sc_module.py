@@ -243,7 +243,8 @@ def mixing2specific(mixing):
 
 ################################
 
-def relativey2sepcific_humidity(relative_humidity=70, temperature_abs=273.15-15, pressure=1013.25):
+def relativey2sepcific_humidity(relative_humidity=70, temperature_abs=273.15-15, pressure=101325):
+    # Input has to be Pa not hPa!!!
     vapour_pressure_e = vapour_pressure_e_from_rh(relative_humidity , temperature_abs)
     rhov = absolute_moisture_rhov_or_f(vapour_pressure_e, temperature_abs)
     q = absolute_hum2specific_hum(rhov, T=temperature_abs-273.15, p=pressure)

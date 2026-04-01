@@ -27,19 +27,10 @@ fs = 20
 plt.rc('font', size=fs) 
 plt.style.use('seaborn-poster')
 matplotlib.use("Qt5Agg")
-
-# Clear sky LWP threshold
-thres_lwp=0.005 # kg m-2 fitting with Moritz' threshold of 5 g m-2
-n_chans=14
-model_tbs=["TBs_PyRTlib_R24",'TBs_RTTOV_gb', 'TBs_ARMS_gb']
-mwr_vars = ['TBs_dwdhat', 'TBs_sunhat', 'TBs_tophat',\
-        'TBs_joyhat'] #, 'TBs_foghat', 'TBs_hamhat']
-ref_label = "PyRTlib R24 LBL"
-n_elev = 10
-elevations = np.array([90., 30, 19.2, 14.4, 11.4, 8.4,  6.6,  5.4, 4.8,  4.2])
 grid_params = (-3,3.0001, 0.5)
 ylims_bias = [-3, 3]
-
+n_chans=14
+elevations = np.array([90., 30, 19.2, 14.4, 11.4, 8.4,  6.6,  5.4, 4.8,  4.2])
 label_colors = {'Dwdhat (MWR)': "blue",
         'Foghat (MWR)': "green",'RTTOV-gb (model)': "red",
         'ARMS-gb (model)': "orange",'Sunhat (MWR)': "blue",
@@ -48,7 +39,20 @@ label_colors = {'Dwdhat (MWR)': "blue",
          "LABEL_9": "olive",
         "LABEL_10": "cyan"
 }
+thres_lwp=0.005 # kg m-2 fitting with Moritz' threshold of 5 g m-2
 
+'''
+# Clear sky LWP threshold
+
+
+model_tbs=["TBs_PyRTlib_R24",'TBs_RTTOV_gb', 'TBs_ARMS_gb']
+mwr_vars = ['TBs_dwdhat', 'TBs_sunhat', 'TBs_tophat',\
+        'TBs_joyhat'] #, 'TBs_foghat', 'TBs_hamhat']
+ref_label = "PyRTlib R24 LBL"
+n_elev = 10
+
+
+'''
 
 ##############################################################################
 # 2nd Used functions:
@@ -61,7 +65,7 @@ def parse_arguments():
     parser.add_argument(
         "--NetCDF", "-nc",
         type=str,
-        default=os.path.expanduser("~/PhD_data/TB_preproc_and_proc_results/3campaigns_3models_all_results.nc"),
+        default=os.path.expanduser("~/PhD_data/TB_preproc_and_proc_results/3campaigns_3models_all_results_and_stats.nc"),
         help="Input data"
     )
     parser.add_argument(
@@ -70,106 +74,67 @@ def parse_arguments():
         default=os.path.expanduser("~/PhD_plots/2026/"),
         help="Output plot directory"
     )
-    parser.add_argument(
-        "--cloud", "-cl",
-        type=str,
-        default=os.path.expanduser("~/PhD_data/Alexander_Moritz_Exchange/retrievals_final_ele/20250409_m_20210*.nc"),
-        help="Pattern of cloud_flag files!"
-    )
-
     return parser.parse_args()
 
 ##############################################################################
 
-def add_MLNN_cloud_info(ds, args):
-    cf_files = sorted(glob.glob(args.cloud))
-    ds_cloud = xr.open_mfdataset(cf_files)
-    cf_da = ds_cloud["cloud_flag"].sel(time=slice("2021-05-01T00:00:00", "2021-08-31T00:00:00"))
+def get_deviation_variables(ds):
+    """
+    Finds all variables starting with 'Deviations_' in ds and returns
+    lists of (var_name, var_label, ref_label) for looping.
 
-    # Keep only cf_da times that fall within ds time range
-    ds_tmin = ds["time"].values.min()
-    ds_tmax = ds["time"].values.max()
-    cf_da = cf_da.sel(time=slice(ds_tmin, ds_tmax))
-    cf_da = cf_da.rename({"n_angle": "elevation"})
+    Example:
+        "Deviations_RTTOV_R24"   → var_label="RTTOV",  ref_label="R24"
+    """
+    dev_vars    = []
+    var_labels  = []
+    ref_labels  = []
 
-    # Interpolate cf_da onto ds time axis, fill outside range with NaN
-    cf_interp = cf_da.reindex(time=ds["time"], method="nearest", tolerance="30min")
+    for var in ds.data_vars:
+        if var.startswith("Deviations_"):
+            parts = var.split("_")   # e.g. ["Deviations", "RTTOV", "R24"]
+            var_label = parts[1]
+            ref_label = "_".join(parts[2:])   # handles multi-part names
+            dev_vars.append(var)
+            var_labels.append(var_label)
+            ref_labels.append(ref_label)
 
-    ds["cloud_flag"] = cf_interp
-    return ds
+    return dev_vars, var_labels, ref_labels
 
 ##############################################################################
 
-def clear_sky_dataset(ds, args, thres_lwp=thres_lwp):
-    exclude = False
-    exclude_times = []
-    ds = add_MLNN_cloud_info(ds, args)
-
-    ###########################################
-    # Cloud flag ist jetzt im dataset...
-    print("cloud_flag: ",ds["cloud_flag"])
-    print("cf values: ", ds["cloud_flag"].values)
-    ##############################################
-    
-    for i, timestamp in enumerate(ds["time"].values):
-        
-        water_sum = np.nanmean(np.array([
-            np.nansum(np.nan_to_num(ds["Dwdhat_LWP"].values[i])),
-            np.nansum(np.nan_to_num(ds["Foghat_LWP"].values[i])),
-            np.nansum(np.nan_to_num(ds["Sunhat_LWP"].values[i])),
-            np.nansum(np.nan_to_num(ds["Tophat_LWP"].values[i])),
-            np.nansum(np.nan_to_num(ds["Joyhat_LWP"].values[i])),
-            np.nansum(np.nan_to_num(ds["Hamhat_LWP"].values[i]))
-        ]))
-        
-        # water_sum in kg m-2
-        # 15-40 g m-2 == 0.015-0.040
-        if water_sum > thres_lwp:
-            exclude = True
-        elif water_sum <= thres_lwp:  # or np.isnan(water_sum):
-            exclude = False
-
-        if exclude:
-            exclude_times.append(timestamp)
-            exclude = False
-    
-    # Clear-sky dataset: identical processing as before, only renamed to ds_clear
-    ds_clear = ds
-    for timestamp in exclude_times:
-        ds_clear = ds_clear.sel(time=ds_clear.time != timestamp)
-    
-    # Cloudy dataset: complementary times (those in exclude_times)
-    # Easiest: select all times that are in exclude_times
-    # Convert list to a set or array for selection
-    if len(exclude_times) > 0:
-        exclude_times_array = np.array(exclude_times)
-        ds_cloudy = ds.sel(time=exclude_times_array)
+def stats_by_channel(ds_sel, dev_var,i_elev, n_chans=n_chans):
+    da = ds_sel[dev_var]
+    dims = da.dims  
+    if "azimuth" in dims:
+        print("Azi!")
+        arr = da.mean(dim="azimuth").isel(elevation=i_elev).values      
     else:
-        # No cloudy times found; return an empty selection with same structure
-        ds_cloudy = ds.isel(time=0).drop_isel(time=0)
-    
-    return ds_clear, ds_cloudy
-    
-##############################################################################
+        arr = da.isel(elevation=i_elev).values
 
-def stats_by_channel(values, references, n_chans=n_chans):
-    # Equation taken from Shi et al. 2024 preprint / 2025
-    # different sign than Shi et al!
-    std_array = []
-    bias_array = []
-    rmse_array = []
-    
+    # ── Stats per channel ─────────────────────────────────────────────────────
+    std_array     = np.full(n_chans, np.nan)
+    bias_array    = np.full(n_chans, np.nan)
+    rmse_array    = np.full(n_chans, np.nan)
+    n_valid_array = np.zeros(n_chans, dtype=int)
+
     for i in range(n_chans):
-        deviation = values[:,i] - references[:,i]
-        avg = np.nansum((values[:,i] -references[:,i])/ len(ds["time"]))
-        std = np.sqrt(np.nansum((deviation-avg)**2)/len(ds["time"]))
-        rmse = np.sqrt(np.nansum((values[:,i] -references[:,i])**2/len(ds["time"])))
-        std_array.append(std)
-        bias_array.append(avg)
-        rmse_array.append(rmse)     
-    
-    return np.array(std_array), np.array(bias_array), rmse_array
-    
+        col     = arr[:, i]
+        valid   = ~np.isnan(col)
+        n_valid = int(np.sum(valid))
+        n_valid_array[i] = n_valid
+        if n_valid == 0:
+            continue
+        dev_valid      = col[valid]
+        bias           = np.sum(dev_valid) / n_valid
+        std            = np.sqrt(np.sum((dev_valid - bias) ** 2) / n_valid)
+        rmse           = np.sqrt(np.sum(dev_valid ** 2) / n_valid)
+        bias_array[i]  = bias
+        std_array[i]   = std
+        rmse_array[i]  = rmse
+
+    return std_array, bias_array, rmse_array, n_valid_array
+
 ##############################################################################
 
 def select_ds_camp_loc(ds, campaign, location, crop_index=0):
@@ -217,7 +182,24 @@ def plot_std_bars(ds, stds, labels, channels, channel_labels, elev,
     plt.close()
 
 ##############################################################################
-    
+
+def ensure_folder_exists(base_path, folder_name):
+    # Join the base path with the folder name
+    folder_path = os.path.join(base_path, folder_name)
+    # Create the directory if it does not exist
+    os.makedirs(folder_path, exist_ok=True)
+
+    return os.path.abspath(folder_path)
+
+##############################################################################
+##############################################################################
+
+
+
+
+##############################################################################
+##############################################################################
+'''
 def plot_bias_lines(ds, all_biases, all_labels, channels, channel_labels, elev,
                    n_valid, save_path, elevations=elevations,\
                    thres_lwp=thres_lwp, ref_label=ref_label,\
@@ -337,16 +319,6 @@ def check_model_and_mwr_data_availability(ds, elev_idx, ref_mod,\
                 name = var.replace('TBs_', '')
                 mwr_labels.append(f"{name.title()} (MWR)")
 
-            '''
-            ###############################
-            # What happens, if I allow nans?
-            elif var in old_valid_mwrs:
-                valid_mwrs.append(var)
-                # Extract instrument name from variable name
-                name = var.replace('TBs_', '')
-                mwr_labels.append(f"{name.title()} (MWR)")
-             ##########################
-            '''
 
     
     # 2. Check models
@@ -701,15 +673,7 @@ def extract_IWV_timelines_of_camp_loc(ds_sel, campaign, location):
 
     return ds_sel[iwv_var1], ds_sel[lwp_var1], ds_sel[hua_var1]
 
-##############################################################################
 
-def ensure_folder_exists(base_path, folder_name):
-    # Join the base path with the folder name
-    folder_path = os.path.join(base_path, folder_name)
-    # Create the directory if it does not exist
-    os.makedirs(folder_path, exist_ok=True)
-
-    return os.path.abspath(folder_path)
 
 ##############################################################################
 
@@ -1032,7 +996,7 @@ def armsgb_vs_rttov_by_IWV(camp_loc_stat_dict, elevations=elevations,\
 
     plt.close("all")
     return 0
-
+'''
 ##############################################################################
 # 3 Main
 ##############################################################################
@@ -1041,319 +1005,53 @@ if __name__ == "__main__":
     args = parse_arguments()
     nc_out_path=args.NetCDF
     
-    # Open dataset and clear sky filtering
-    ds = xr.open_dataset(nc_out_path)
-    ds_clear, ds_cloudy = clear_sky_dataset(ds, args)
-
-    print("********************")
-    print("ds_clear:", ds_clear)
-    print("ds_cloudy:", ds_cloudy)
-    ####################################
-    sys.exit()
-    result_dict = {}
-
-    for campaign in np.unique(ds['Campaign'].values):
-        result_dict[campaign] = {}
-        for location in np.unique(ds['Location'].values): 
-            result_dict[campaign][location] = {}
-            labels_by_ele = []
-            all_tbs_frtm_mwr = []
-            all_tb_references = []
-            validity_masks = []
-            
-            # Filter data for campaign and location:
-            ds_sel = select_ds_camp_loc(ds_clear, campaign, location)
-            if len(ds_sel['time'])==0 or len(ds_sel["Campaign"].values)==0:
-                continue
-            print("\n\nCampaign / Location: ",campaign, "/", location)
-
-            iwv_da, lwp_da, hua_da = extract_IWV_timelines_of_camp_loc(\
-                ds_sel, campaign, location)
-
-            # 2nd Applying statistics to dataset:
-            for elev_idx in range(n_elev):
-                print("\nElevation index: ",elev_idx, " : ", elevations[elev_idx])
-                plot_stds, all_biases, all_rmses, n_valid, plot_labels,\
-                    old_valid_mwrs, all_values, reference_tb,\
-                    common_valid_mask =\
-                    analyze_mwr_model_stats(ds_sel, args,\
-                     elev_idx=elev_idx, tag="clear_sky")
-
-                if campaign=="Socles":
-                    continue
-
-                if elev_idx==0:
-                    ####
-                    
-                    shapei = np.shape(plot_stds)
-                    stds_by_ch_ele = np.full((*shapei, 8), np.nan)                    
-                    biases_by_ch_ele = np.full((*shapei, 8), np.nan)
-                    rmses_by_ch_ele = np.full((*shapei, 8), np.nan)
-                    all_valid = []
-                if elev_idx<8:
-                    
-                    biases_by_ch_ele[:,:,elev_idx] = all_biases
-                    rmses_by_ch_ele[:,:,elev_idx] = all_rmses
-                    stds_by_ch_ele[:,:,elev_idx] = plot_stds
-                    all_valid.append(n_valid) 
-                    labels_by_ele.append(plot_labels)
-                    all_tbs_frtm_mwr.append(all_values)
-                    all_tb_references.append(reference_tb)
-                    validity_masks.append(common_valid_mask)
-
-            #####
-            # Plot std and bias by elevation angle by channel?
-            if campaign=="Socles":
-                continue
-            result_dict[campaign][location]["biases"] = biases_by_ch_ele
-            result_dict[campaign][location]["rmses"] = rmses_by_ch_ele
-            result_dict[campaign][location]["stds"] = stds_by_ch_ele
-            result_dict[campaign][location]["n_valid"] = all_valid
-            result_dict[campaign][location]["labels"] = labels_by_ele
-            result_dict[campaign][location]["IWV"] = iwv_da
-            result_dict[campaign][location]["LWP"] = lwp_da
-            result_dict[campaign][location]["hua"] = hua_da
-            result_dict[campaign][location]["all_non_ref_tbs"] = all_tbs_frtm_mwr
-            result_dict[campaign][location]["all_ref_tbs"] = all_tb_references
-            result_dict[campaign][location]["vald_masks"] = validity_masks
-            
-
-            create_plot_by_chan_and_ele(result_dict[campaign][location],\
-                campaign=campaign, location=location,args=args, tag="clear_sky")
-
-            ###
-            # Create ARMS-gb vs. RTTOV-gb plots by IWV:
-            armsgb_vs_rttov_by_IWV(result_dict[campaign][location],\
-                campaign=campaign, location=location,args=args, tag="clear_sky")
-
-    ###########################################################################
-    # ===== CLOUDY PROCESSING (IDENTISCH wie clear, nur ds_cloudy) =====
-    '''
-    '''
-    result_dict_cloudy = {}
-    
-    for campaign in np.unique(ds['Campaign'].values):
-        result_dict_cloudy[campaign] = {}
-        for location in np.unique(ds['Location'].values): 
-            result_dict_cloudy[campaign][location] = {}
-            labels_by_ele = []
-            all_tbs_frtm_mwr = []
-            all_tb_references = []
-            validity_masks = []
-            
-            # Filter data for campaign and location (CLOUDY):
-            ds_sel_cloudy = select_ds_camp_loc(ds_cloudy, campaign, location)
-            if len(ds_sel_cloudy['time'])==0 or len(ds_sel_cloudy["Campaign"].values)==0:
-                continue
-            print("\\n\\n**CLOUDY** Campaign / Location: ",campaign, "/", location)
-
-            iwv_da_cloudy, lwp_da_cloudy, hua_da_cloudy =\
-                extract_IWV_timelines_of_camp_loc(\
-                ds_sel_cloudy, campaign, location)
-
-            # 2nd Applying statistics to dataset (CLOUDY):
-            for elev_idx in range(n_elev):
-                print("\\n**CLOUDY** Elevation index: ",elev_idx,\
-                    " : ",elevations[elev_idx])
-                plot_stds_cloudy, all_biases_cloudy, all_rmses_cloudy,\
-                    n_valid_cloudy, plot_labels_cloudy,old_valid_mwrs_cloudy,\
-                    all_values_cloudy, reference_tb_cloudy,\
-                    common_valid_mask_cloudy = analyze_mwr_model_stats(\
-                    ds_sel_cloudy, args, elev_idx=elev_idx, tag="cloudy_sky")
-
-                if campaign=="Socles":
-                    continue
-
-                if elev_idx==0:
-                    shapei = np.shape(plot_stds_cloudy)
-                    stds_by_ch_ele_cloudy =\
-                        np.full((*shapei, 8), np.nan)                    
-                    biases_by_ch_ele_cloudy = np.full((*shapei, 8), np.nan)
-                    rmses_by_ch_ele_cloudy = np.full((*shapei, 8), np.nan)
-                    all_valid_cloudy = []
-                    
-                if elev_idx<8:
-                    biases_by_ch_ele_cloudy[:,:,elev_idx] = all_biases_cloudy
-                    rmses_by_ch_ele_cloudy[:,:,elev_idx] = all_rmses_cloudy
-                    stds_by_ch_ele_cloudy[:,:,elev_idx] = plot_stds_cloudy
-                    all_valid_cloudy.append(n_valid_cloudy) 
-                    labels_by_ele.append(plot_labels_cloudy)
-                    all_tbs_frtm_mwr.append(all_values_cloudy)
-                    all_tb_references.append(reference_tb_cloudy)
-                    validity_masks.append(common_valid_mask_cloudy)
-
-            # Speichern cloudy results:
-            if campaign=="Socles":
-                continue
-            result_dict_cloudy[campaign][location]["biases"] = biases_by_ch_ele_cloudy
-            result_dict_cloudy[campaign][location]["rmses"] = rmses_by_ch_ele_cloudy
-            result_dict_cloudy[campaign][location]["stds"] = stds_by_ch_ele_cloudy
-            result_dict_cloudy[campaign][location]["n_valid"] = all_valid_cloudy
-            result_dict_cloudy[campaign][location]["labels"] = labels_by_ele
-            result_dict_cloudy[campaign][location]["IWV"] = iwv_da_cloudy
-            result_dict_cloudy[campaign][location]["LWP"] = lwp_da_cloudy
-            result_dict_cloudy[campaign][location]["hua"] = hua_da_cloudy
-            result_dict_cloudy[campaign][location]["all_non_ref_tbs"] = all_tbs_frtm_mwr
-            result_dict_cloudy[campaign][location]["all_ref_tbs"] = all_tb_references
-            result_dict_cloudy[campaign][location]["vald_masks"] = validity_masks
-            
-
-            # Plotting für cloudy:
-            create_plot_by_chan_and_ele(result_dict_cloudy[campaign][location],\
-                campaign=campaign, location=location,args=args, tag="cloudy_sky")
-
-            # ARMS-gb vs RTTOV-gb für cloudy:
-            armsgb_vs_rttov_by_IWV(result_dict_cloudy[campaign][location],\
-                campaign=campaign, location=location,args=args, tag="cloudy_sky")
-
-
-    ###########################################################################
-    # Check RAO again for different periods!
-
-    campaign = "FESSTVaL"
-    location = "RAO_Lindenberg"
-
-    #1st May:
-    # Filter data for campaign and location:
-    ds_sel = select_ds_camp_loc(ds_clear, "FESSTVaL", "RAO_Lindenberg")
-    ##################################
-    # print("time values: ",ds_sel["time"].values[0:20])
-    # print("time type: ",type(ds_sel["time"].values[0]))
-    ds_sel = ds_sel.sortby("time")
-    ds_sel = ds_sel.sel(time=slice('2021-05-10T00:00:00','2021-05-31T00:00:00'))
-    ###################################
-
-    iwv_da, lwp_da, hua_da = extract_IWV_timelines_of_camp_loc(\
-        ds_sel, "FESSTVaL", "RAO_Lindenberg")
-
-    # 2nd Applying statistics to dataset:
-    for elev_idx in range(n_elev):
-        print("\nElevation index: ",elev_idx, " : ", elevations[elev_idx])
-        plot_stds, all_biases, all_rmses, n_valid, plot_labels,\
-            old_valid_mwrs, all_values, reference_tb,\
-            common_valid_mask =\
-            analyze_mwr_model_stats(ds_sel, args,\
-             elev_idx=elev_idx, tag="May_dry_RAO")
-
-        if campaign=="Socles":
-            continue
-
-        if elev_idx==0:
-            ####
-            
-            shapei = np.shape(plot_stds)
-            stds_by_ch_ele = np.full((*shapei, 8), np.nan)                    
-            biases_by_ch_ele = np.full((*shapei, 8), np.nan)
-            rmses_by_ch_ele = np.full((*shapei, 8), np.nan)
-            all_valid = []
-        if elev_idx<8:
-            
-            biases_by_ch_ele[:,:,elev_idx] = all_biases
-            rmses_by_ch_ele[:,:,elev_idx] = all_rmses
-            stds_by_ch_ele[:,:,elev_idx] = plot_stds
-            all_valid.append(n_valid) 
-            labels_by_ele.append(plot_labels)
-            all_tbs_frtm_mwr.append(all_values)
-            all_tb_references.append(reference_tb)
-            validity_masks.append(common_valid_mask)
-
-    #####
-    # Plot std and bias by elevation angle by channel?
-    result_dict[campaign][location]["biases"] = biases_by_ch_ele
-    result_dict[campaign][location]["rmses"] = rmses_by_ch_ele
-    result_dict[campaign][location]["stds"] = stds_by_ch_ele
-    result_dict[campaign][location]["n_valid"] = all_valid
-    result_dict[campaign][location]["labels"] = labels_by_ele
-    result_dict[campaign][location]["IWV"] = iwv_da
-    result_dict[campaign][location]["LWP"] = lwp_da
-    result_dict[campaign][location]["hua"] = hua_da
-    result_dict[campaign][location]["all_non_ref_tbs"] = all_tbs_frtm_mwr
-    result_dict[campaign][location]["all_ref_tbs"] = all_tb_references
-    result_dict[campaign][location]["vald_masks"] = validity_masks
-    
-    create_plot_by_chan_and_ele(result_dict[campaign][location],\
-        campaign=campaign, location=location,args=args, tag="May_dry_RAO")
-
+    ###
+    # 0th Open dataset and clear sky filtering
+    ds0 = xr.open_dataset(nc_out_path)
     
     ###
-    # Create ARMS-gb vs. RTTOV-gb plots by IWV:
-    armsgb_vs_rttov_by_IWV(result_dict[campaign][location],\
-         campaign=campaign, location=location,args=args, tag="May_dry_RAO")
+    # 1st choose dataset (RAO / clear) & Make sure Output dirs exist:
+    dev_vars, var_labels, ref_labels = get_deviation_variables(ds0)
+    # campaign ="FESSTVaL"
+    # location = "RAO_Lindenberg"
+    # sky = "clear"  
+    skies = ["clear", "cloudy", "all_sky"]
 
-    ######################################################################
-    # 2nd June/July:
-    # Filter data for campaign and location:
-    ds_sel = select_ds_camp_loc(ds_clear, "FESSTVaL", "RAO_Lindenberg")
-    ##################################
-    ds_sel = ds_sel.sortby("time")
-    ds_sel = ds_sel.sel(time=slice("2021-06-19T00:00:00","2021-07-18T00:00:00"))
-    ###################################
-
-    iwv_da, lwp_da, hua_da = extract_IWV_timelines_of_camp_loc(\
-        ds_sel, "FESSTVaL", "RAO_Lindenberg")
-
-    # 2nd Applying statistics to dataset:
-    for elev_idx in range(n_elev):
-        print("\nElevation index: ",elev_idx, " : ", elevations[elev_idx])
-        plot_stds, all_biases, all_rmses, n_valid, plot_labels,\
-            old_valid_mwrs, all_values, reference_tb,\
-            common_valid_mask =\
-            analyze_mwr_model_stats(ds_sel, args,\
-             elev_idx=elev_idx, tag="JJ_humid_RAO")
-
-        if campaign=="Socles":
-            continue
-
-        if elev_idx==0:
-            ####
-            
-            shapei = np.shape(plot_stds)
-            stds_by_ch_ele = np.full((*shapei, 8), np.nan)                    
-            biases_by_ch_ele = np.full((*shapei, 8), np.nan)
-            rmses_by_ch_ele = np.full((*shapei, 8), np.nan)
-            all_valid = []
-        if elev_idx<8:
-            
-            biases_by_ch_ele[:,:,elev_idx] = all_biases
-            rmses_by_ch_ele[:,:,elev_idx] = all_rmses
-            stds_by_ch_ele[:,:,elev_idx] = plot_stds
-            all_valid.append(n_valid) 
-            labels_by_ele.append(plot_labels)
-            all_tbs_frtm_mwr.append(all_values)
-            all_tb_references.append(reference_tb)
-            validity_masks.append(common_valid_mask)
-
-    #####
-    # Plot std and bias by elevation angle by channel?
-    result_dict[campaign][location]["biases"] = biases_by_ch_ele
-    result_dict[campaign][location]["rmses"] = rmses_by_ch_ele
-    result_dict[campaign][location]["stds"] = stds_by_ch_ele
-    result_dict[campaign][location]["n_valid"] = all_valid
-    result_dict[campaign][location]["labels"] = labels_by_ele
-    result_dict[campaign][location]["IWV"] = iwv_da
-    result_dict[campaign][location]["LWP"] = lwp_da
-    result_dict[campaign][location]["hua"] = hua_da
-    result_dict[campaign][location]["all_non_ref_tbs"] = all_tbs_frtm_mwr
-    result_dict[campaign][location]["all_ref_tbs"] = all_tb_references
-    result_dict[campaign][location]["vald_masks"] = validity_masks
-    
-    create_plot_by_chan_and_ele(result_dict[campaign][location],\
-        campaign=campaign, location=location,args=args, tag="JJ_humid_RAO")
-    
-
-    ###
-    # Create ARMS-gb vs. RTTOV-gb plots by IWV:
-    # armsgb_vs_rttov_by_IWV(result_dict[campaign][location],\
-    #     campaign=campaign, location=location,args=args, tag="JJ_humid_RAO")
-
-    ###########################################################################
-     
-    # make some scatter plots - with RMSE std and bias
-    # Get correlations between channels as many others before.
-    # Which pairs but 2/13 are low correlated?
-    # Which other channel pairs have good std / bias characteristica?    
+    for campaign in ds0["Campaign"].values:
+        for location in ds0["Location"].values:  
+            folder = ensure_folder_exists(args.output, campaign+"_"+\
+                    location+"/std/")
+            ds_sel = select_ds_camp_loc(ds0, campaign, location)
+            for sky in skies:
+                #########################################
+                # 1.5 Determine clear / cloudy / complete!    
+                if sky == "clear":
+                    # Zeitschritte wo cloud_flag an ALLEN Elevationen 0 ist
+                    time_mask = (ds_sel["cloud_flag"] == 0).all(dim="elevation")
+                    ds_cf = ds_sel.isel(time=time_mask)
+                elif sky == "cloudy":
+                    time_mask = (ds_sel["cloud_flag"] == 1).any(dim="elevation")
+                    ds_cf = ds_sel.isel(time=time_mask)
+                elif sky == "all_sky":
+                    ds_cf = ds_sel
+                #############################################
+                for dev_var, var_label, ref_label in zip(dev_vars, var_labels,\
+                            ref_labels):
+                    for i_elev, elev in enumerate(ds_cf["elevation"].values):
+                        # ds_ele = ds_cf.sel(elevation=elevation)
+                        
+                        ###    
+                        # Calculate stats and plot:
+                        print(ds_cf)
+                        stds, biass, rmses, n_valid = stats_by_channel(ds_cf,\
+                            dev_var, i_elev)
+                        plot_std_bars(ds_cf, stds, labels, channels,\
+                            channel_labels, i_elev, n_valid, folder, tag=sky)
 
 
+    ###################
+    # Cloud flag does not take into account elevation cloud_flag!!!
+    # Use Crop-Index 1 for Joyhat!!! somehow...!?!
 
 
 
