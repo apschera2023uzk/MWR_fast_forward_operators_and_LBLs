@@ -176,7 +176,7 @@ def plot_bias_lines(all_biases, all_labels, channels, channel_labels,
     fig, ax = plt.subplots(figsize=(14, 9))
     plt.suptitle(f"Campaign: {campaign}, location: {location}\n"
                  f"elevation: {elev_val:.1f}°  (N: {n_valid} / {tag})")
-    ax.set_title("Bias of brightness temperature (MWR-R24) / (model-R24)")
+    ax.set_title("Bias of brightness temperature against "+ref_label)
     ax.plot(channels, [0.] * len(channels), label=ref_label,
             color="black", linewidth=2)
 
@@ -292,6 +292,10 @@ if __name__ == "__main__":
                 # ── Statistiken einmal berechnen ──────────────────────────────
                 stats_cache = {}
                 for dev_var, var_label, ref_label in zip(dev_vars_r24, var_labels_r24, ref_labels_r24):
+                    if ds_cf[dev_var].isnull().all():
+                        continue
+                    else:
+                        print("Processing Variable:", dev_var)
                     stds, rmses, biases, n_valid, var_label, ref_label, pearsons_rs = \
                         derive_stats_per_chan_and_elev(ds_cf, dev_var, var_label, ref_label)
                     stats_cache[dev_var] = (stds, biases, n_valid, var_label)
@@ -320,7 +324,7 @@ if __name__ == "__main__":
                         all_stds_ele.append(std_ele)
                         all_labels_ele.append(var_label)
                         n_valid_min = int(n_valid.isel(elevation=i_elev).min().values)
-                        del stds, rmses, biases, n_valid
+                        del stds, biases, n_valid
 
                     if not all_biases_ele:
                         continue
@@ -330,21 +334,27 @@ if __name__ == "__main__":
                         elev, n_valid_min,
                         save_path=os.path.join(bias_dir,
                             f"{sky}_elev{elev:.1f}_{campaign}_{location}_bias.png"),
-                        campaign=campaign, location=location, tag=sky
-                    )
+                        campaign=campaign, location=location, tag=sky,
+                ref_label=ref_label 
+                    )  
                     plot_bias_std_lines(
                         all_biases_ele, all_stds_ele, all_labels_ele, channels, channel_labels,
                         elev, n_valid_min,
                         save_path=os.path.join(bias_std_dir,
                             f"{sky}_elev{elev:.1f}_{campaign}_{location}_bias_std.png"),
-                        campaign=campaign, location=location, tag=sky
-                    )        
+                        campaign=campaign, location=location, tag=sky,                
+                        ref_label=ref_label 
+                    )  
 
                 #####
                 # MWR:
                 # ── Statistiken einmal berechnen ──────────────────────────────
                 stats_cache = {}
                 for dev_var, var_label, ref_label in zip(dev_vars_mwr, var_labels_mwr,ref_labels_mwr):
+                    if ds_cf[dev_var].isnull().all():
+                        continue
+                    else:
+                        print("Processing Variable:", dev_var)
                     stds, rmses, biases, n_valid, var_label, ref_label, pearsons_rs = \
                         derive_stats_per_chan_and_elev(ds_cf, dev_var, var_label, ref_label)
                     stats_cache[dev_var] = (stds, biases, n_valid, var_label)
@@ -373,7 +383,7 @@ if __name__ == "__main__":
                         all_stds_ele.append(std_ele)
                         all_labels_ele.append(var_label)
                         n_valid_min = int(n_valid.isel(elevation=i_elev).min().values)
-                        del stds, rmses, biases, n_valid
+                        del stds, biases, n_valid
 
                     if not all_biases_ele:
                         continue
@@ -383,14 +393,20 @@ if __name__ == "__main__":
                         elev, n_valid_min,
                         save_path=os.path.join(bias_dir,
                             f"MWRREF_{sky}_elev{elev:.1f}_{campaign}_{location}_bias.png"),
-                        campaign=campaign, location=location, tag=sky
+                        campaign=campaign, location=location, tag=sky,
+                    ylims_bias=[-15,15],
+                   grid_params=(-15, 15.0001, 2),
+                    ref_label=ref_label 
                     )
                     plot_bias_std_lines(
                         all_biases_ele, all_stds_ele, all_labels_ele, channels, channel_labels,
                         elev, n_valid_min,
                         save_path=os.path.join(bias_std_dir,
                             f"MWRREF_{sky}_elev{elev:.1f}_{campaign}_{location}_bias_std.png"),
-                        campaign=campaign, location=location, tag=sky
+                        campaign=campaign, location=location, tag=sky,
+                    ylims_bias=[-15,15],
+                   grid_params=(-15, 15.0001, 2),
+                    ref_label=ref_label 
                     )        
             del ds_sel  # nach der sky-Schleife
 

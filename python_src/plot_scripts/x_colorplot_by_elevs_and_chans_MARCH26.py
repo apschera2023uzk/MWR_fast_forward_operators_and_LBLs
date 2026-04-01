@@ -186,22 +186,18 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
         campaign=campaign, location=location)
     channels = np.arange(14)+1
     elev_idcs = np.arange(8)
-    valid_tag = (np.min(n_valid.values), np.max(n_valid.values))
+    valid_tag = (np.min(n_valid.values[:,:8]), np.max(n_valid.values[:,:8]))
 
     ###
     # Plot of Std:
     fig, ax = plt.subplots(figsize=(16, 9))
-    norm = colors.LogNorm(vmin=0.25, vmax=10.) 
+    norm = colors.LogNorm(vmin=0.25, vmax=15.) 
     c = ax.pcolormesh(
         channels,
         elev_idcs,
         stds[:,:8].T,          
         cmap="viridis",
-        #################
-        # vmin=0.0,
-        # vmax=3.0,      
         norm=norm ,
-        ###################
         shading="auto"
     )
     CS = ax.contour(
@@ -218,14 +214,14 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
     elev_tags = [str(elev) for elev in elevations[:8]]
     ax.set_yticks(elev_idcs, elev_tags)
     title = f"Standard deviation of TB per Channel/Elevation\n\
-        n_valid={valid_tag}, {location}, {campaign}, {label}-{ref_label}, {tag}"
+        n_valid(min/max)={valid_tag}, {location}, {campaign}, {label}-{ref_label}, {tag}"
     ax.set_title(title)
     cb = fig.colorbar(c, ax=ax)
-    ticks = [0.25, 0.5, 1, 2, 3, 5,7.5, 10]
+    ticks = [0.25, 0.5, 1, 2, 3, 5,7.5, 10, 15]
     cb.set_ticks(ticks)
     cb.set_ticklabels([str(t) for t in ticks])  # explizit lineare Labels
     cb.set_label("Standard deviation TB [K]")
-    out_path = f"{std_dir}/{tag}_std_chan_ele_{campaign}_{location}_{label}.png"
+    out_path = f"{std_dir}/{ref_label}_{tag}_std_chan_ele_{campaign}_{location}_{label}.png"
     plt.tight_layout()
     plt.savefig(out_path, dpi=300)
     plt.close(fig)
@@ -239,11 +235,7 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
         elev_idcs,
         biases[:,:8].T,          
         cmap="bwr",
-        ##############
-        #vmin=-2.0,
-        #vmax=2.0,
         norm=norm,      
-        ############## 
         shading="auto"
     )
     CS = ax.contour(
@@ -267,7 +259,7 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
     cb.set_ticks(ticks)
     cb.set_ticklabels([str(t) for t in ticks])  # explizit lineare Labels
     cb.set_label("Bias TB [K]")
-    out_path = f"{bias_dir}/{tag}_bias_chan_ele_{campaign}_{location}_{label}.png"
+    out_path = f"{bias_dir}/{ref_label}_{tag}_bias_chan_ele_{campaign}_{location}_{label}.png"
     plt.tight_layout()
     plt.savefig(out_path, dpi=300)
     plt.close(fig)
@@ -275,15 +267,12 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
     ###
     # Plot of RMSE:
     fig, ax = plt.subplots(figsize=(16, 9))
-    norm = colors.LogNorm(vmin=0.25, vmax=10.)
+    norm = colors.LogNorm(vmin=0.25, vmax=15.)
     c = ax.pcolormesh(
         channels,
         elev_idcs,
         rmses[:,:8].T,          
-        cmap="viridis",
-        ##########
-        #vmin=0.0,
-        # vmax=3.0,       
+        cmap="viridis",   
         norm = norm,
         shading="auto"
     )
@@ -304,11 +293,11 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
         n_valid={valid_tag}, {location}, {campaign}, {label}-{ref_label}, {tag}"
     ax.set_title(title)
     cb = fig.colorbar(c, ax=ax)
-    ticks = [0.25, 0.5, 1, 2, 3, 5,7.5, 10]
+    ticks = [0.25, 0.5, 1, 2, 3, 5,7.5, 10, 15]
     cb.set_ticks(ticks)
     cb.set_ticklabels([str(t) for t in ticks])  # explizit lineare Labels
     cb.set_label("RMSE TB [K]")
-    out_path = f"{bias_std_dir}/{tag}_RMSE_chan_ele_{campaign}_{location}_{label}.png"
+    out_path = f"{bias_std_dir}/{ref_label}_{tag}_RMSE_chan_ele_{campaign}_{location}_{label}.png"
     plt.tight_layout()
     plt.savefig(out_path, dpi=300)
     plt.close(fig)
@@ -321,7 +310,7 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
         elev_idcs,
         pearsons_rs[:,:8].T,          
         cmap="viridis",
-        vmin=-1,
+        vmin=0,
         vmax=1,       
         shading="auto"
     )
@@ -329,8 +318,8 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
         channels,
         elev_idcs,
         pearsons_rs[:,:8].T,     
-        levels=[-0.5, -0.25,0, 0.25, 0.5],
-        colors=["white", "red", "black", "red", "white"],
+        levels=[0.5, 0.75, 0.9, 0.95, 0.98],
+        colors=["purple", "red", "black", "blue", "white"],
         linewidths=1.0
     )
     ax.clabel(CS, inline=True, fontsize=8, fmt="%.2f")
@@ -339,14 +328,16 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
     elev_tags = [str(elev) for elev in elevations[:8]]
     ax.set_yticks(elev_idcs, elev_tags)
     title = f"Pearson's R of TB per Channel/Elevation\n\
-        n_valid={valid_tag}, {location}, {campaign}, {label}-{ref_label}, {tag}"
+        n_valid={valid_tag}, {location}, {campaign}, {label} and {ref_label}, {tag}"
     ax.set_title(title)
     cb = fig.colorbar(c, ax=ax)
+    '''
     ticks = [-1,-0.5, -0.25,0, 0.25, 0.5, 1.]
     cb.set_ticks(ticks)
     cb.set_ticklabels([str(t) for t in ticks])  # explizit lineare Labels
+    '''
     cb.set_label("correlation r")
-    out_path = f"{bias_std_dir}/{tag}_Pearson_corr_chan_ele_{campaign}_{location}_{label}.png"
+    out_path = f"{bias_std_dir}/{ref_label}_{tag}_Pearson_corr_chan_ele_{campaign}_{location}_{label}.png"
     plt.tight_layout()
     plt.savefig(out_path, dpi=300)
     plt.close(fig)
@@ -379,13 +370,13 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
     ax.set_ylabel("N valid timesteps")
     ax.set_title(
         f"Number of valid timesteps per Elevation\n"
-        f"{location}, {campaign}, {label}-{ref_label}, [{tag}]"
+        f"{location}, {campaign}, {label} and {ref_label}, [{tag}]"
     )
     ax.grid(True, axis="y", alpha=0.3)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
 
-    out_path = f"{bias_std_dir}/{tag}_nvalid_per_elev_{campaign}_{location}_{label}.png"
+    out_path = f"{bias_std_dir}/{ref_label}_{tag}_nvalid_per_elev_{campaign}_{location}_{label}.png"
     plt.tight_layout()
     plt.savefig(out_path, dpi=300)
     plt.close(fig)
@@ -449,7 +440,7 @@ if __name__ == "__main__":
                 print("Processing sky-tag:", sky)
                 for dev_var, var_label, ref_label in zip(dev_vars, var_labels,\
                             ref_labels):
-                    if ds_cf[dev_var].isna().all():
+                    if ds_cf[dev_var].isnull().all():
                         continue
                     else:
                         print("Processing Variable:", dev_var)
