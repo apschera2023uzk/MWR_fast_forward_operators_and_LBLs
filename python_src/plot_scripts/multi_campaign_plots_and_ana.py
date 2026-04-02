@@ -67,7 +67,7 @@ def parse_arguments():
     parser.add_argument(
         "--output", "-o",
         type=str,
-        default=os.path.expanduser("~/PhD_plots/2026/"),
+        default=os.path.expanduser("~/PhD_plots/multi/"),
         help="Output plot directory"
     )
     parser.add_argument(
@@ -160,10 +160,17 @@ def stats_by_channel(values, references, n_chans=n_chans):
     rmse_array = []
     
     for i in range(n_chans):
+        '''
         deviation = values[:,i] - references[:,i]
-        avg = np.nansum((values[:,i] -references[:,i])/ len(ds["time"]))
+        avg = np.nansum((values[:,i] -references[:,i]) / len(ds["time"]))
         std = np.sqrt(np.nansum((deviation-avg)**2)/len(ds["time"]))
         rmse = np.sqrt(np.nansum((values[:,i] -references[:,i])**2/len(ds["time"])))
+        '''
+        n_valid = np.sum(~np.isnan(values[:, i]))
+        deviation = values[:, i] - references[:, i]
+        avg  = np.nansum(deviation) / n_valid
+        std  = np.sqrt(np.nansum((deviation - avg) ** 2) / n_valid)
+        rmse = np.sqrt(np.nansum(deviation ** 2) / n_valid)
         std_array.append(std)
         bias_array.append(avg)
         rmse_array.append(rmse)     
@@ -1044,12 +1051,6 @@ if __name__ == "__main__":
     # Open dataset and clear sky filtering
     ds = xr.open_dataset(nc_out_path)
     ds_clear, ds_cloudy = clear_sky_dataset(ds, args)
-
-    print("********************")
-    print("ds_clear:", ds_clear)
-    print("ds_cloudy:", ds_cloudy)
-    ####################################
-    sys.exit()
     result_dict = {}
 
     for campaign in np.unique(ds['Campaign'].values):
