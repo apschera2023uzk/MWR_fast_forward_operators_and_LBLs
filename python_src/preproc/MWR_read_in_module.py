@@ -168,6 +168,7 @@ def get_tbs_from_l1(l1_files, datetime_np, elevations=elevations,\
         azimuths=azimuths): 
     tbs = np.full((10, 72, 14), np.nan)
     lat = np.nan; lon = np.nan
+    qual_flag = 0
     
     for file in l1_files:
         
@@ -183,6 +184,8 @@ def get_tbs_from_l1(l1_files, datetime_np, elevations=elevations,\
                     if idx_list is not None and len(idx_list) > 0:
                         for ch in range(len(tbs[ele_index,0,:])):
                             tbs[ele_index,0, ch] = np.nanmean(ds_bl["tb"].values[idx_list,ele_index,ch])
+                        flags = ds_bl["flag"].values[idx_list] 
+                        qual_flag = np.nanmean(flags)
                     
         # 1C01-files:
         elif "MWR_1C01" in file:
@@ -194,14 +197,16 @@ def get_tbs_from_l1(l1_files, datetime_np, elevations=elevations,\
                         ds_c1["time"].values, elevation, azi, datetime_np)
                     if time_idx_list is not None and len(time_idx_list) > 0:                       
                         for ch in range(len(tbs[i,j, :])):
-                            tbs[i,j, ch] = np.nanmean(ds_c1["tb"].values[time_idx_list,ch])    
+                            tbs[i,j, ch] = np.nanmean(ds_c1["tb"].values[time_idx_list,ch])  
+                        qual_flag = np.nanmean(ds_c1["quality_flag"].values[time_idx_list, :])
+
             if "latitude" in ds_c1.data_vars:
                 lat = ds_c1["latitude"].values[0]
                 lon = ds_c1["longitude"].values[0]
             elif "lat" in ds_c1.data_vars:
                 lat = ds_c1["lat"].values
                 lon = ds_c1["lon"].values
-                
+            
         # mwr-files:           
         else: 
             ###
@@ -217,6 +222,8 @@ def get_tbs_from_l1(l1_files, datetime_np, elevations=elevations,\
                     if time_idx_list is not None and len(time_idx_list) > 0:
                         for ch in range(len(tbs[i,j, :])):
                             tbs[i,j, ch] = np.nanmean(ds_mwr["tb"].values[time_idx_list,ch])     
+                        flags = ds_mwr["flag"].values[time_idx_list] 
+                        qual_flag = np.nanmean(flags)
             if "latitude" in ds_mwr.data_vars:
                 lat = ds_mwr["latitude"].values[0]
                 lon = ds_mwr["longitude"].values[0]
@@ -224,7 +231,7 @@ def get_tbs_from_l1(l1_files, datetime_np, elevations=elevations,\
                 lat = ds_mwr["lat"].values
                 lon = ds_mwr["lon"].values 
                 
-    return tbs, lat, lon
+    return tbs, lat, lon, qual_flag
    
 ##############################################################################
 
@@ -369,7 +376,7 @@ def get_mwr_data(datetime_np, mwrs,n_levels=n_levels,\
         files = [file for file in dwd_files if datestring in file]   
         l1_files = [file for file in files if "l1" in file]   
         l2_files = [file for file in files if "l2" in file] 
-        tbs_dwdhat, lat, lon = get_tbs_from_l1(l1_files, datetime_np)
+        tbs_dwdhat, lat, lon, qual_flag = get_tbs_from_l1(l1_files, datetime_np)
         dwd_profiles, lwp_dwd, iwv_dwd = get_profs_from_l2(l2_files, datetime_np)
         dwd_profiles[0,:] = dwd_profiles[0,:] + 112
     else:
@@ -381,7 +388,7 @@ def get_mwr_data(datetime_np, mwrs,n_levels=n_levels,\
         files = [file for file in fog_files if datestring in file]   
         l1_files = [file for file in files if "l1" in file]   
         l2_files = [file for file in files if "l2" in file] 
-        tbs_foghat, lat, lon = get_tbs_from_l1(l1_files, datetime_np)
+        tbs_foghat, lat, lon, qual_flag = get_tbs_from_l1(l1_files, datetime_np)
         fog_profiles, lwp_fog, iwv_fog = get_profs_from_l2(l2_files, datetime_np)
         fog_profiles[0,:] = fog_profiles[0,:] + 112
     else:
@@ -393,7 +400,7 @@ def get_mwr_data(datetime_np, mwrs,n_levels=n_levels,\
         files = [file for file in sun_files if datestring in file]   
         l1_files = [file for file in files if "l1" in file]   
         l2_files = [file for file in files if "l2" in file] 
-        tbs_sunhat, lat, lon = get_tbs_from_l1(l1_files, datetime_np)
+        tbs_sunhat, lat, lon, qual_flag = get_tbs_from_l1(l1_files, datetime_np)
         sun_profiles, lwp_sun, iwv_sun = get_profs_from_l2(l2_files, datetime_np)
         sun_profiles[0,:] = sun_profiles[0,:] + 74
     else:
@@ -405,7 +412,7 @@ def get_mwr_data(datetime_np, mwrs,n_levels=n_levels,\
         files = [file for file in top_files if datestring in file]   
         l1_files = [file for file in files if "l1" in file]   
         l2_files = [file for file in files if "l2" in file] 
-        tbs_tophat, lat, lon = get_tbs_from_l1(l1_files, datetime_np)
+        tbs_tophat, lat, lon, qual_flag = get_tbs_from_l1(l1_files, datetime_np)
         top_profiles, lwp_top, iwv_top = get_profs_from_l2(l2_files, datetime_np)
         top_profiles[0,:] = top_profiles[0,:] + 110
     else:
@@ -417,7 +424,7 @@ def get_mwr_data(datetime_np, mwrs,n_levels=n_levels,\
         files = [file for file in joy_files if datestring in file]   
         l1_files = [file for file in files if "1C01" in file]   
         l2_files = [file for file in files if "single" in file] 
-        tbs_joyhat, lat, lon = get_tbs_from_l1(l1_files, datetime_np)
+        tbs_joyhat, lat, lon, qual_flag = get_tbs_from_l1(l1_files, datetime_np)
         joy_profiles, lwp_joy, iwv_joy = get_profs_from_l2(l2_files, datetime_np) 
     else:
         tbs_joyhat = np.full((10, 72, 14), np.nan)
@@ -428,12 +435,13 @@ def get_mwr_data(datetime_np, mwrs,n_levels=n_levels,\
         files = [file for file in ham_files if datestring in file]   
         l1_files = [file for file in files if "1C01" in file]   
         l2_files = [file for file in files if "single" in file] 
-        tbs_hamhat, lat, lon = get_tbs_from_l1(l1_files, datetime_np)
+        tbs_hamhat, lat, lon, qual_flag = get_tbs_from_l1(l1_files, datetime_np)
         ham_profiles, lwp_ham, iwv_ham = get_profs_from_l2(l2_files, datetime_np)
     else:
         tbs_hamhat = np.full((10, 72, 14), np.nan)
         ham_profiles = np.full((4,n_levels), np.nan)
-        lwp_ham, iwv_ham = np.nan, np.nan        
+        lwp_ham, iwv_ham = np.nan, np.nan      
+        qual_flag = np.nan  
         
     #######################################
     # Then jsut read l1-files for now
@@ -443,10 +451,14 @@ def get_mwr_data(datetime_np, mwrs,n_levels=n_levels,\
     # [-0.001904392, 23.411406, -0.004118612, 31.603878, nan, nan, nan, nan, nan, nan, nan, nan]
     # => Warum habe ich denn für sunhat, tophat, joyhat, hamhat keine sinnvollen Werte???
     # Was mache ich mit negativen Werten???
+
+    print("************")
+    print("mwrs: s",mwrs)
+    print("qual_flag: ", qual_flag)
     
     return tbs_dwdhat, tbs_foghat, tbs_sunhat, tbs_tophat, tbs_joyhat,\
         tbs_hamhat, dwd_profiles,fog_profiles, sun_profiles, top_profiles,\
-        joy_profiles, ham_profiles, integrals, lat, lon
+        joy_profiles, ham_profiles, integrals, lat, lon, qual_flag
 
 ##############################################################################
         

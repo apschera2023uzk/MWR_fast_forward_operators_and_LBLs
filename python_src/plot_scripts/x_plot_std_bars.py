@@ -124,16 +124,14 @@ def select_ds_camp_loc(ds, campaign, location):
 ##############################################################################
 
 def plot_std_bars(ds, stds, labels, channels, channel_labels, elev,
-        n_valid_arr, save_path,elevations=elevations, thres_lwp=thres_lwp,\
+        n_valid_arr, save_path,campaign,location, ref_label,\
+        elevations=elevations, thres_lwp=thres_lwp,\
         ylims_bias=ylims_bias, tag="any_tag"):
-        
-    campaign = ds["Campaign"].values[0]
-    location = ds["Location"].values[0]
     
     fig, ax = plt.subplots(figsize=(14,9))
     plt.suptitle(f"Campaign: {campaign}, location: {location}, \n\
-        elevation: {elevations[elev]:.1f}°, (N: {n_valid_arr} / LWP < {thres_lwp} kg m-2) {tag}")
-    ax.set_title("Standard deviation of brightness temperature deviation")
+        elevation: {elevations[elev]:.1f}°, (N: {n_valid_arr[0][0]} / {tag})")
+    ax.set_title(f"Standard deviation of brightness temperature deviation (Reference: {ref_label})")
     
     width = 0.2  # Width of each bar
     offsets = np.linspace(-0.3,0.3,len(stds))
@@ -147,14 +145,83 @@ def plot_std_bars(ds, stds, labels, channels, channel_labels, elev,
     ax.set_xticks(channels)
     ax.set_xticklabels(channel_labels)
     ax.set_xlabel("Channels")
-    ax.set_ylim(0, 3)
-    ax.set_ylabel("Standard Deviation of Brightness Temperature [K]")
+    # ax.set_ylim(0, 3)
+    ax.set_ylabel(f"Standard Deviation of Brightness Temperature [K]")
     ax.grid(True)
     ax.legend()
     plt.tight_layout()
     
     plt.savefig(save_path+\
-        f"std/{tag}_{campaign}_{location}_{elevations[elev]:.1f}_bar_std.png",\
+        f"/{tag}_{campaign}_{location}_{elevations[elev]:.1f}_bar_std.png",\
+        dpi=300)
+    plt.close("all")
+    return 0
+
+##############################################################################
+
+def plot_rmse_bars(ds, rmses, labels, channels, channel_labels, elev,
+        n_valid_arr, save_path, campaign, location, ref_label,
+        elevations=elevations, thres_lwp=thres_lwp,
+        ylims_bias=ylims_bias, tag="any_tag"):
+
+    fig, ax = plt.subplots(figsize=(14, 9))
+    plt.suptitle(f"Campaign: {campaign}, location: {location}, \n\
+        elevation: {elevations[elev]:.1f}°, (N: {n_valid_arr[0][0]} / {tag})")
+    ax.set_title(f"RMSE of brightness temperature deviation (Reference: {ref_label})")
+
+    width   = 0.2
+    offsets = np.linspace(-0.3, 0.3, len(rmses))
+
+    for rmse, lbl, offset in zip(rmses, labels, offsets):
+        lbl = lbl.strip()
+        ax.bar(channels + offset, rmse, width, label=lbl, alpha=0.7)
+
+    ax.set_yticks(np.arange(0, 4.01, 0.5))
+    ax.set_xticks(channels)
+    ax.set_xticklabels(channel_labels)
+    ax.set_xlabel("Channels")
+    # ax.set_ylim(0, 3)
+    ax.set_ylabel(f"RMSE of Brightness Temperature [K]")
+    ax.grid(True)
+    ax.legend()
+    plt.tight_layout()
+    plt.savefig(save_path +
+        f"/{tag}_{campaign}_{location}_{elevations[elev]:.1f}_bar_rmse.png",
+        dpi=300)
+    plt.close("all")
+    return 0
+
+##############################################################################
+
+def plot_bias_lines(biases, labels, channels, channel_labels, elev,
+        n_valid_arr, save_path, campaign, location, ref_label,
+        elevations=elevations, thres_lwp=thres_lwp,
+        ylims_bias=ylims_bias, grid_params=grid_params, tag="any_tag"):
+
+    fig, ax = plt.subplots(figsize=(14, 9))
+    plt.suptitle(f"Campaign: {campaign}, location: {location}, \n\
+        elevation: {elevations[elev]:.1f}°, (N: {n_valid_arr[0][0]} / {tag})")
+    ax.set_title(f"Bias of brightness temperature deviation (Reference: {ref_label})")
+
+    ax.plot(channels, [0.] * len(channels), color="black",
+            linewidth=2, label=ref_label)
+
+    for bias, lbl in zip(biases, labels):
+        lbl = lbl.strip()
+        ax.bar(channels, bias, linewidth=2, alpha=0.8, label=lbl)
+
+    ax.set_yticks(np.arange(*grid_params))
+    ax.set_xticks(channels)
+    ax.set_xticklabels(channel_labels)
+    ax.set_xlabel("Channels")
+    ax.set_xlim(channels.min() - 1, channels.max() + 1)
+    # ax.set_ylim(ylims_bias)
+    ax.set_ylabel(f"Bias of Brightness Temperature [K]")
+    ax.grid(True)
+    ax.legend()
+    plt.tight_layout()
+    plt.savefig(save_path +
+        f"/{tag}_{campaign}_{location}_{elevations[elev]:.1f}_bias.png",
         dpi=300)
     plt.close("all")
     return 0
@@ -209,6 +276,13 @@ if __name__ == "__main__":
     ###
     # 0th Open dataset and clear sky filtering
     ds0 = xr.open_dataset(nc_out_path)
+    keep_vars = [v for v in ds0.data_vars if 
+                 v.startswith("Deviations_") or 
+                 v.startswith("TBs_") or 
+                 v == "cloud_flag" or 
+                 v == "Campaign" or 
+                 v == "Location"]
+    ds0 = ds0[keep_vars]
     ds0 = ds0.mean(dim="azimuth", keep_attrs=True)
     
     ###
@@ -222,79 +296,64 @@ if __name__ == "__main__":
     for campaign in campaigns:
         print("Processing Campaign: ", campaign)
         for location in locations:
-            print("Processing location:", location)
-            folder = ensure_folder_exists(args.output, campaign+"_"+\
-                    location+"/std/")
             ds_sel = select_ds_camp_loc(ds0, campaign, location)
+            if len(ds_sel["time"]) == 0:
+                continue
+            else:
+                print("Processing location:", location)
+                folder = ensure_folder_exists(args.output, campaign+"_"+\
+                    location+"/std/")
             for sky in skies:
                 ds_cf = apply_sky_mask(ds_sel, sky)
 
                 #######################################################
 
                 for i_elev, elev in enumerate(ds_cf["elevation"].values):
-                    # ds_ele = ds_cf.sel(elevation=elevation)
-                    stds =[]
-                    labels=[]
-                    n_valid_arr = []
+                    stds, biases, rmses = [], [], []
+                    stds_mwr, biases_mwr, rmses_mwr = [], [], []
+                    labels, labels_mwr = [], []
+                    n_valid_arr, n_valid_arr_mwr = [], []
+
                     for dev_var, var_label, ref_label in zip(dev_vars, var_labels,\
                             ref_labels):
                         std, bias, rmse, n_valid = stats_by_channel(ds_cf,\
                             dev_var, i_elev)
-
-                        #####
-                        print("***********************************+")
-                        print("std, bias, rmse, n_valid:", std, bias, rmse, n_valid)
-                        print("ds_cf,dev_var, i_elev ::", ds_cf, dev_var, i_elev)
-                        print("**********************************")
-                        '''
-        std, bias, rmse, n_valid: [0.67847073 0.42596514 0.15469753 0.07433007 0.07382497 0.0660372
-         0.06138445 0.07133994 0.08250314 0.1116207  0.02372852 0.03843786
-         0.04632173 0.06996615] [-2.57536403 -1.61806711 -0.54992093  0.07611798  0.08344426  0.0146511
-         -0.11692435  0.14658593  2.05941402  1.26513019 -0.06098652 -0.12626487
-         -0.1342514  -0.21324561] [2.66323533 1.67319678 0.57126557 0.10639034 0.11141396 0.06764294
-         0.13205815 0.16302399 2.06106595 1.27004472 0.06544003 0.13198593
-         0.1420181  0.22443029] [205 205 205 205 205 205 205 205 205 205 205 205 205 205]
-                        ds_cf,dev_var, i_elev :: <xarray.Dataset> Size: 1GB
-Dimensions:                  (time: 437, elevation: 10, azimuth: 72,
-                              N_Channels: 14, N_Levels: 180, Crop: 2)
-Coordinates:
-    Level_z                  (N_Levels, time, Crop) float64 1MB ...
-    Latitude                 (time) float64 3kB ...
-    Longitude                (time) float64 3kB ...
-  * Crop                     (Crop) bool 2B False True
-  * N_Channels               (N_Channels) int32 56B 0 1 2 3 4 ... 9 10 11 12 13
-  * time                     (time) datetime64[ns] 3kB 2021-06-26T22:45:00 .....
-  * N_Levels                 (N_Levels) int32 720B 0 1 2 3 4 ... 176 177 178 179
-  * elevation                (elevation) float64 80B 90.0 30.0 19.2 ... 4.8 4.2
-  * azimuth                  (azimuth) float64 576B 0.0 5.0 10.0 ... 350.0 355.0
-    dim_1                    int64 8B ...
-Data variables: (12/79)
-    TBs_dwdhat               (time, elevation, azimuth, N_Channels) float64 35MB ...
-Deviations_RTTOV_R24 0
-                        '''
-                        ####
-
-                        # Skip if all channels are NaN (no valid data for this dev_var/elevation)
-
                         if np.all(np.isnan(std)):
                             continue
-                        else:
-                            print(f"Processing {dev_var} at elevation {elev} — all NaN")
-                            stds.append(std)
-                            labels.append(var_label)
+                        if "R24" in ref_label:
+                            stds.append(std); biases.append(bias)
+                            rmses.append(rmse); labels.append(var_label)
                             n_valid_arr.append(n_valid)
-                            
+                        else:
+                            stds_mwr.append(std); biases_mwr.append(bias)
+                            rmses_mwr.append(rmse); labels_mwr.append(var_label)
+                            n_valid_arr_mwr.append(n_valid)
 
-                    plot_std_bars(ds_cf, stds, labels, channels,\
-                            channel_labels, i_elev, n_valid_arr, folder, tag=sky)
-                #######################################################
+                    for stds_i, biases_i, rmses_i, lbls, nvs, ref in [
+                        (stds,     biases,     rmses,     labels,     n_valid_arr,     "R24"),
+                        (stds_mwr, biases_mwr, rmses_mwr, labels_mwr, n_valid_arr_mwr, "MWR"),
+                    ]:
+                        if nvs == []:
+                            continue
+                        plot_std_bars(ds_cf, stds_i, lbls, channels, channel_labels,
+                            i_elev, nvs, folder, campaign, location, ref, tag=sky)
+                        plot_rmse_bars(ds_cf, rmses_i, lbls, channels, channel_labels,
+                            i_elev, nvs, folder, campaign, location, ref, tag=sky)
+                        plot_bias_lines(biases_i, lbls, channels, channel_labels,
+                            i_elev, nvs, folder, campaign, location, ref, tag=sky)
+                    del stds
+                    del labels
+                    del n_valid_arr
+                    del stds_mwr
+                    del labels_mwr
+                    del n_valid_arr_mwr
+                del ds_cf
+            del ds_sel
 
 
     ###################
-    # Do outputs now look like before??? => No! Definitely no!!!XXX
-    # How to deal with MWR and R24 references??
-    # 2. analyze_mwr_model_stats(ds - Check this funtion in origianl sccrip
-    # Should I divide this by Channel??
+    # Biases scheinen sehr groß (vergleich mit CAO: 2 K...)
+    # Grid anpassen
     
 
 

@@ -599,6 +599,7 @@ def summarize_many_profiles(pattern=\
     top_profiles= np.full((n, 4,n_levels), np.nan)
     joy_profiles= np.full((n, 4,n_levels), np.nan)
     ham_profiles= np.full((n, 4,n_levels), np.nan)
+    qual_flags = np.full((n), np.nan)
     
     lwps_rs = np.full((n, 2), np.nan)
     lwps_dwd = np.full((n), np.nan)
@@ -640,7 +641,7 @@ def summarize_many_profiles(pattern=\
         tbs_dwdhat1, tbs_foghat1,tbs_sunhat1,tbs_tophat1, tbs_joyhat1,\
         tbs_hamhat1, dwd_profiles1,fog_profiles1, sun_profiles1,\
         top_profiles1, joy_profiles1, ham_profiles1, integrals,\
-         lat, lon =\
+         lat, lon, qual_flag =\
             get_mwr_data(datetime_np, mwrs)
         times[i] = datetime_np
         if crop:
@@ -715,6 +716,7 @@ def summarize_many_profiles(pattern=\
             iwvs_top[i] = integrals[7]
             iwvs_joy[i] = integrals[9]
             iwvs_ham[i] = integrals[11]
+            qual_flags[i] = qual_flag
         else:
             #################
             # p in hPa as in other inputs!
@@ -799,7 +801,9 @@ def summarize_many_profiles(pattern=\
         iwvs_sun[i] = integrals[5]
         iwvs_top[i] = integrals[7]
         iwvs_joy[i] = integrals[9]
-        iwvs_ham[i] = integrals[11]               
+        iwvs_ham[i] = integrals[11]     
+        qual_flags[i] = qual_flag
+          
         level_pressures[:,i,0] = p_array[-n_levels:]
         level_temperatures[:,i,0] = t_array[-n_levels:]
         level_wvs[:,i,0] = 1000*m_array[-n_levels:] # convert kg/kg to g/kg
@@ -829,7 +833,7 @@ def summarize_many_profiles(pattern=\
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham, lwps_rs, lats, lons
+        iwvs_ham, lwps_rs, lats, lons, qual_flags
 
 ##############################################################################
 
@@ -1115,7 +1119,7 @@ def produce_dataset(profile_indices, level_pressures,
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham,lwps_rs, lats, lons, \
+        iwvs_ham,lwps_rs, lats, lons,qual_flags,\
         n_levels=137,\
         campaign="any_camp",\
         location="any_location", elevations=elevations, azimuths=azimuths):
@@ -1187,6 +1191,7 @@ def produce_dataset(profile_indices, level_pressures,
             "Hamhat_hua":           (( "time","N_Levels"),ham_profiles[:,3,:]),
             "Hamhat_IWV":           (("time",), iwvs_ham),
             "Hamhat_LWP":           (("time",), lwps_ham),
+            "qual_flag":          (("time",), qual_flags),
                         
             "Level_Pressure":       (("N_Levels", "time","Crop"), level_pressures),
             "Level_Temperature":    (("N_Levels", "time","Crop"), level_temperatures),
@@ -1257,7 +1262,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham, lwps_rs, lats, lons  =\
+        iwvs_ham, lwps_rs, lats, lons, qual_flags  =\
         summarize_many_profiles(pattern=\
         "/home/aki/PhD_data/FESSTVaL_14GB/radiosondes/RAO/sups_rao_sonde00_l1_any_v00_*.nc",\
              sza_float=sza_float,n_levels=n_levels, mwrs="dwdhat/foghat") 
@@ -1271,7 +1276,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham,lwps_rs, lats, lons,\
+        iwvs_ham,lwps_rs, lats, lons,qual_flags,\
         n_levels=n_levels, campaign="FESSTVaL",\
         location="RAO_Lindenberg")
 
@@ -1285,7 +1290,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham, lwps_rs, lats, lons  =\
+        iwvs_ham, lwps_rs, lats, lons, qual_flags  =\
         summarize_many_profiles(pattern=\
         "/home/aki/PhD_data/FESSTVaL_14GB/radiosondes/UHH/fval_uhh_sonde00_l1_any_v00_*.nc",\
              sza_float=sza_float,n_levels=n_levels, mwrs="dwdhat/foghat") 
@@ -1300,7 +1305,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham,lwps_rs, lats, lons,\
+        iwvs_ham,lwps_rs, lats, lons,qual_flags,\
         n_levels=n_levels, campaign="FESSTVaL",\
         location="RAO_Lindenberg")
             
@@ -1313,7 +1318,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham,lwps_rs, lats, lons =\
+        iwvs_ham,lwps_rs, lats, lons, qual_flags =\
         summarize_many_profiles(pattern=\
         "/home/aki/PhD_data/FESSTVaL_14GB/radiosondes/UzK/fval_uzk*.nc",\
              sza_float=sza_float,n_levels=n_levels, mwrs="sunhat") 
@@ -1328,7 +1333,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham,lwps_rs, lats, lons,\
+        iwvs_ham,lwps_rs, lats, lons,qual_flags,\
         n_levels=n_levels, campaign="FESSTVaL",\
         location="Falkenberg")  
         
@@ -1341,7 +1346,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham, lwps_rs, lats, lons  =\
+        iwvs_ham, lwps_rs, lats, lons, qual_flags  =\
         summarize_many_profiles(pattern=\
         "/home/aki/PhD_data/Socles/radiosondes/202*/SOUNDING DATA/*_Profile.txt",\
              sza_float=sza_float,n_levels=n_levels, mwrs="tophat") 
@@ -1356,7 +1361,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham,lwps_rs, lats, lons,\
+        iwvs_ham,lwps_rs, lats, lons,qual_flags,\
         n_levels=n_levels, campaign="Socles",\
         location="JOYCE")
 
@@ -1369,7 +1374,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham, lwps_rs, lats, lons =\
+        iwvs_ham, lwps_rs, lats, lons, qual_flags =\
         summarize_many_profiles(sza_float=sza_float,n_levels=n_levels,\
         crop=True, mwrs="hamhat/joyhat") 
     # srf_altitude = np.array([h_km_vital]*len(srf_altitude))
@@ -1384,7 +1389,7 @@ if __name__=="__main__":
         tbs_hamhat, dwd_profiles, fog_profiles, sun_profiles, top_profiles,\
         joy_profiles, ham_profiles, lwps_dwd, lwps_fog, lwps_sun, lwps_top,\
         lwps_joy, lwps_ham, iwvs_dwd, iwvs_fog, iwvs_sun, iwvs_top, iwvs_joy,\
-        iwvs_ham,lwps_rs, lats, lons,\
+        iwvs_ham,lwps_rs, lats, lons,qual_flags,\
         n_levels=n_levels, campaign="Vital I",\
         location="JOYCE")
    

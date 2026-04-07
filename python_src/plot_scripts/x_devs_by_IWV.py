@@ -352,6 +352,139 @@ def plot_arms_vs_rttov_per_ele_chan(dep_rttov, dep_arms, iwv_flat,
             plt.close()
 
 ##############################################################################
+# 5g  MWR deviations vs IWV — all instruments combined per plot
+##############################################################################
+
+MWR_INSTRUMENTS = {
+    "dwdhat": ("Deviations_dwdhat_R24", "blue"),
+    "joyhat": ("Deviations_joyhat_R24", "green"),
+    "foghat": ("Deviations_foghat_R24", "purple"),
+    "hamhat": ("Deviations_hamhat_R24", "brown"),
+}
+
+def get_mwr_departures(ds_cf):
+    """Return dict of {instrument: (time, N_Channels, elevation) array}."""
+    result = {}
+    for name, (var, _) in MWR_INSTRUMENTS.items():
+        if var not in ds_cf:
+            continue
+        da = ds_cf[var]
+        if "azimuth" in da.dims:
+            da = da.mean(dim="azimuth", keep_attrs=True)
+        if da.dims[1] != "N_Channels":
+            da = da.transpose("time", "N_Channels", "elevation")
+        result[name] = da.values
+    return result
+
+
+def plot_mwr_vs_iwv_all(mwr_deps, iwv_flat, campaign, location, sky, outpath):
+    """One plot per instrument: all chans × all elevs vs IWV."""
+    for name, dep in mwr_deps.items():
+        color = MWR_INSTRUMENTS[name][1]
+        y_all = dep.flatten()
+        x_all = np.repeat(iwv_flat, dep.shape[1] * dep.shape[2])
+        fig, ax = plt.subplots(figsize=(10, 10))
+        ax.scatter(x_all, y_all, marker="o", color=color, s=8, alpha=0.4)
+        ax.axhline(0, color="black", linestyle="--", linewidth=2)
+        ax.set_xlabel("IWV [kg m⁻²]")
+        ax.set_ylabel(f"{name} deviations from R24 [K]")
+        ax.set_xlim(0, 45)
+        safe_ylim(ax, y_all)
+        ax.set_title(f"{name} vs. IWV — all chans/elevs\n"
+                     f"[{campaign}, {location}, {sky}]")
+        plt.tight_layout()
+        fname = f"{sky}_allchans_allelev_{name}_IWV_{campaign}_{location}.png"
+        plt.savefig(os.path.join(outpath, fname), dpi=300, bbox_inches="tight")
+        plt.close()
+
+
+def plot_mwr_vs_iwv_per_channel(mwr_deps, iwv_flat,
+                                 campaign, location, sky, outpath):
+    """Per channel: all instruments on one plot, all elevations stacked."""
+    for ch_idx in range(n_chans):
+        fig, ax = plt.subplots(figsize=(10, 10))
+        for name, dep in mwr_deps.items():
+            color = MWR_INSTRUMENTS[name][1]
+            y = dep[:, ch_idx, :].flatten()
+            x = np.repeat(iwv_flat, dep.shape[2])
+            ax.scatter(x, y, marker="o", color=color, s=8,
+                       alpha=0.5, label=name)
+        ax.axhline(0, color="black", linestyle="--", linewidth=2)
+        ax.set_xlabel("IWV [kg m⁻²]")
+        ax.set_ylabel("MWR deviation from R24 [K]")
+        ax.set_xlim(0, 45)
+        axis_len = 4 if ch_idx > 6 else 13
+        ax.set_ylim(-axis_len, axis_len)
+        ax.legend()
+        ax.set_title(f"Ch{ch_idx+1} — all MWRs vs. IWV — all elevs\n"
+                     f"[{campaign}, {location}, {sky}]")
+        plt.tight_layout()
+        fname = f"{sky}_ch{ch_idx+1}_MWRs_IWV_allelev_{campaign}_{location}.png"
+        plt.savefig(os.path.join(outpath, fname), dpi=300, bbox_inches="tight")
+        plt.close()
+
+
+def plot_mwr_vs_iwv_per_elevation(mwr_deps, iwv_flat,
+                                   campaign, location, sky, outpath,
+                                   elevations=elevations):
+    """Per elevation: all instruments on one plot, all channels stacked."""
+    n_elev = next(iter(mwr_deps.values())).shape[2]
+    for el_idx in range(n_elev):
+        elev_val = elevations[el_idx] if el_idx < len(elevations) else el_idx
+        fig, ax = plt.subplots(figsize=(10, 10))
+        for name, dep in mwr_deps.items():
+            color = MWR_INSTRUMENTS[name][1]
+            y = dep[:, :, el_idx].flatten()
+            x = np.repeat(iwv_flat, dep.shape[1])
+            ax.scatter(x, y, marker="o", color=color, s=8,
+                       alpha=0.5, label=name)
+        ax.axhline(0, color="black", linestyle="--", linewidth=2)
+        ax.set_xlabel("IWV [kg m⁻²]")
+        ax.set_ylabel("MWR deviation from R24 [K]")
+        ax.set_xlim(0, 45)
+        safe_ylim(ax, np.concatenate([d[:, :, el_idx].flatten()
+                                       for d in mwr_deps.values()]))
+        ax.legend()
+        ax.set_title(f"All MWRs vs. IWV — {elev_val:.1f}° — all chans\n"
+                     f"[{campaign}, {location}, {sky}]")
+        plt.tight_layout()
+        fname = (f"{sky}_elev{elev_val:.1f}_MWRs_IWV_allchans_"
+                 f"{campaign}_{location}.png")
+        plt.savefig(os.path.join(outpath, fname), dpi=300, bbox_inches="tight")
+        plt.close()
+
+
+def plot_mwr_vs_iwv_per_ele_chan(mwr_deps, iwv_flat,
+                                  campaign, location, sky, outpath,
+                                  elevations=elevations):
+    """Per (elevation × channel): all instruments on one plot."""
+    n_elev = next(iter(mwr_deps.values())).shape[2]
+    for el_idx in range(n_elev):
+        elev_val = elevations[el_idx] if el_idx < len(elevations) else el_idx
+        for ch_idx in range(n_chans):
+            axis_len = 4 if ch_idx > 6 else 13
+            fig, ax = plt.subplots(figsize=(8, 8))
+            for name, dep in mwr_deps.items():
+                color = MWR_INSTRUMENTS[name][1]
+                y = dep[:, ch_idx, el_idx]
+                ax.scatter(iwv_flat, y, marker="o", color=color,
+                           s=15, alpha=0.6, label=name)
+            ax.axhline(0, color="black", linestyle="--", linewidth=1.5)
+            ax.set_xlabel("IWV [kg m⁻²]")
+            ax.set_ylabel("MWR deviation from R24 [K]")
+            ax.set_xlim(0, 45)
+            ax.set_ylim(-axis_len, axis_len)
+            ax.legend(fontsize=10)
+            ax.set_title(f"MWRs vs. IWV  Ch{ch_idx+1}  {elev_val:.1f}°\n"
+                         f"[{campaign}, {location}, {sky}]")
+            plt.tight_layout()
+            fname = (f"{sky}_elev{elev_val:.1f}_ch{ch_idx+1}_MWRs_IWV_"
+                     f"{campaign}_{location}.png")
+            plt.savefig(os.path.join(outpath, fname), dpi=150,
+                        bbox_inches="tight")
+            plt.close()
+
+##############################################################################
 # 6  Main
 ##############################################################################
 
@@ -440,6 +573,23 @@ if __name__ == "__main__":
                 plot_arms_vs_rttov_per_ele_chan(dep_rttov, dep_arms, iwv_vals,
                                                 campaign, location, sky,
                                                 dir_arms_rttov_ec)  # NEW
+
+                # ── MWR-Deviationen laden ─────────────────────────────────────────────────
+                mwr_deps = get_mwr_departures(ds_cf)
+                if mwr_deps:
+                    dir_mwr_all      = ensure_folder(os.path.join(base, "MWR_all"))
+                    dir_mwr_chan     = ensure_folder(os.path.join(base, "MWR_per_channel"))
+                    dir_mwr_elev     = ensure_folder(os.path.join(base, "MWR_per_elevation"))
+                    dir_mwr_ele_chan = ensure_folder(os.path.join(base, "MWR_per_ele_chan"))
+
+                    plot_mwr_vs_iwv_all(mwr_deps, iwv_vals,
+                                        campaign, location, sky, dir_mwr_all)
+                    plot_mwr_vs_iwv_per_channel(mwr_deps, iwv_vals,
+                                                campaign, location, sky, dir_mwr_chan)
+                    plot_mwr_vs_iwv_per_elevation(mwr_deps, iwv_vals,
+                                                  campaign, location, sky, dir_mwr_elev)
+                    plot_mwr_vs_iwv_per_ele_chan(mwr_deps, iwv_vals,
+                                                 campaign, location, sky, dir_mwr_ele_chan)
 
                 plt.close("all")
 

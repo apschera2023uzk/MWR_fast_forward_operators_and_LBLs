@@ -412,6 +412,7 @@ if __name__ == "__main__":
     ###
     # 0th Open dataset and clear sky filtering
     ds0 = xr.open_dataset(nc_out_path)
+    # ds0 = ds0.where(ds0["qual_flag"] == 0, drop=True)
     keep_vars = [v for v in ds0.data_vars if 
                  v.startswith("Deviations_") or 
                  v.startswith("TBs_") or 
