@@ -98,6 +98,21 @@ def add_MLNN_cloud_info(ds, args):
 
 ##############################################################################
 
+def get_liquid_flag(ds, rs_lwp_thrs_kg_m2=0.2):
+    """
+    Returns a (time,) float array: 1.0=cloudy where
+    LWP_radiosonde (Crop=0) > thres_liquid.
+    Returns None if LWP_radiosonde not in ds.
+    """
+    if "LWP_radiosonde" not in ds:
+        print("Info: LWP_radiosonde nicht im Dataset — kein Liquid-Filter.")
+        return None
+
+    lwp = ds["LWP_radiosonde"].isel(Crop=0)  # (time,)
+    return (lwp.values > rs_lwp_thrs_kg_m2).astype(float)
+
+##############################################################################
+
 def add_cloud_flag(ds, args, thres_lwp=thres_lwp):
     """
     Adds 'cloud_flag' (1=cloudy, 0=clear, never NaN) to ds.
@@ -123,21 +138,28 @@ def add_cloud_flag(ds, args, thres_lwp=thres_lwp):
     lwp_flag = np.tile(lwp_flag, (mlnn_flag.shape[0], 1))
 
     # ── 3. MLNN dominant; fill NaNs with LWP-based flag ──────────────────────
-    nan_mask        = np.isnan(mlnn_flag)
-    combined_flag   = mlnn_flag.copy()
+    nan_mask      = np.isnan(mlnn_flag)
+    combined_flag = mlnn_flag.copy()
     combined_flag[nan_mask] = lwp_flag[nan_mask]
+
+
+    # ── 3b. Level_Liquid override: setze cloudy wo Liquid-Summe > threshold ──
+    liquid_flag = get_liquid_flag(ds)
+    if liquid_flag is not None:
+        # liquid_flag ist (time,) → auf (elevation, time) broadcasten
+        liquid_flag_2d = np.tile(liquid_flag, (combined_flag.shape[0], 1))
+        combined_flag = np.where(liquid_flag_2d == 1.0, 1.0, combined_flag)
 
     # ── 4. Store as int (0/1, never NaN) and return ───────────────────────────
     ds["cloud_flag"] = xr.DataArray(
         np.transpose(combined_flag).astype(int),
         dims=["time", "elevation"],
         attrs={
-            "long_name": "Cloud flag (MLNN primary, LWP fallback)",
+            "long_name": "Cloud flag (MLNN primary, LWP + Level_Liquid fallback)",
             "flag_values": "0, 1",
             "flag_meanings": "clear cloudy",
         }
     )
-
     return ds
 
 ##############################################################################

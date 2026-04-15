@@ -155,13 +155,26 @@ def apply_sky_mask(ds_sel, sky):
         return ds_sel
 
     cf = ds_sel["cloud_flag"]  # (time, elevation)
-    bad_mask = (cf == 1) if sky == "clear" else (cf == 0)
 
-    ds_cf = ds_sel.copy()
+    if sky == "clear":
+        bad_mask_elev = (cf == 1)   # (time, elevation): cloudy cells
+    else:  # cloudy
+        bad_mask_elev = (cf == 0)   # (time, elevation): clear cells
+
+    # Timestep is dropped if ALL elevations are bad:
+    bad_mask_time = bad_mask_elev.all(dim="elevation")  # (time,)
+    good_time     = ~bad_mask_time
+
+    # 1. Drop fully-bad timesteps from entire dataset (all vars, incl. no-elevation vars):
+    ds_cf = ds_sel.isel(time=good_time.values)
+
+    # 2. For vars with elevation dim: additionally NaN out bad (time, elevation) cells:
+    bad_mask_elev_filtered = bad_mask_elev.isel(time=good_time.values)
     for var in ds_cf.data_vars:
         if "elevation" not in ds_cf[var].dims:
             continue
-        ds_cf[var] = ds_cf[var].where(~bad_mask.broadcast_like(ds_cf[var]))
+        ds_cf[var] = ds_cf[var].where(
+            ~bad_mask_elev_filtered.broadcast_like(ds_cf[var]))
 
     return ds_cf
 

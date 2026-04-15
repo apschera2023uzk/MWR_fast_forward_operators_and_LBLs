@@ -945,6 +945,7 @@ def add_attrs_CF_conform(ds):
         "units": "degree"
     })
 
+    # --- Level variables ---
     ds["Level_z"].attrs.update({
         "standard_name": "altitude",
         "long_name": "Geopotential height above mean sea level",
@@ -952,14 +953,12 @@ def add_attrs_CF_conform(ds):
         "positive": "up",
         "axis": "Z"
     })
-
-    # --- Level variables ---
     ds["Level_Pressure"].attrs.update({
         "standard_name": "air_pressure",
         "long_name": "Pressure profile from radiosonde",
         "units": "hPa",
         "_FillValue": np.nan,
-        "coordinates": "time Latitude Longitude Level_z",
+        "coordinates": "time Latitude Longitude",
         "cell_methods": "time: mean"
     })
 
@@ -969,7 +968,7 @@ def add_attrs_CF_conform(ds):
         "units": "K",
         "_FillValue": np.nan,
         "valid_range": (150.0, 330.0),
-        "coordinates": "time Latitude Longitude Level_z",
+        "coordinates": "time Latitude Longitude",
         "cell_methods": "time: mean"
     })
 
@@ -978,7 +977,7 @@ def add_attrs_CF_conform(ds):
         "long_name": "Water vapor mixing ratio",
         "units": "g kg-1",
         "_FillValue": np.nan,
-        "coordinates": "time Latitude Longitude Level_z"
+        "coordinates": "time Latitude Longitude"
     })
 
     ds["Level_Liquid"].attrs.update({
@@ -986,7 +985,7 @@ def add_attrs_CF_conform(ds):
         "long_name": "Liquid water mixing ratio",
         "units": "kg kg-1",
         "_FillValue": np.nan,
-        "coordinates": "time Latitude Longitude Level_z"
+        "coordinates": "time Latitude Longitude"
     })
 
     ds["Level_Ice"].attrs.update({
@@ -994,7 +993,7 @@ def add_attrs_CF_conform(ds):
         "long_name": "Ice water mixing ratio",
         "units": "kg kg-1",
         "_FillValue": np.nan,
-        "coordinates": "time Latitude Longitude Level_z"
+        "coordinates": "time Latitude Longitude"
     })
 
     ds["Level_RH"].attrs.update({
@@ -1003,7 +1002,7 @@ def add_attrs_CF_conform(ds):
         "units": "%",
         "_FillValue": np.nan,
         "valid_range": (0.0, 100.0),
-        "coordinates": "time Latitude Longitude Level_z"
+        "coordinates": "time Latitude Longitude"
     })
 
     # --- Integrated quantities ---

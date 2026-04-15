@@ -147,13 +147,26 @@ def apply_sky_mask(ds_sel, sky):
         return ds_sel
 
     cf = ds_sel["cloud_flag"]  # (time, elevation)
-    bad_mask = (cf == 1) if sky == "clear" else (cf == 0)
 
-    ds_cf = ds_sel.copy()
+    if sky == "clear":
+        bad_mask_elev = (cf == 1)   # (time, elevation): cloudy cells
+    else:  # cloudy
+        bad_mask_elev = (cf == 0)   # (time, elevation): clear cells
+
+    # Timestep is dropped if ALL elevations are bad:
+    bad_mask_time = bad_mask_elev.all(dim="elevation")  # (time,)
+    good_time     = ~bad_mask_time
+
+    # 1. Drop fully-bad timesteps from entire dataset (all vars, incl. no-elevation vars):
+    ds_cf = ds_sel.isel(time=good_time.values)
+
+    # 2. For vars with elevation dim: additionally NaN out bad (time, elevation) cells:
+    bad_mask_elev_filtered = bad_mask_elev.isel(time=good_time.values)
     for var in ds_cf.data_vars:
         if "elevation" not in ds_cf[var].dims:
             continue
-        ds_cf[var] = ds_cf[var].where(~bad_mask.broadcast_like(ds_cf[var]))
+        ds_cf[var] = ds_cf[var].where(
+            ~bad_mask_elev_filtered.broadcast_like(ds_cf[var]))
 
     return ds_cf
 
@@ -204,8 +217,9 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
         channels,
         elev_idcs,
         stds[:,:8].T,     
-        levels=[0.25, 0.5,1, 2, 3],
-        colors=["white", "red", "black", "purple", "black"],
+        levels=[0.25, 0.5,1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14],
+        colors=["red", "red", "black", "black", "black", "black", "black",\
+            "black", "black", "black", "black", "black", "black"],
         linewidths=1.0
     )
     ax.clabel(CS, inline=True, fontsize=8, fmt="%.2f")
@@ -241,9 +255,10 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
     CS = ax.contour(
         channels,
         elev_idcs,
-        biases[:,:8].T,     
-        levels=[-2, -1,-0.5,-0.25,0.25, 0.5,1, 2],
-        colors=["red", "black", "purple"],
+        biases[:,:8].T,  
+        levels=[-5,-4,-3, -2, -1,-0.5,-0.25,0.25, 0.5,1, 2,3 ,4,5],
+        colors=["black","black","black","black","black","red","red","red",\
+        "red", "black", "black", "black", "black", "black"],
         linewidths=1.0
     )
     ax.clabel(CS, inline=True, fontsize=8, fmt="%.2f")
@@ -280,8 +295,9 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
         channels,
         elev_idcs,
         rmses[:,:8].T,     
-        levels=[0.25, 0.5,1, 2, 3],
-        colors=["white", "red", "black", "purple", "black"],
+        levels=[0.25, 0.5,1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14],
+        colors=["red", "red", "black", "black", "black", "black", "black",\
+            "black", "black", "black", "black", "black", "black"],
         linewidths=1.0
     )
     ax.clabel(CS, inline=True, fontsize=8, fmt="%.2f")
@@ -319,7 +335,7 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
         elev_idcs,
         pearsons_rs[:,:8].T,     
         levels=[0.5, 0.75, 0.9, 0.95, 0.98],
-        colors=["purple", "red", "black", "blue", "white"],
+        colors=["red", "red", "red", "red", "red"],
         linewidths=1.0
     )
     ax.clabel(CS, inline=True, fontsize=8, fmt="%.2f")
