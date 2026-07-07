@@ -246,9 +246,12 @@ def read_radiosonde_nc_arms(file=\
         max_index = np.nanargmin(np.abs(ds[p_var].values[:max_index]/p_factor-min_p))    
     index3000 = np.nanargmin(abs(ds[height_var].values[:max_index]-3000))
     
-   # Or just find 132 m height:
+    ##########################
+    # Cutting of 20m at the beginning makes much more sense...
+    # Or just find 132 m height:
     if crop > 0:
         crop = np.nanargmin(abs(ds[height_var].values -132))
+    ##############################
         
     # AccRate / Height change crop:
     if crop == 0:
@@ -290,9 +293,6 @@ def read_radiosonde_nc_arms(file=\
         z_array = ds[height_var].isel(Time=inds).values
     elif "zg" in ds.data_vars or "zsl" in ds.data_vars:
         z_array = ds[height_var].isel(time=inds).values
-    if "Vital_I/radiosondes" in file:
-        # print("Vital rs found, z will be adjusted by 20 m: ", file)
-        z_array = z_array-20
     t_array = running_mean_from_arrays(inds, ds[height_var].values,\
         ds[t_var].values)
     p_array = running_mean_from_arrays(inds, ds[height_var].values,\
