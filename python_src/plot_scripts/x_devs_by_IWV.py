@@ -395,6 +395,7 @@ def get_mwr_departures(ds_cf):
         result[name] = da.values
     return result
 
+##############################################################################
 
 def plot_mwr_vs_iwv_all(mwr_deps, iwv_flat, campaign, location, sky, outpath):
     """One plot per instrument: all chans × all elevs vs IWV."""
@@ -416,6 +417,7 @@ def plot_mwr_vs_iwv_all(mwr_deps, iwv_flat, campaign, location, sky, outpath):
         plt.savefig(os.path.join(outpath, fname), dpi=300, bbox_inches="tight")
         plt.close()
 
+##############################################################################
 
 def plot_mwr_vs_iwv_per_channel(mwr_deps, iwv_flat,
                                  campaign, location, sky, outpath):
@@ -442,6 +444,7 @@ def plot_mwr_vs_iwv_per_channel(mwr_deps, iwv_flat,
         plt.savefig(os.path.join(outpath, fname), dpi=300, bbox_inches="tight")
         plt.close()
 
+##############################################################################
 
 def plot_mwr_vs_iwv_per_elevation(mwr_deps, iwv_flat,
                                    campaign, location, sky, outpath,
@@ -472,6 +475,7 @@ def plot_mwr_vs_iwv_per_elevation(mwr_deps, iwv_flat,
         plt.savefig(os.path.join(outpath, fname), dpi=300, bbox_inches="tight")
         plt.close()
 
+##############################################################################
 
 def plot_mwr_vs_iwv_per_ele_chan(mwr_deps, iwv_flat,
                                   campaign, location, sky, outpath,
@@ -535,26 +539,24 @@ if __name__ == "__main__":
                 continue
             print(f"\n{campaign} / {location}")
 
-            iwv_da = get_iwv(ds_sel, campaign, location)
-            if iwv_da is None:
-                print("  No IWV variable found — skipping")
-                continue
-
             for sky in skies:
                 print(f"  sky: {sky}")
                 ds_cf = apply_sky_mask(ds_sel, sky)
 
-                # ── Check required deviation variables ─────────────────────
-                if "Deviations_RTTOV_R24" not in ds_cf or \
-                   "Deviations_ARMS_R24"  not in ds_cf:
-                    print("  Missing RTTOV/ARMS deviations — skipping")
+                # Extracting DataArrays:
+                iwv_da = get_iwv(ds_cf, campaign, location)
+                if iwv_da is None:
+                    print("  No IWV variable found — skipping")
                     continue
-
                 dep_rttov = get_departures(ds_cf, "Deviations_RTTOV_R24")
                 dep_arms  = get_departures(ds_cf, "Deviations_ARMS_R24")
                 # shape: (time, N_Channels, elevation)
-
                 iwv_vals = iwv_da.values   # (time,)
+                # Skip if any of the three is all-NaN:
+                if (np.all(np.isnan(dep_rttov)) or
+                    np.all(np.isnan(dep_arms))):
+                    print(f"  → all-NaN slice for {campaign}/{location}/{sky} — skipping")
+                    continue
 
                 # ── Output directories ────────────────────────────────────
                 base = ensure_folder(
