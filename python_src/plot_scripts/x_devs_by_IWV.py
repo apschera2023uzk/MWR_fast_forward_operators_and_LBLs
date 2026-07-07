@@ -20,6 +20,9 @@ import xarray as xr
 import matplotlib
 matplotlib.use("Qt5Agg")
 import matplotlib.pyplot as plt
+import sys
+sys.path.append("./")
+from m_mod_plot import select_ds_camp_loc, ensure_folder_exists, apply_sky_mask
 
 ##############################################################################
 # 2  Parameters
@@ -55,7 +58,7 @@ def ensure_folder(path):
     return os.path.abspath(path)
 
 ##############################################################################
-
+'''
 def select_ds_camp_loc(ds, campaign, location):
     mask   = (ds["Campaign"] == campaign) & (ds["Location"] == location)
     ds_sel = ds.sel(time=ds["time"].values[mask.values])
@@ -90,7 +93,7 @@ def apply_sky_mask(ds_sel, sky):
             ~bad_mask_elev_filtered.broadcast_like(ds_cf[var]))
 
     return ds_cf
-
+'''
 ##############################################################################
 
 def get_iwv(ds_sel, campaign, location):

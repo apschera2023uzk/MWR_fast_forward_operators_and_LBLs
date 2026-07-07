@@ -11,27 +11,14 @@ import glob
 import os
 from scipy.interpolate import interp1d
 from datetime import datetime, timedelta
+import matplotlib.pyplot as plt
+import matplotlib
 
 ##############################################################################
 # 1.5 Parameters:
 ##############################################################################
-# Plotstyles:
-'''
-fs = 20
-plt.rc('font', size=fs) 
 plt.style.use('seaborn-poster')
 matplotlib.use("Qt5Agg")
-grid_params = (-3,3.0001, 0.5)
-ylims_bias = [-3, 3]
-label_colors = {'Dwdhat (MWR)': "blue",
-        'Foghat (MWR)': "green",'RTTOV-gb (model)': "red",
-        'ARMS-gb (model)': "orange",'Sunhat (MWR)': "blue",
-        'Tophat (MWR)': "blue", 'Joyhat (MWR)': "green",
-        'Hamhat (MWR)': "blue",
-         "LABEL_9": "olive",
-        "LABEL_10": "cyan"
-}
-'''
 
 # Clear sky LWP threshold
 thres_lwp=0.005 # kg m-2 fitting with Moritz' threshold of 5 g m-2
@@ -43,10 +30,9 @@ ref_label = "PyRTlib R24 LBL"
 n_elev = 10
 elevations = np.array([90., 30, 19.2, 14.4, 11.4, 8.4,  6.6,  5.4, 4.8,  4.2])
 
-
-
-
-
+# Cloud_data NN by sites:
+rao = "/home/aki/PhD_data/retrievals_final_ele/RAO_*.nc"
+vit1_joy = "/home/aki//PhD_data/retrievals_final_ele/Vit1_JOY*.nc"
 
 ##############################################################################
 # 2nd Used functions:
@@ -68,19 +54,23 @@ def parse_arguments():
         default=os.path.expanduser("~/PhD_data/TB_preproc_and_proc_results/3campaigns_3models_all_results_and_stats.nc"),
         help="Output file with statistics!"
     )
+    '''
     parser.add_argument(
         "--cloud", "-cl",
         type=str,
-        default=os.path.expanduser("~/PhD_data/Alexander_Moritz_Exchange/retrievals_final_ele/20250409_m_20210*.nc"),
+        default=os.path.expanduser("~/PhD_data/Alexander_Moritz_Exchange/retrievals_final_ele/*.nc"),
         help="Pattern of cloud_flag files!"
     )
-
+    '''
     return parser.parse_args()
 
 ##############################################################################
+'''
+def add_MLNN_cloud_info(ds, args, rao=rao, vit1=vit1):
 
-def add_MLNN_cloud_info(ds, args):
-    cf_files = sorted(glob.glob(args.cloud))
+    # 1st for RAO:
+    print("Rao: ",rao)
+    cf_files = sorted(glob.glob(rao))
     ds_cloud = xr.open_mfdataset(cf_files)
     cf_da = ds_cloud["cloud_flag"].sel(time=slice("2021-05-01T00:00:00", "2021-08-31T00:00:00"))
 
@@ -92,8 +82,110 @@ def add_MLNN_cloud_info(ds, args):
 
     # Interpolate cf_da onto ds time axis, fill outside range with NaN
     cf_interp = cf_da.reindex(time=ds["time"], method="nearest", tolerance="30min")
-
     ds["cloud_flag"] = cf_interp
+
+    print("ds[location]", np.unique(ds["Location"].values))
+    print("ds[location]", np.unique(ds["Campaign"].values))
+
+    # 1st just make a correction here, so that these cloud flag files are only applied to timesteps of the datasets where:
+    # 1.1: Make sure campaign is: 'FESSTVaL'
+    # 1.2: Make sure Location is: 'RAO_Lindenberg'
+'''
+
+def add_MLNN_cloud_info(ds, args, rao=rao, vit1_joy=vit1_joy):
+
+    ###################
+    # 1st RAO Lindenberg:
+    cf_files = sorted(glob.glob(rao))
+    ds_cloud = xr.open_mfdataset(cf_files)
+    cf_da = ds_cloud["cloud_flag"].sel(time=slice("2021-05-01T00:00:00", "2021-08-31T00:00:00"))
+    cf_da = cf_da.rename({"n_angle": "elevation"})
+
+    # Interpoliere auf ds-Zeitachse — außerhalb des Bereichs → NaN:
+    cf_interp = cf_da.reindex(time=ds["time"], method="nearest", tolerance="30min")
+
+    # Maske: nur FESSTVaL & RAO_Lindenberg bekommt den MLNN-Flag
+    valid_mask = (
+        (ds["Campaign"].values == "FESSTVaL") &
+        (ds["Location"].values == "RAO_Lindenberg")
+    )
+
+    # Set Cloudflag for RAO Lindenberg:
+    ds["cloud_flag"] = cf_interp
+    ds["cloud_flag"].values[:, ~valid_mask] = np.nan
+
+    ###################
+    # 2nd Vital I Joyhat:
+    cf_files = sorted(glob.glob(vit1_joy))
+    ds_cloud = xr.open_mfdataset(cf_files)
+
+    print("ds_cloud: ", ds_cloud)
+
+    # cf_da hat länge der Zeitdimension = 0
+    #cf_da:  <xarray.DataArray 'cloud_flag' (elevation: 10, time: 0)> Size: 0B
+    # WARUM????
+    cf_da = ds_cloud["cloud_flag"].sel(time=slice("2024-08-01T00:00:00", "2024-08-31T00:00:00"))
+    print("cf_da: ", cf_da)
+
+    # Interpoliere auf ds-Zeitachse — außerhalb des Bereichs → NaN:
+    cf_interp = cf_da.reindex(time=ds["time"], method="nearest", tolerance="30min")
+    valid_mask = (
+        (ds["Campaign"].values == 'Vital I') &
+        (ds["Location"].values == 'JOYCE')
+    )
+    print("cf_interp: ", cf_interp)
+
+    ds["cloud_flag"].values[:, valid_mask] = cf_interp.values[:, valid_mask]
+
+    '''
+    # Unfortunately this part still does not work, and I cannot repeat the trick from before...
+    # Initialisiere cloud_flag komplett mit NaN:
+    cloud_flag_full = cf_interp.copy() * np.nan    
+    cloud_flag_full.values[:, valid_mask] = cf_interp.values[:, valid_mask]
+    ds["cloud_flag"] = cloud_flag_full
+    '''
+
+    ##################
+    # Plots:
+    plt.figure()
+    plt.plot(cf_interp.values)
+    plt.show()
+
+
+    plt.figure()
+    plt.plot(valid_mask)
+    plt.show()
+
+    plt.figure()
+    plt.plot(ds["time"], ds["cloud_flag"].mean(dim="elevation"))
+    plt.show()
+
+
+    '''
+    ###################
+    # 3rd :
+    cf_files = sorted(glob.glob(vit1_joy))
+    ds_cloud = xr.open_mfdataset(cf_files)
+    cf_da = ds_cloud["cloud_flag"].sel(time=slice("2021-05-01T00:00:00", "2021-08-31T00:00:00"))
+
+    # Interpoliere auf ds-Zeitachse — außerhalb des Bereichs → NaN:
+    cf_interp = cf_da.reindex(time=ds["time"], method="nearest", tolerance="30min")
+
+    # Maske: nur FESSTVaL & RAO_Lindenberg bekommt den MLNN-Flag
+    valid_mask = (
+        (ds["Campaign"].values == 'Vital I') &
+        (ds["Location"].values == 'JOYCE')
+    )
+
+    # Initialisiere cloud_flag komplett mit NaN:
+    cloud_flag_full = cf_interp.copy() * np.nan
+    cloud_flag_full.values[valid_mask] = cf_interp.values[valid_mask]
+    ds["cloud_flag"] = cloud_flag_full
+
+
+# ds[location] ['Falkenberg' 'JOYCE' 'RAO_Lindenberg']
+# ds[location] ['FESSTVaL' 'Socles' 'Vital I']
+    '''
     return ds
 
 ##############################################################################
@@ -135,13 +227,12 @@ def add_cloud_flag(ds, args, thres_lwp=thres_lwp):
             np.nansum(np.nan_to_num(ds["Hamhat_LWP"].values[i]))
         ]))        
         lwp_flag[i] = 1.0 if water_sum > thres_lwp else 0.0
-    lwp_flag = np.tile(lwp_flag, (mlnn_flag.shape[0], 1))
+    lwp_flag_2d = np.tile(lwp_flag, (mlnn_flag.shape[0], 1))
 
     # ── 3. MLNN dominant; fill NaNs with LWP-based flag ──────────────────────
     nan_mask      = np.isnan(mlnn_flag)
     combined_flag = mlnn_flag.copy()
-    combined_flag[nan_mask] = lwp_flag[nan_mask]
-
+    combined_flag[nan_mask] = lwp_flag_2d[nan_mask]
 
     # ── 3b. Level_Liquid override: setze cloudy wo Liquid-Summe > threshold ──
     liquid_flag = get_liquid_flag(ds)
@@ -154,12 +245,17 @@ def add_cloud_flag(ds, args, thres_lwp=thres_lwp):
     ds["cloud_flag"] = xr.DataArray(
         np.transpose(combined_flag).astype(int),
         dims=["time", "elevation"],
+        coords={
+            "time":      ds["time"],
+            "elevation": ds["elevation"],
+        },
         attrs={
             "long_name": "Cloud flag (MLNN primary, LWP + Level_Liquid fallback)",
             "flag_values": "0, 1",
             "flag_meanings": "clear cloudy",
         }
     )
+
     return ds
 
 ##############################################################################

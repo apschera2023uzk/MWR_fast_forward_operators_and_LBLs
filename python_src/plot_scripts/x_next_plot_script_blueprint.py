@@ -18,6 +18,9 @@ import matplotlib
 import matplotlib.image as mpimg
 from PIL import Image
 import matplotlib.colors as colors
+import sys
+sys.path.append("./")
+from m_mod_plot import select_ds_camp_loc, ensure_folder_exists, apply_sky_mask
 
 ##############################################################################
 # 1.5 Parameters:
@@ -137,14 +140,6 @@ def stats_by_channel(ds_sel, dev_var,i_elev, n_chans=n_chans):
 
 ##############################################################################
 
-def select_ds_camp_loc(ds, campaign, location, crop_index=0):
-    # Filter Datensatz nach Kampagne und Ort
-    mask = (ds["Campaign"] == campaign) & (ds["Location"] == location)
-    ds_sel = ds.sel(time=ds["time"].values[mask.values]).isel(Crop=crop_index)
-    return ds_sel
-
-##############################################################################
-
 def plot_std_bars(ds, stds, labels, channels, channel_labels, elev,
         n_valid, save_path,elevations=elevations, thres_lwp=thres_lwp,\
         label_colors=label_colors,\
@@ -182,7 +177,7 @@ def plot_std_bars(ds, stds, labels, channels, channel_labels, elev,
     plt.close()
 
 ##############################################################################
-
+'''
 def ensure_folder_exists(base_path, folder_name):
     # Join the base path with the folder name
     folder_path = os.path.join(base_path, folder_name)
@@ -190,7 +185,7 @@ def ensure_folder_exists(base_path, folder_name):
     os.makedirs(folder_path, exist_ok=True)
 
     return os.path.abspath(folder_path)
-
+'''
 ##############################################################################
 ##############################################################################
 

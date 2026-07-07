@@ -18,6 +18,9 @@ import matplotlib
 import matplotlib.image as mpimg
 from PIL import Image
 import matplotlib.colors as colors
+import sys
+sys.path.append("./")
+from m_mod_plot import select_ds_camp_loc, ensure_folder_exists, apply_sky_mask
 
 ##############################################################################
 # 1.5 Parameters:
@@ -89,7 +92,7 @@ def get_deviation_variables(ds):
     return dev_vars, var_labels, ref_labels
 
 ##############################################################################
-
+'''
 def select_ds_camp_loc(ds, campaign, location):
     # Filter Datensatz nach Kampagne und Ort
     mask = (ds["Campaign"] == campaign) & (ds["Location"] == location)
@@ -105,7 +108,7 @@ def ensure_folder_exists(base_path, folder_name):
     os.makedirs(folder_path, exist_ok=True)
 
     return os.path.abspath(folder_path)
-
+'''
 ##############################################################################
 
 def plot_clear_sky_fraction(ds_sel, campaign, location, folder, elevations=elevations):

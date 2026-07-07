@@ -18,6 +18,9 @@ import matplotlib
 import matplotlib.image as mpimg
 from PIL import Image
 import matplotlib.colors as colors
+import sys
+sys.path.append("./")
+from m_mod_plot import select_ds_camp_loc, ensure_folder_exists, apply_sky_mask
 
 ##############################################################################
 # 1.5 Parameters:
@@ -123,7 +126,7 @@ def stats_by_channel(ds_sel, dev_var,i_elev, n_chans=n_chans):
     return std_array, bias_array, rmse_array, n_valid_array
 
 ##############################################################################
-
+'''
 def select_ds_camp_loc(ds, campaign, location):
     # Filter Datensatz nach Kampagne und Ort
     mask = (ds["Campaign"] == campaign) & (ds["Location"] == location)
@@ -169,7 +172,7 @@ def apply_sky_mask(ds_sel, sky):
             ~bad_mask_elev_filtered.broadcast_like(ds_cf[var]))
 
     return ds_cf
-
+'''
 ##############################################################################
 
 def create_plot_dirs(ds, args, campaign=None, location=None):
@@ -201,10 +204,15 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
     elev_idcs = np.arange(8)
     valid_tag = (np.min(n_valid.values[:,:8]), np.max(n_valid.values[:,:8]))
 
+    if "RTTOV" in label or "ARMS" in label:
+        varmax = 2
+    else:
+        varmax = 6
+        
     ###
     # Plot of Std:
     fig, ax = plt.subplots(figsize=(16, 9))
-    norm = colors.LogNorm(vmin=0.25, vmax=15.) 
+    norm = colors.LogNorm(vmin=0.1, vmax=varmax) 
     c = ax.pcolormesh(
         channels,
         elev_idcs,
@@ -217,9 +225,9 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
         channels,
         elev_idcs,
         stds[:,:8].T,     
-        levels=[0.25, 0.5,1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14],
-        colors=["red", "red", "black", "black", "black", "black", "black",\
-            "black", "black", "black", "black", "black", "black"],
+        levels=[0.25, 0.5,1, 2, 3, 4, 5, 6],
+        colors=["black", "red", "black", "black", "black", "black", "black",\
+            "black"],
         linewidths=1.0
     )
     ax.clabel(CS, inline=True, fontsize=8, fmt="%.2f")
@@ -231,7 +239,10 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
         n_valid(min/max)={valid_tag}, {location}, {campaign}, {label}-{ref_label}, {tag}"
     ax.set_title(title)
     cb = fig.colorbar(c, ax=ax)
-    ticks = [0.25, 0.5, 1, 2, 3, 5,7.5, 10, 15]
+    if "RTTOV" in label or "ARMS" in label:
+        ticks = [0.1,0.25, 0.5, 0.75,1, 1.25,1.5, 2]
+    else:
+        ticks = [0.25, 0.5,1, 2, 3, 4, 5, 6]
     cb.set_ticks(ticks)
     cb.set_ticklabels([str(t) for t in ticks])  # explizit lineare Labels
     cb.set_label("Standard deviation TB [K]")
@@ -243,7 +254,7 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
     ###
     # Plot of Bias:
     fig, ax = plt.subplots(figsize=(16, 9))
-    norm = colors.SymLogNorm(linthresh=0.25, vmin=-15, vmax=15.) 
+    norm = colors.SymLogNorm(linthresh=0.1, vmin=-varmax, vmax=varmax) 
     c = ax.pcolormesh(
         channels,
         elev_idcs,
@@ -257,8 +268,8 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
         elev_idcs,
         biases[:,:8].T,  
         levels=[-5,-4,-3, -2, -1,-0.5,-0.25,0.25, 0.5,1, 2,3 ,4,5],
-        colors=["black","black","black","black","black","red","red","red",\
-        "red", "black", "black", "black", "black", "black"],
+        colors=["black","black","black","black","black","gold","black", "black",\
+        "gold", "black", "black", "black", "black", "black"],
         linewidths=1.0
     )
     ax.clabel(CS, inline=True, fontsize=8, fmt="%.2f")
@@ -270,7 +281,10 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
         n_valid={valid_tag}, {location}, {campaign}, {label}-{ref_label}, {tag}"
     ax.set_title(title)
     cb = fig.colorbar(c, ax=ax)
-    ticks = [-15,-7.5, -5,-3, -2,-1,-0.5,-0.25, 0.25, 0.5, 1, 2, 3,5,7.5,15]
+    if "RTTOV" in label or "ARMS" in label:
+        ticks = [-2,-1.5, -1,-0.5,-0.25,-0.1,0,0.1, 0.25, 0.5,1,-1.5, 2]
+    else:
+        ticks = [-5,-4,-3, -2, -1,-0.5,-0.25, 0,0.25, 0.5,1, 2,3 ,4,5]
     cb.set_ticks(ticks)
     cb.set_ticklabels([str(t) for t in ticks])  # explizit lineare Labels
     cb.set_label("Bias TB [K]")
@@ -282,7 +296,7 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
     ###
     # Plot of RMSE:
     fig, ax = plt.subplots(figsize=(16, 9))
-    norm = colors.LogNorm(vmin=0.25, vmax=15.)
+    norm = colors.LogNorm(vmin=0.1, vmax=varmax*2)
     c = ax.pcolormesh(
         channels,
         elev_idcs,
@@ -295,9 +309,9 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
         channels,
         elev_idcs,
         rmses[:,:8].T,     
-        levels=[0.25, 0.5,1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14],
-        colors=["red", "red", "black", "black", "black", "black", "black",\
-            "black", "black", "black", "black", "black", "black"],
+        levels=[0.25, 0.5,1, 2, 3, 4, 5, 6, 7, 8, 10, 12],
+        colors=["black", "red", "black", "black", "black", "black", "black",\
+            "black", "black", "black", "black", "black"],
         linewidths=1.0
     )
     ax.clabel(CS, inline=True, fontsize=8, fmt="%.2f")
@@ -309,7 +323,10 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
         n_valid={valid_tag}, {location}, {campaign}, {label}-{ref_label}, {tag}"
     ax.set_title(title)
     cb = fig.colorbar(c, ax=ax)
-    ticks = [0.25, 0.5, 1, 2, 3, 5,7.5, 10, 15]
+    if "RTTOV" in label or "ARMS" in label:
+        ticks = [0.1,0.25, 0.5, 0.75, 1, 2 ,3, 4]
+    else:
+        ticks = [0.25, 0.5, 1, 2 ,3, 4,5,6,7,8]
     cb.set_ticks(ticks)
     cb.set_ticklabels([str(t) for t in ticks])  # explizit lineare Labels
     cb.set_label("RMSE TB [K]")
@@ -326,7 +343,7 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
         elev_idcs,
         pearsons_rs[:,:8].T,          
         cmap="viridis",
-        vmin=0,
+        vmin=0.9,
         vmax=1,       
         shading="auto"
     )
