@@ -193,6 +193,20 @@ def create_plot_dirs(ds, args, campaign=None, location=None):
 
 ##############################################################################
 
+def add_band_annotations(ax, channels):
+    # Trennlinie zwischen Kanal 7 und 8:
+    ax.axvline(x=7.5, color="gray", linestyle="--", linewidth=1.2, alpha=0.9, zorder=10)
+
+    # Sekundäre x-Achse oben für K-/V-Band Beschriftung:
+    def identity(x):
+        return x
+    secax = ax.secondary_xaxis("top", functions=(identity, identity))
+    secax.set_xticks([4, 11])   # Mittelpunkte der beiden Bänder
+    secax.set_xticklabels(["K-Band", "V-Band"], fontsize=11, fontweight="bold")
+    secax.tick_params(length=0)  # keine Tick-Striche, nur Labe
+
+##############################################################################
+
 def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
         ref_label, pearsons_rs, elevations=elevations, campaign="any_campaign",\
         location="any_location",args=None, tag="any_tag"):
@@ -205,9 +219,9 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
     valid_tag = (np.min(n_valid.values[:,:8]), np.max(n_valid.values[:,:8]))
 
     if "RTTOV" in label or "ARMS" in label:
-        varmax = 2
+        varmax = 3
     else:
-        varmax = 6
+        varmax = 7
         
     ###
     # Plot of Std:
@@ -235,12 +249,13 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
     ax.set_ylabel("Elevation [deg]")
     elev_tags = [str(elev) for elev in elevations[:8]]
     ax.set_yticks(elev_idcs, elev_tags)
+    add_band_annotations(ax, channels)   # ← hier einfügen
     title = f"Standard deviation of TB per Channel/Elevation\n\
         n_valid(min/max)={valid_tag}, {location}, {campaign}, {label}-{ref_label}, {tag}"
     ax.set_title(title)
     cb = fig.colorbar(c, ax=ax)
     if "RTTOV" in label or "ARMS" in label:
-        ticks = [0.1,0.25, 0.5, 0.75,1, 1.25,1.5, 2]
+        ticks = [0.1,0.25, 0.5, 0.75,1, 1.25,1.5, 2, 3]
     else:
         ticks = [0.25, 0.5,1, 2, 3, 4, 5, 6]
     cb.set_ticks(ticks)
@@ -267,9 +282,12 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
         channels,
         elev_idcs,
         biases[:,:8].T,  
-        levels=[-5,-4,-3, -2, -1,-0.5,-0.25,0.25, 0.5,1, 2,3 ,4,5],
-        colors=["black","black","black","black","black","gold","black", "black",\
-        "gold", "black", "black", "black", "black", "black"],
+        levels=[-10, -9, -8,-7, -6, -5,-4,-3, -2, -1,-0.5,-0.25,0.25,\
+                0.5,1, 2,3 ,4,5, 6,7,8, 9, 10],
+        colors=["black","black","black","black","black","black","black",\
+                "black","black","black","gold","black", "black",\
+                "gold", "black", "black", "black", "black", "black","black",\
+                "black","black","black","black"],
         linewidths=1.0
     )
     ax.clabel(CS, inline=True, fontsize=8, fmt="%.2f")
@@ -277,12 +295,13 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
     ax.set_ylabel("Elevation [deg]")
     elev_tags = [str(elev) for elev in elevations[:8]]
     ax.set_yticks(elev_idcs, elev_tags)
+    add_band_annotations(ax, channels)   # ← hier einfügen
     title = f"Bias of TB per Channel/Elevation\n\
         n_valid={valid_tag}, {location}, {campaign}, {label}-{ref_label}, {tag}"
     ax.set_title(title)
     cb = fig.colorbar(c, ax=ax)
     if "RTTOV" in label or "ARMS" in label:
-        ticks = [-2,-1.5, -1,-0.5,-0.25,-0.1,0,0.1, 0.25, 0.5,1,-1.5, 2]
+        ticks = [-3,-2,-1.5, -1,-0.5,-0.25,-0.1,0,0.1, 0.25, 0.5,1,-1.5, 2, 3]
     else:
         ticks = [-5,-4,-3, -2, -1,-0.5,-0.25, 0,0.25, 0.5,1, 2,3 ,4,5]
     cb.set_ticks(ticks)
@@ -309,9 +328,9 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
         channels,
         elev_idcs,
         rmses[:,:8].T,     
-        levels=[0.25, 0.5,1, 2, 3, 4, 5, 6, 7, 8, 10, 12],
+        levels=[0.25, 0.5,1, 2, 3, 4, 5, 6, 7, 8, 10, 12,14],
         colors=["black", "red", "black", "black", "black", "black", "black",\
-            "black", "black", "black", "black", "black"],
+            "black", "black", "black", "black", "black", "black"],
         linewidths=1.0
     )
     ax.clabel(CS, inline=True, fontsize=8, fmt="%.2f")
@@ -319,14 +338,15 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
     ax.set_ylabel("Elevation [deg]")
     elev_tags = [str(elev) for elev in elevations[:8]]
     ax.set_yticks(elev_idcs, elev_tags)
+    add_band_annotations(ax, channels)   # ← hier einfügen
     title = f"RMSE of TB per Channel/Elevation\n\
         n_valid={valid_tag}, {location}, {campaign}, {label}-{ref_label}, {tag}"
     ax.set_title(title)
     cb = fig.colorbar(c, ax=ax)
     if "RTTOV" in label or "ARMS" in label:
-        ticks = [0.1,0.25, 0.5, 0.75, 1, 2 ,3, 4]
+        ticks = [0.1,0.25, 0.5, 0.75, 1, 2 ,3, 4, 5]
     else:
-        ticks = [0.25, 0.5, 1, 2 ,3, 4,5,6,7,8]
+        ticks = [0.25, 0.5, 1, 2 ,3, 4,5,6,7,8,10,12]
     cb.set_ticks(ticks)
     cb.set_ticklabels([str(t) for t in ticks])  # explizit lineare Labels
     cb.set_label("RMSE TB [K]")

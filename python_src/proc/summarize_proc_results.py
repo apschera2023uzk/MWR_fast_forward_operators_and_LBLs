@@ -39,6 +39,7 @@ def parse_arguments():
     outfile_a = "3_campaigns_ARMS_gb_processed_TBs_from_rs.nc"    
     outfile_r = "3_campaigns_RTTOV_gb_processed_TBs_from_rs.nc"       
     outfile = "3campaigns_3models_all_results.nc"
+    outfile_a2 = "3_campaigns_ARMS_gb2_processed_TBs_from_rs.nc"    
     
     parser.add_argument(
         "--pyrtlib", "-p",
@@ -50,6 +51,12 @@ def parse_arguments():
         "--armsgb", "-a",
         type=str,
         default=os.path.expanduser(outpath+outfile_a),
+        help="Where to find ARMS-gb TBs"
+    )   
+    parser.add_argument(
+        "--armsgb2", "-a2",
+        type=str,
+        default=os.path.expanduser(outpath+outfile_a2),
         help="Where to find ARMS-gb TBs"
     )   
     parser.add_argument(
@@ -75,12 +82,14 @@ if __name__=="__main__":
     
     ds_py = xr.open_dataset(args.pyrtlib)
     ds_ar = xr.open_dataset(args.armsgb)
+    ds_ar2 = xr.open_dataset(args.armsgb2)
     ds_rt = xr.open_dataset(args.rttovgb)
     ds_new = ds_rt
     
     ###############
     # Maybe I will have to add other variables here:
     ds_new["TBs_ARMS_gb"] = ds_ar["TBs_ARMS_gb"]
+    ds_new["TBs_ARMS_gb2"] = ds_ar2["TBs_ARMS_gb2"]
     ds_new["TBs_PyRTlib_R24"] = ds_py["TBs_PyRTlib_R24"]
     ds_new["TBs_PyRTlib_R17"] = ds_py["TBs_PyRTlib_R17"]
     ds_new["TBs_PyRTlib_R98"] = ds_py["TBs_PyRTlib_R98"]

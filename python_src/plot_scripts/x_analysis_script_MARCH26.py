@@ -54,7 +54,7 @@ def parse_arguments():
         default=os.path.expanduser("~/PhD_data/TB_preproc_and_proc_results/3campaigns_3models_all_results_and_stats.nc"),
         help="Output file with statistics!"
     )
-    '''
+
     parser.add_argument(
         "--cloud", "-cl",
         type=str,
@@ -62,11 +62,12 @@ def parse_arguments():
         help="Pattern of cloud_flag files!"
     )
     '''
+    '''
     return parser.parse_args()
 
 ##############################################################################
-'''
-def add_MLNN_cloud_info(ds, args, rao=rao, vit1=vit1):
+
+def add_MLNN_cloud_info(ds, args, rao=rao, vit1=vit1_joy):
 
     # 1st for RAO:
     print("Rao: ",rao)
@@ -87,11 +88,13 @@ def add_MLNN_cloud_info(ds, args, rao=rao, vit1=vit1):
     print("ds[location]", np.unique(ds["Location"].values))
     print("ds[location]", np.unique(ds["Campaign"].values))
 
+    return ds
+
     # 1st just make a correction here, so that these cloud flag files are only applied to timesteps of the datasets where:
     # 1.1: Make sure campaign is: 'FESSTVaL'
     # 1.2: Make sure Location is: 'RAO_Lindenberg'
-'''
 
+'''
 def add_MLNN_cloud_info(ds, args, rao=rao, vit1_joy=vit1_joy):
 
     ###################
@@ -137,13 +140,13 @@ def add_MLNN_cloud_info(ds, args, rao=rao, vit1_joy=vit1_joy):
 
     ds["cloud_flag"].values[:, valid_mask] = cf_interp.values[:, valid_mask]
 
-    '''
+
     # Unfortunately this part still does not work, and I cannot repeat the trick from before...
     # Initialisiere cloud_flag komplett mit NaN:
-    cloud_flag_full = cf_interp.copy() * np.nan    
-    cloud_flag_full.values[:, valid_mask] = cf_interp.values[:, valid_mask]
-    ds["cloud_flag"] = cloud_flag_full
-    '''
+    #cloud_flag_full = cf_interp.copy() * np.nan    
+    #cloud_flag_full.values[:, valid_mask] = cf_interp.values[:, valid_mask]
+    #ds["cloud_flag"] = cloud_flag_full
+
 
     ##################
     # Plots:
@@ -160,34 +163,32 @@ def add_MLNN_cloud_info(ds, args, rao=rao, vit1_joy=vit1_joy):
     plt.plot(ds["time"], ds["cloud_flag"].mean(dim="elevation"))
     plt.show()
 
-
-    '''
     ###################
     # 3rd :
-    cf_files = sorted(glob.glob(vit1_joy))
-    ds_cloud = xr.open_mfdataset(cf_files)
-    cf_da = ds_cloud["cloud_flag"].sel(time=slice("2021-05-01T00:00:00", "2021-08-31T00:00:00"))
+    #cf_files = sorted(glob.glob(vit1_joy))
+    #ds_cloud = xr.open_mfdataset(cf_files)
+    #cf_da = ds_cloud["cloud_flag"].sel(time=slice("2021-05-01T00:00:00", "2021-08-31T00:00:00"))
 
     # Interpoliere auf ds-Zeitachse — außerhalb des Bereichs → NaN:
-    cf_interp = cf_da.reindex(time=ds["time"], method="nearest", tolerance="30min")
+    #cf_interp = cf_da.reindex(time=ds["time"], method="nearest", tolerance="30min")
 
     # Maske: nur FESSTVaL & RAO_Lindenberg bekommt den MLNN-Flag
-    valid_mask = (
-        (ds["Campaign"].values == 'Vital I') &
-        (ds["Location"].values == 'JOYCE')
-    )
+    #valid_mask = (
+    #    (ds["Campaign"].values == 'Vital I') &
+    #    (ds["Location"].values == 'JOYCE')
+    #)
 
     # Initialisiere cloud_flag komplett mit NaN:
-    cloud_flag_full = cf_interp.copy() * np.nan
-    cloud_flag_full.values[valid_mask] = cf_interp.values[valid_mask]
-    ds["cloud_flag"] = cloud_flag_full
+    #cloud_flag_full = cf_interp.copy() * np.nan
+    #cloud_flag_full.values[valid_mask] = cf_interp.values[valid_mask]
+    #ds["cloud_flag"] = cloud_flag_full
 
 
 # ds[location] ['Falkenberg' 'JOYCE' 'RAO_Lindenberg']
 # ds[location] ['FESSTVaL' 'Socles' 'Vital I']
-    '''
-    return ds
 
+    return ds
+'''
 ##############################################################################
 
 def get_liquid_flag(ds, rs_lwp_thrs_kg_m2=0.2):
@@ -280,6 +281,13 @@ if __name__ == "__main__":
     ds_write["Deviations_ARMS_R24"]  = (ds_write["TBs_ARMS_gb"].isel(Crop=0)  - ds_write["TBs_PyRTlib_R24"].isel(Crop=0)).squeeze()
     ds_write["Deviations_ARMS_R24"].attrs["var_label"] = "TBs_ARMS_gb"
     ds_write["Deviations_ARMS_R24"].attrs["ref_label"] = "TBs_PyRTlib_R24"
+    ds_write["Deviations_R17_R24"]  = (ds_write["TBs_PyRTlib_R17"].isel(Crop=0)  - ds_write["TBs_PyRTlib_R24"].isel(Crop=0)).squeeze()
+    ds_write["Deviations_R17_R24"].attrs["var_label"] = "TBs_PyRTlib_R17"
+    ds_write["Deviations_R17_R24"].attrs["ref_label"] = "TBs_PyRTlib_R24"
+    ds_write["Deviations_R98_R24"]  = (ds_write["TBs_PyRTlib_R98"].isel(Crop=0)  - ds_write["TBs_PyRTlib_R24"].isel(Crop=0)).squeeze()
+    ds_write["Deviations_R98_R24"].attrs["var_label"] = "TBs_PyRTlib_R98"
+    ds_write["Deviations_R98_R24"].attrs["ref_label"] = "TBs_PyRTlib_R24"
+
     # 2nd for MWRs:
     ds_write["Deviations_dwdhat_R24"] = (ds_write["TBs_dwdhat"] -\
         ds_write["TBs_PyRTlib_R24"].isel(Crop=0)).squeeze().transpose("time",\
