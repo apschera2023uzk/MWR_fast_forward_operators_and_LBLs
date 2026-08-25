@@ -281,6 +281,12 @@ if __name__ == "__main__":
     ds_write["Deviations_ARMS_R24"]  = (ds_write["TBs_ARMS_gb"].isel(Crop=0)  - ds_write["TBs_PyRTlib_R24"].isel(Crop=0)).squeeze()
     ds_write["Deviations_ARMS_R24"].attrs["var_label"] = "TBs_ARMS_gb"
     ds_write["Deviations_ARMS_R24"].attrs["ref_label"] = "TBs_PyRTlib_R24"
+    ds_write["Deviations_ARMS2_R24"]  = (ds_write["TBs_ARMS_gb2"].isel(Crop=0)  - ds_write["TBs_PyRTlib_R24"].isel(Crop=0)).squeeze()
+    ds_write["Deviations_ARMS2_R24"].attrs["var_label"] = "TBs_ARMS_gb2"
+    ds_write["Deviations_ARMS2_R24"].attrs["ref_label"] = "TBs_PyRTlib_R24"
+    ds_write["Deviations_ARMS_ARMS2"]  = (ds_write["TBs_ARMS_gb"].isel(Crop=0)  - ds_write["TBs_ARMS_gb2"].isel(Crop=0)).squeeze()
+    ds_write["Deviations_ARMS_ARMS2"].attrs["var_label"] = "TBs_ARMS_gb"
+    ds_write["Deviations_ARMS_ARMS2"].attrs["ref_label"] = "TBs_ARMS_gb2"
     ds_write["Deviations_R17_R24"]  = (ds_write["TBs_PyRTlib_R17"].isel(Crop=0)  - ds_write["TBs_PyRTlib_R24"].isel(Crop=0)).squeeze()
     ds_write["Deviations_R17_R24"].attrs["var_label"] = "TBs_PyRTlib_R17"
     ds_write["Deviations_R17_R24"].attrs["ref_label"] = "TBs_PyRTlib_R24"

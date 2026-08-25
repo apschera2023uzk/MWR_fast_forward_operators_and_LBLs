@@ -44,7 +44,7 @@ min_p = 137 # Do not change this threshold to lower value!!!
 datapoints_bl = 80
 datapoints_ft = 120
 # min_time_diff_thres = 30 # => Leads to 520 remaining sondes 
-min_time_diff_thres = 15 
+min_time_diff_thres = 30
 
 ##############################################################################
 # 2nd Used Functions

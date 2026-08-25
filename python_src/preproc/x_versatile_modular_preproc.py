@@ -28,13 +28,13 @@ from derive_cloud_water import derive_cloud_features
 # Parameters (unchanged physics/geometry defaults)
 ##############################################################################
 
-elevations = np.array([90., 30, 19.2, 14.4, 11.4, 8.4, 6.6, 5.4, 4.8, 4.2])
+elevations = np.array([90., 30, 19.2, 15., 14.4, 11.4, 10., 8.4, 6.6, 5.4, 5., 4.8, 4.2])
 azimuths   = np.arange(0., 355.1, 5.)
 n_levels_default   = 180
 min_p_default      = 137
 datapoints_bl      = 80
 datapoints_ft      = 120
-min_time_diff_thres= 15
+min_time_diff_thres= 30
 max_elev_azi_diff  = 0.05
 
 ##############################################################################
@@ -47,26 +47,28 @@ def parse_arguments():
                     "and (optionally) append to an existing preprocessed NetCDF."
     )
     parser.add_argument("--rs_dir", "-r", type=str,\
-        default=os.path.expanduser("~/PhD_data/vitII_MWR_rs_comp/sondes_sin"),
+        # default=os.path.expanduser("~/PhD_data/vitII_MWR_rs_comp/sondes_sin"),
         # default=os.path.expanduser("PhD_data/Socles/radiosondes/202*/SOUNDING DATA"),
         # default=os.path.expanduser("~/PhD_data/Vital_I/radiosondes"),
         # default=os.path.expanduser("~/PhD_data/vitII_MWR_rs_comp/sondes_cgn"),
+        default=os.path.expanduser("~/PhD_data/vitII_MWR_rs_comp/sondes_joy"),
         help="Folder containing radiosonde NetCDF (or .txt) files for this site.")
     parser.add_argument("--mwr_dir", "-m", type=str,\
-        default=os.path.expanduser("~/PhD_data/vitII_MWR_rs_comp/kithat_sin"),
+        # default=os.path.expanduser("~/PhD_data/vitII_MWR_rs_comp/kithat_sin"),
         # default=os.path.expanduser("~/PhD_data/Socles/MWR_tophat"),
         # default=os.path.expanduser("~/PhD_data/Vital_I/hatpro-joyhat"),   
         # default=os.path.expanduser("~/PhD_data/vitII_MWR_rs_comp/foghat_cgn"),
+        default=os.path.expanduser("~/PhD_data/vitII_MWR_rs_comp/joyhat_joy"),
         help="Folder containing MWR l1/l2 NetCDF files for this site.")
     parser.add_argument("--campaign", "-c", type=str, default="Vital_I",
         help="Campaign label to store in the output dataset.")
     parser.add_argument("--location", "-l", type=str, default="JOYCE",
         help="Site/location label to store in the output dataset.")
     parser.add_argument("--append", "-a", type=str,
-        default=os.path.expanduser("~/PhD_data/TB_preproc_and_proc_results/combined.nc"),
+        default=None, # os.path.expanduser("~/PhD_data/TB_preproc_and_proc_results/combined_vitalII.nc"),
         help="Path to an existing preprocessed NetCDF to append the new data to.")
     parser.add_argument("--output", "-o", type=str,
-        default=os.path.expanduser("~/PhD_data/TB_preproc_and_proc_results/combined_o.nc"),
+        default=os.path.expanduser("~/PhD_data/TB_preproc_and_proc_results/complete_sinthern.nc"),
         help="Output NetCDF path.")
     parser.add_argument("--height_offset", type=float, default=0.0,
         help="Height offset [m] applied to MWR height profiles (e.g. instrument"
@@ -152,9 +154,14 @@ def read_radiosonde_nc(file, min_p, n_levels, crop=0):
     ds = xr.open_dataset(file)
 
     if "Height" in ds.data_vars:
-        height_var, t_var, p_var, h_var, p_factor = "Height", "Temperature", "Pressure", "Humidity", 1.
-        deg_lat = ds["Latitude"].values[0]; deg_lon = ds["Longitude"].values[0]
-        height_in_km = ds[height_var].values[0] / 1000
+        if "zsl" in ds.coords:
+            height_var, t_var, p_var, h_var, p_factor = "zsl", "ta", "pa", "hur", 1.
+            deg_lat = ds["lat"].values[0]; deg_lon = ds["lon"].values[0]
+            height_in_km = ds[height_var].values[0] / 1000
+        else:
+            height_var, t_var, p_var, h_var, p_factor = "Height", "Temperature", "Pressure", "Humidity", 1.
+            deg_lat = ds["Latitude"].values[0]; deg_lon = ds["Longitude"].values[0]
+            height_in_km = ds[height_var].values[0] / 1000
     else:
         height_var = "zg" if "zg" in ds.data_vars else "zsl"
         t_var, p_var, h_var, p_factor = "ta", "pa", "hur", 100.
