@@ -47,19 +47,21 @@ def parse_arguments():
                     "and (optionally) append to an existing preprocessed NetCDF."
     )
     parser.add_argument("--rs_dir", "-r", type=str,\
-        # default=os.path.expanduser("~/PhD_data/vitII_MWR_rs_comp/sondes_sin"),
+        default=os.path.expanduser("~/PhD_data/vitII_MWR_rs_comp/sondes_sin"),
         # default=os.path.expanduser("PhD_data/Socles/radiosondes/202*/SOUNDING DATA"),
         # default=os.path.expanduser("~/PhD_data/Vital_I/radiosondes"),
         # default=os.path.expanduser("~/PhD_data/vitII_MWR_rs_comp/sondes_cgn"),
-        default=os.path.expanduser("~/PhD_data/vitII_MWR_rs_comp/sondes_joy"),
+        # default=os.path.expanduser("~/PhD_data/vitII_MWR_rs_comp/sondes_joy"),
         help="Folder containing radiosonde NetCDF (or .txt) files for this site.")
     parser.add_argument("--mwr_dir", "-m", type=str,\
-        # default=os.path.expanduser("~/PhD_data/vitII_MWR_rs_comp/kithat_sin"),
+        default=os.path.expanduser("~/PhD_data/vitII_MWR_rs_comp/kithat_sin"),
         # default=os.path.expanduser("~/PhD_data/Socles/MWR_tophat"),
         # default=os.path.expanduser("~/PhD_data/Vital_I/hatpro-joyhat"),   
         # default=os.path.expanduser("~/PhD_data/vitII_MWR_rs_comp/foghat_cgn"),
-        default=os.path.expanduser("~/PhD_data/vitII_MWR_rs_comp/joyhat_joy"),
+        # default=os.path.expanduser("~/PhD_data/vitII_MWR_rs_comp/joyhat_joy"),
         help="Folder containing MWR l1/l2 NetCDF files for this site.")
+    parser.add_argument("--mwr2_dir", "-m2", type=str, default=None,
+        help="Optional: folder containing a second MWR's l1/l2 NetCDF files at the same site.")
     parser.add_argument("--campaign", "-c", type=str, default="Vital_I",
         help="Campaign label to store in the output dataset.")
     parser.add_argument("--location", "-l", type=str, default="JOYCE",
@@ -155,14 +157,17 @@ def read_radiosonde_nc(file, min_p, n_levels, crop=0):
 
     if "Height" in ds.data_vars:
         if "zsl" in ds.coords:
-            height_var, t_var, p_var, h_var, p_factor = "zsl", "ta", "pa", "hur", 1.
+            # Vital II
+            height_var, t_var, p_var, h_var, p_factor = "zsl", "ta", "pa", "hur", 100.
             deg_lat = ds["lat"].values[0]; deg_lon = ds["lon"].values[0]
             height_in_km = ds[height_var].values[0] / 1000
         else:
+            # Vital I - 48 Radiosondes:
             height_var, t_var, p_var, h_var, p_factor = "Height", "Temperature", "Pressure", "Humidity", 1.
             deg_lat = ds["Latitude"].values[0]; deg_lon = ds["Longitude"].values[0]
             height_in_km = ds[height_var].values[0] / 1000
     else:
+        #FESSTVaL:
         height_var = "zg" if "zg" in ds.data_vars else "zsl"
         t_var, p_var, h_var, p_factor = "ta", "pa", "hur", 100.
         deg_lat = ds["lat"].values[0]; deg_lon = ds["lon"].values[0]
@@ -195,10 +200,13 @@ def read_radiosonde_nc(file, min_p, n_levels, crop=0):
     increment_ft = int(np.ceil((max_index-index3000)/datapoints_ft))
     inds = np.unique(np.r_[crop:index3000:increment_bl, index3000:max_index:increment_ft])
 
-    time_dim = "Time" if "hur" in ds.data_vars else "time"
+    time_dim = "Time" if "Time" in ds.coords else "time"
     z_array = ds[height_var].isel({time_dim: inds}).values
     t_array = running_mean_from_arrays(inds, ds[height_var].values, ds[t_var].values)
-    p_array = running_mean_from_arrays(inds, ds[height_var].values, ds[p_var].values/p_factor)
+    p_array = running_mean_from_arrays(inds, ds[height_var].values, ds[p_var].values/p_factor) # hPa
+    if max(p_array)>5000:
+        print("Pessure values unphysical - more than 5000 hPa!")
+        sys.exit()
     rh      = running_mean_from_arrays(inds, ds[height_var].values, ds[h_var].values)
     if np.all(rh <= 1.5):
         rh = rh * 100
@@ -370,7 +378,7 @@ def get_tbs_from_mwr_dir(mwr_dir, datestring, datetime_np,
     for file in files:
         fname = os.path.basename(file)
 
-        if "BL" in fname:
+        if "BL" in fname and "l1" in fname:
             ds_bl = xr.open_dataset(file)
             for i, elevation in enumerate(elevations):
                 ele_index = derive_elevation_index(ds_bl, elevation)
@@ -493,7 +501,12 @@ def get_profile_from_mwr_dir(mwr_dir, datestring, datetime_np, n_levels, height_
 
 def derive_date_from_rs_filename(file):
 
-    if "vitII" in file:
+    if "sups_rao_sonde00" in file or "fval" in file:
+        string = file.split("/")[-1].split(".")[0].split("_")[-1]
+        datestring = string[:4]+"-"+string[4:6]+"-"+string[6:8]+"T"+\
+            string[8:10]+":"+string[10:12]+":"+string[12:14]
+        return np.datetime64(datestring)
+    elif "vitII" in file:
         string = os.path.basename(file).split(".")[0]
         return np.datetime64(f"{string[24:28]}-{string[28:30]}-{string[30:32]}T"
                              f"{string[32:34]}:{string[34:36]}:{string[36:38]}")
@@ -510,7 +523,9 @@ def derive_date_from_rs_filename(file):
 
 ##############################################################################
 
-def process_site(rs_dir, mwr_dir, campaign, location, n_levels, min_p, height_offset):
+def process_site(rs_dir, mwr_dir, campaign, location, n_levels, min_p,\
+            height_offset, mwr2_dir=None):
+
     rs_files = sorted(glob.glob(os.path.join(rs_dir, "*.nc")) +
                       glob.glob(os.path.join(rs_dir, "**", "*Profile.txt"), recursive=True))
     n = len(rs_files)
@@ -524,6 +539,17 @@ def process_site(rs_dir, mwr_dir, campaign, location, n_levels, min_p, height_of
     lwps_rs       = np.full(n, np.nan)
     lwps_mwr      = np.full(n, np.nan)
     iwvs_mwr      = np.full(n, np.nan)
+
+    ####
+    # Second set of vars for 2nd MWR:
+    tbs_all_2      = np.full((n, len(elevations), len(azimuths), 14), np.nan)
+    mwr_profiles_2 = np.full((n, 4, n_levels), np.nan)
+    qual_flags_2   = np.full(n, np.nan)
+    lwps_mwr_2     = np.full(n, np.nan)
+    iwvs_mwr_2     = np.full(n, np.nan)
+    mwr1_name      = [os.path.basename(mwr_dir.rstrip("/"))] * n
+    mwr2_name      = [os.path.basename(mwr2_dir.rstrip("/")) if mwr2_dir else None] * n
+
     level_pressures    = np.full((n_levels, n), np.nan)
     level_temperatures = np.full((n_levels, n), np.nan)
     level_wvs          = np.full((n_levels, n), np.nan)
@@ -552,6 +578,19 @@ def process_site(rs_dir, mwr_dir, campaign, location, n_levels, min_p, height_of
         qual_flags[i] = qual_flag
         lwps_mwr[i] = lwp_mwr
         iwvs_mwr[i] = iwv_mwr
+
+        ########
+        # If second MWR is existing:
+        if mwr2_dir is not None:
+            tbs2, lat2, lon2, qual_flag2 = get_tbs_from_mwr_dir(mwr2_dir, datestring, datetime_np)
+            mwr_prof2, lwp_mwr2, iwv_mwr2 = get_profile_from_mwr_dir(
+                mwr2_dir, datestring, datetime_np, n_levels, height_offset)
+            tbs_all_2[i] = tbs2
+            mwr_profiles_2[i] = mwr_prof2
+            qual_flags_2[i] = qual_flag2
+            lwps_mwr_2[i] = lwp_mwr2
+            iwvs_mwr_2[i] = iwv_mwr2
+        #######
 
         length_value, p_array, t_array, ppmv_array, height_in_km, deg_lat, \
             m_array, z_array, rh, deg_lon = read_radiosonde(file, min_p, n_levels)
@@ -589,6 +628,20 @@ def process_site(rs_dir, mwr_dir, campaign, location, n_levels, min_p, height_of
             "MWR_IWV":          (("time",), iwvs_mwr),
             "MWR_LWP":          (("time",), lwps_mwr),
             "qual_flag":        (("time",), qual_flags),
+
+            ######
+            # Second MWR:
+            "TBs_2":       (("time","elevation","azimuth","N_Channels"), tbs_all_2),
+            "MWR_z_2":     (("time","N_Levels"), mwr_profiles_2[:,0,:]),
+            "MWR_ta_2":    (("time","N_Levels"), mwr_profiles_2[:,1,:]),
+            "MWR_hua_2":   (("time","N_Levels"), mwr_profiles_2[:,3,:]),
+            "MWR_IWV_2":   (("time",), iwvs_mwr_2),
+            "MWR_LWP_2":   (("time",), lwps_mwr_2),
+            "qual_flag_2": (("time",), qual_flags_2),
+            "MWR_1_name":  (("time",), mwr1_name),
+            "MWR_2_name":  (("time",), mwr2_name),
+            #####
+
             "Level_Pressure":    (("N_Levels","time"), level_pressures),
             "Level_Temperature": (("N_Levels","time"), level_temperatures),
             "Level_H2O":         (("N_Levels","time"), level_wvs),
@@ -633,11 +686,22 @@ if __name__ == "__main__":
         n_levels=args.n_levels,
         min_p=args.min_p,
         height_offset=args.height_offset,
+        mwr2_dir=args.mwr2_dir
     )
 
     if args.append is not None and os.path.exists(args.append):
         print(f"Appending to existing dataset: {args.append}")
         ds_old = xr.open_dataset(args.append)
+        ds_old = ds_old.reset_coords(["Latitude", "Longitude"])
+        ds_new = ds_new.reset_coords(["Latitude", "Longitude"])
+
+
+        for var in ["MWR_1_name", "MWR_2_name"]:
+            if var in ds_old:
+                ds_old[var] = ds_old[var].astype(str).where(~ds_old[var].isnull(), None)
+            if var in ds_new:
+                ds_new[var] = ds_new[var].astype(str).where(~ds_new[var].isnull(), None)
+
         combined = xr.concat([ds_old, ds_new], dim="time")
         combined = combined.sortby("time")   # ← garantiert korrekte Zeitreihenfolge
         ds_old.close()
