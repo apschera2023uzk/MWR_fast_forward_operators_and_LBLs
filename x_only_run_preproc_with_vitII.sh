@@ -28,9 +28,9 @@
 ##################
 # Run models on data and summarize:
 
-# ./python_src/proc/x_versatile_2ARMS_gb_processing.py  >> run_all.log &&
-# ./python_src/proc/x_versatile_ARMS_gb_processing.py  >> run_all.log &&
-# ./python_src/proc/x_versatile_RTTOV_gb_processing.py >> run_all.log &&
+./python_src/proc/x_versatile_2ARMS_gb_processing.py  >> run_all.log &&
+./python_src/proc/x_versatile_ARMS_gb_processing.py  >> run_all.log &&
+./python_src/proc/x_versatile_RTTOV_gb_processing.py >> run_all.log
 
 
 
