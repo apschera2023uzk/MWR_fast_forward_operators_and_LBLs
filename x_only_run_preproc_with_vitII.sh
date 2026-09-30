@@ -30,9 +30,10 @@
 
 ./python_src/proc/x_versatile_2ARMS_gb_processing.py  >> run_all.log &&
 ./python_src/proc/x_versatile_ARMS_gb_processing.py  >> run_all.log &&
-./python_src/proc/x_versatile_RTTOV_gb_processing.py >> run_all.log
-
-
+./python_src/proc/x_versatile_RTTOV_gb_processing.py >> run_all.log &&
+./python_src/proc/x_versatile_PyRTlib_processing.py >> run_all.log &&
+./python_src/proc/x_versatile_summarize_proc_results.py >> run_all.log &&
+./python_src/plot_scripts/x_versatile_analysis_script.py >> run_all.log
 
 #Traceback (most recent call last):
 #  File "././python_src/proc/x_2ARMS_gb_processing.py", line 383, in <module>
