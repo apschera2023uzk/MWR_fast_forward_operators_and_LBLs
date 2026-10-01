@@ -1,0 +1,519 @@
+#!/usr/bin/env python3
+
+##############################################################################
+# 1 Necessary modules
+##############################################################################
+
+import argparse
+import xarray as xr
+import pandas as pd
+import numpy as np
+import glob
+from scipy.stats import pearsonr
+import os
+from scipy.interpolate import interp1d
+from datetime import datetime, timedelta
+import matplotlib.pyplot as plt
+import matplotlib
+import matplotlib.image as mpimg
+from PIL import Image
+import matplotlib.colors as colors
+import sys
+sys.path.append("./")
+from m_mod_plot import ensure_folder_exists, apply_sky_mask
+# from m_mod_plot import select_ds_camp_loc, ensure_folder_exists, apply_sky_mask
+
+##############################################################################
+# 1.5 Parameters:
+##############################################################################
+# Plotstyles:
+fs = 20
+plt.rc('font', size=fs) 
+plt.style.use('seaborn-poster')
+matplotlib.use("Qt5Agg")
+grid_params = (-3,3.0001, 0.5)
+ylims_bias = [-3, 3]
+n_chans=14
+# elevations = np.array([90., 30, 19.2, 14.4, 11.4, 8.4,  6.6,  5.4, 4.8,  4.2])
+label_colors = {'Dwdhat (MWR)': "blue",
+        'Foghat (MWR)': "green",'RTTOV-gb (model)': "red",
+        'ARMS-gb (model)': "orange",'Sunhat (MWR)': "blue",
+        'Tophat (MWR)': "blue", 'Joyhat (MWR)': "green",
+        'Hamhat (MWR)': "blue",
+         "LABEL_9": "olive",
+        "LABEL_10": "cyan"
+}
+thres_lwp=0.005 # kg m-2 fitting with Moritz' threshold of 5 g m-2
+
+##############################################################################
+# 2nd Used functions:
+##############################################################################
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+        description="Scatter plots of TB MWR against sondes e.g.."
+    )
+    parser.add_argument(
+        "--NetCDF", "-nc",
+        type=str,
+        default=os.path.expanduser("~/PhD_data/TB_preproc_and_proc_results/4campaigns_3models_all_results_and_stats.nc"),
+        help="Input data"
+    )
+    parser.add_argument(
+        "--output", "-o",
+        type=str,
+        default=os.path.expanduser("~/PhD_plots/paper_1/"),
+        help="Output plot directory"
+    )
+    return parser.parse_args()
+
+##############################################################################
+def select_ds_camp_loc(ds, campaign, location):
+    mask = (ds["Campaign"] == campaign) & (ds["Location"] == location)
+    return ds.isel(time=mask.values)
+##############################################################################
+
+def get_deviation_variables(ds):
+    """
+    Finds all variables starting with 'Deviations_' in ds and returns
+    lists of (var_name, var_label, ref_label) for looping.
+
+    Example:
+        "Deviations_RTTOV_R24"   → var_label="RTTOV",  ref_label="R24"
+    """
+    dev_vars    = []
+    var_labels  = []
+    ref_labels  = []
+
+    for var in ds.data_vars:
+        if var.startswith("Deviations_"):
+            dev_vars.append(var)
+            parts = var.split("_")   # e.g. ["Deviations", "RTTOV", "R24"]
+            ref_label = "_".join(parts[2:])   # handles multi-part names
+            ref_labels.append(ref_label)
+            if "MWR1" in var:
+                #print("********************")
+                #print("ds data vars", ds.data_vars)
+                #print("MWR1 names: (should be same!", ds["MWR_1_name"].values)
+                #var_label = ds["MWR_1_name"].values[0]
+                var_label = "MWR 1"
+                var_labels.append(var_label)          
+            elif "MWR2" in var:
+                #print("MWR2 names: (should be same!", ds["MWR_2_name"].values)
+                #var_label = ds["MWR_2_name"].values[0]
+                var_label = "MWR 2"
+                var_labels.append(var_label)         
+            else:
+                var_label = parts[1]
+                var_labels.append(var_label)
+
+    return dev_vars, var_labels, ref_labels
+
+##############################################################################
+
+def stats_by_channel(ds_sel, dev_var,i_elev, n_chans=n_chans):
+    da = ds_sel[dev_var]
+    dims = da.dims  
+    if "azimuth" in dims:
+        print("Azi!")
+        arr = da.mean(dim="azimuth").isel(elevation=i_elev).values      
+    else:
+        arr = da.isel(elevation=i_elev).values
+
+    # ── Stats per channel ─────────────────────────────────────────────────────
+    std_array     = np.full(n_chans, np.nan)
+    bias_array    = np.full(n_chans, np.nan)
+    rmse_array    = np.full(n_chans, np.nan)
+    n_valid_array = np.zeros(n_chans, dtype=int)
+
+    for i in range(n_chans):
+        col     = arr[:, i]
+        valid   = ~np.isnan(col)
+        n_valid = int(np.sum(valid))
+        n_valid_array[i] = n_valid
+        if n_valid == 0:
+            continue
+        dev_valid      = col[valid]
+        bias           = np.sum(dev_valid) / n_valid
+        std            = np.sqrt(np.sum((dev_valid - bias) ** 2) / n_valid)
+        rmse           = np.sqrt(np.sum(dev_valid ** 2) / n_valid)
+        bias_array[i]  = bias
+        std_array[i]   = std
+        rmse_array[i]  = rmse
+
+    return std_array, bias_array, rmse_array, n_valid_array
+
+##############################################################################
+
+def create_plot_dirs(ds, args, campaign=None, location=None):
+
+    if not campaign:
+        campaign = ds["Campaign"].values[0]
+        location = ds["Location"].values[0]   
+    site_dir       = os.path.join(args.output, campaign+"_"+location)
+    os.makedirs(site_dir, exist_ok=True)
+        
+    std_dir       = os.path.join(site_dir, "std")
+    bias_dir      = os.path.join(site_dir, "bias")
+    bias_std_dir  = os.path.join(site_dir, "bias_std")
+    os.makedirs(std_dir, exist_ok=True)
+    os.makedirs(bias_dir, exist_ok=True)
+    os.makedirs(bias_std_dir, exist_ok=True)
+    return std_dir, bias_dir, bias_std_dir
+
+##############################################################################
+
+def add_band_annotations(ax, channels):
+    # Trennlinie zwischen Kanal 7 und 8:
+    ax.axvline(x=7.5, color="gray", linestyle="--", linewidth=1.2, alpha=0.9, zorder=10)
+
+    # Sekundäre x-Achse oben für K-/V-Band Beschriftung:
+    def identity(x):
+        return x
+    secax = ax.secondary_xaxis("top", functions=(identity, identity))
+    secax.set_xticks([4, 11])   # Mittelpunkte der beiden Bänder
+    secax.set_xticklabels(["K-Band", "V-Band"], fontsize=11, fontweight="bold")
+    secax.tick_params(length=0)  # keine Tick-Striche, nur Labe
+
+##############################################################################
+
+def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
+        ref_label, pearsons_rs, elevations=[], campaign="any_campaign",\
+        location="any_location",args=None, tag="any_tag"):
+    ###
+    # Outdirs:::
+    std_dir, bias_dir, bias_std_dir = create_plot_dirs(ds, args,\
+        campaign=campaign, location=location)
+    ele_max_idx = 11 # so far only excluding 4.8 and 4.2 where ARMS does not work..
+    channels = np.arange(14)+1
+    elev_idcs = np.arange(ele_max_idx)
+    valid_tag = (np.min(n_valid.values[:,:ele_max_idx]), np.max(n_valid.values[:,:ele_max_idx]))
+
+    if "RTTOV" in label or "ARMS" in label:
+        varmax = 3
+    else:
+        varmax = 7
+        
+    ###
+    # Plot of Std:
+    fig, ax = plt.subplots(figsize=(16, 9))
+    norm = colors.LogNorm(vmin=0.1, vmax=varmax) 
+    c = ax.pcolormesh(
+        channels,
+        elev_idcs,
+        stds[:,:ele_max_idx].T,          
+        cmap="viridis",
+        norm=norm ,
+        shading="auto"
+    )
+    CS = ax.contour(
+        channels,
+        elev_idcs,
+        stds[:,:ele_max_idx].T,     
+        levels=[0.25, 0.5,1, 2, 3, 4, 5, 6],
+        colors=["black", "red", "black", "black", "black", "black", "black",\
+            "black"],
+        linewidths=1.0
+    )
+    ax.clabel(CS, inline=True, fontsize=8, fmt="%.2f")
+    ax.set_xlabel("Channel")
+    ax.set_ylabel("Elevation [deg]")
+    elev_tags = [str(elev) for elev in elevations[:ele_max_idx]]
+    ax.set_yticks(elev_idcs, elev_tags)
+    add_band_annotations(ax, channels)   # ← hier einfügen
+    title = f"Standard deviation of TB per Channel/Elevation\n\
+        n_valid(min/max)={valid_tag}, {location}, {campaign}, {label}-{ref_label}, {tag}"
+    ax.set_title(title)
+    cb = fig.colorbar(c, ax=ax)
+    if "RTTOV" in label or "ARMS" in label:
+        ticks = [0.1,0.25, 0.5, 0.75,1, 1.25,1.5, 2, 3]
+    else:
+        ticks = [0.25, 0.5,1, 2, 3, 4, 5, 6]
+    cb.set_ticks(ticks)
+    cb.set_ticklabels([str(t) for t in ticks])  # explizit lineare Labels
+    cb.set_label("Standard deviation TB [K]")
+    out_path = f"{std_dir}/{ref_label}_{tag}_std_chan_ele_{campaign}_{location}_{label}.png"
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=300)
+    plt.close(fig)
+
+    ###
+    # Plot of Bias:
+    fig, ax = plt.subplots(figsize=(16, 9))
+    norm = colors.SymLogNorm(linthresh=0.1, vmin=-varmax, vmax=varmax) 
+    c = ax.pcolormesh(
+        channels,
+        elev_idcs,
+        biases[:,:ele_max_idx].T,          
+        cmap="bwr",
+        norm=norm,      
+        shading="auto"
+    )
+    CS = ax.contour(
+        channels,
+        elev_idcs,
+        biases[:,:ele_max_idx].T,  
+        levels=[-10, -9, -8,-7, -6, -5,-4,-3, -2, -1,-0.5,-0.25,0.25,\
+                0.5,1, 2,3 ,4,5, 6,7,8, 9, 10],
+        colors=["black","black","black","black","black","black","black",\
+                "black","black","black","gold","black", "black",\
+                "gold", "black", "black", "black", "black", "black","black",\
+                "black","black","black","black"],
+        linewidths=1.0
+    )
+    ax.clabel(CS, inline=True, fontsize=8, fmt="%.2f")
+    ax.set_xlabel("Channel")
+    ax.set_ylabel("Elevation [deg]")
+    elev_tags = [str(elev) for elev in elevations[:ele_max_idx]]
+    ax.set_yticks(elev_idcs, elev_tags)
+    add_band_annotations(ax, channels)   # ← hier einfügen
+    title = f"Bias of TB per Channel/Elevation\n\
+        n_valid={valid_tag}, {location}, {campaign}, {label}-{ref_label}, {tag}"
+    ax.set_title(title)
+    cb = fig.colorbar(c, ax=ax)
+    if "RTTOV" in label or "ARMS" in label:
+        ticks = [-3,-2,-1.5, -1,-0.5,-0.25,-0.1,0,0.1, 0.25, 0.5,1,-1.5, 2, 3]
+    else:
+        ticks = [-5,-4,-3, -2, -1,-0.5,-0.25, 0,0.25, 0.5,1, 2,3 ,4,5]
+    cb.set_ticks(ticks)
+    cb.set_ticklabels([str(t) for t in ticks])  # explizit lineare Labels
+    cb.set_label("Bias TB [K]")
+    out_path = f"{bias_dir}/{ref_label}_{tag}_bias_chan_ele_{campaign}_{location}_{label}.png"
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=300)
+    plt.close(fig)
+
+    ###
+    # Plot of RMSE:
+    fig, ax = plt.subplots(figsize=(16, 9))
+    norm = colors.LogNorm(vmin=0.1, vmax=varmax*2)
+    c = ax.pcolormesh(
+        channels,
+        elev_idcs,
+        rmses[:,:ele_max_idx].T,          
+        cmap="viridis",   
+        norm = norm,
+        shading="auto"
+    )
+    CS = ax.contour(
+        channels,
+        elev_idcs,
+        rmses[:,:ele_max_idx].T,     
+        levels=[0.25, 0.5,1, 2, 3, 4, 5, 6, 7, 8, 10, 12,14],
+        colors=["black", "red", "black", "black", "black", "black", "black",\
+            "black", "black", "black", "black", "black", "black"],
+        linewidths=1.0
+    )
+    ax.clabel(CS, inline=True, fontsize=8, fmt="%.2f")
+    ax.set_xlabel("Channel")
+    ax.set_ylabel("Elevation [deg]")
+    elev_tags = [str(elev) for elev in elevations[:ele_max_idx]]
+    ax.set_yticks(elev_idcs, elev_tags)
+    add_band_annotations(ax, channels)   # ← hier einfügen
+    title = f"RMSE of TB per Channel/Elevation\n\
+        n_valid={valid_tag}, {location}, {campaign}, {label}-{ref_label}, {tag}"
+    ax.set_title(title)
+    cb = fig.colorbar(c, ax=ax)
+    if "RTTOV" in label or "ARMS" in label:
+        ticks = [0.1,0.25, 0.5, 0.75, 1, 2 ,3, 4, 5]
+    else:
+        ticks = [0.25, 0.5, 1, 2 ,3, 4,5,6,7,8,10,12]
+    cb.set_ticks(ticks)
+    cb.set_ticklabels([str(t) for t in ticks])  # explizit lineare Labels
+    cb.set_label("RMSE TB [K]")
+    out_path = f"{bias_std_dir}/{ref_label}_{tag}_RMSE_chan_ele_{campaign}_{location}_{label}.png"
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=300)
+    plt.close(fig)
+
+    ###
+    # Plot of Pearsons R:
+    fig, ax = plt.subplots(figsize=(16, 9))
+    c = ax.pcolormesh(
+        channels,
+        elev_idcs,
+        pearsons_rs[:,:ele_max_idx].T,          
+        cmap="viridis",
+        vmin=0.9,
+        vmax=1,       
+        shading="auto"
+    )
+    CS = ax.contour(
+        channels,
+        elev_idcs,
+        pearsons_rs[:,:ele_max_idx].T,     
+        levels=[0.5, 0.75, 0.9, 0.95, 0.98],
+        colors=["red", "red", "red", "red", "red"],
+        linewidths=1.0
+    )
+    ax.clabel(CS, inline=True, fontsize=8, fmt="%.2f")
+    ax.set_xlabel("Channel")
+    ax.set_ylabel("Elevation [deg]")
+    elev_tags = [str(elev) for elev in elevations[:ele_max_idx]]
+    ax.set_yticks(elev_idcs, elev_tags)
+    title = f"Pearson's R of TB per Channel/Elevation\n\
+        n_valid={valid_tag}, {location}, {campaign}, {label} and {ref_label}, {tag}"
+    ax.set_title(title)
+    cb = fig.colorbar(c, ax=ax)
+    '''
+    ticks = [-1,-0.5, -0.25,0, 0.25, 0.5, 1.]
+    cb.set_ticks(ticks)
+    cb.set_ticklabels([str(t) for t in ticks])  # explizit lineare Labels
+    '''
+    cb.set_label("correlation r")
+    out_path = f"{bias_std_dir}/{ref_label}_{tag}_Pearson_corr_chan_ele_{campaign}_{location}_{label}.png"
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=300)
+    plt.close(fig)
+
+    ###
+    # Plot of N_VALID: bar plot per elevation
+    fig, ax = plt.subplots(figsize=(12, 7))
+
+    # n_valid is (N_Channels, elevation) — take mean over channels (should be same per elev)
+    n_valid_per_elev = n_valid[:, :ele_max_idx].mean(dim="N_Channels").values.astype(int)
+
+    bars = ax.bar(
+        np.arange(len(elev_idcs)),
+        n_valid_per_elev,
+        color="steelblue", edgecolor="black", alpha=0.8
+    )
+
+    # Write value on top of each bar
+    for bar, val in zip(bars, n_valid_per_elev):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 1,
+            str(val),
+            ha="center", va="bottom", fontsize=11, fontweight="bold"
+        )
+
+    ax.set_xticks(np.arange(len(elev_idcs)))
+    ax.set_xticklabels(elev_tags, rotation=45, ha="right")
+    ax.set_xlabel("Elevation [deg]")
+    ax.set_ylabel("N valid timesteps")
+    ax.set_title(
+        f"Number of valid timesteps per Elevation\n"
+        f"{location}, {campaign}, {label} and {ref_label}, [{tag}]"
+    )
+    ax.grid(True, axis="y", alpha=0.3)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    out_path = f"{bias_std_dir}/{ref_label}_{tag}_nvalid_per_elev_{campaign}_{location}_{label}.png"
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=300)
+    plt.close(fig)
+
+    return 0
+
+##############################################################################
+
+def derive_stats_per_chan_and_elev(ds_cf, dev_var, var_label, ref_label):
+
+    biases = ds_cf[dev_var].mean(dim="time")
+    stds = ds_cf[dev_var].std(dim="time")
+    n_valid = ds_cf[dev_var].count(dim="time")  # shape: (N_Channels, elevation)
+    rmses = np.sqrt((ds_cf[dev_var]**2).mean(dim="time"))  # (N_Channels, elevation)
+    #if "MWR1" in dev_var:
+    #    var_var = ds_cf["MWR_1_name"].values[0]
+    #elif "MWR2" in dev_var:
+    #    var_var = ds_cf["MWR_2_name"].values[0]
+    #else:
+    var_var = ds_cf[dev_var].attrs["var_label"]
+    ref_var = ds_cf[dev_var].attrs["ref_label"]
+    pearsons_rs = xr.corr(ds_cf[var_var], ds_cf[ref_var], dim="time")
+
+    if np.shape(pearsons_rs)[0]==len(ds_cf["elevation"]):
+        pearsons_rs = pearsons_rs.T
+
+    return stds, rmses, biases, n_valid, var_label, ref_label, pearsons_rs
+
+##############################################################################
+# 3 Main
+##############################################################################
+
+if __name__ == "__main__":
+    args = parse_arguments()
+    nc_out_path=args.NetCDF
+    
+    ###
+    # 0th Open dataset and clear sky filtering
+    ds0 = xr.open_dataset(nc_out_path)
+    # ds0 = ds0.where(ds0["qual_flag"] == 0, drop=True)
+    keep_vars = [v for v in ds0.data_vars if 
+                 v.startswith("Deviations_") or 
+                 v.startswith("MWR_") or
+                 v.startswith("TBs") or 
+                 v == "cloud_flag" or 
+                 v == "Campaign" or 
+                 v == "Location"]
+    ds0 = ds0[keep_vars]
+    ds0 = ds0.mean(dim="azimuth", keep_attrs=True)
+    
+    ###
+    # 1st choose dataset (RAO / clear) & Make sure Output dirs exist: 
+    dev_vars, var_labels, ref_labels = get_deviation_variables(ds0)
+
+    #########################
+    # Still the question is: How to fit labels to different MWRs instead of 1 /2
+    #print("dev_vars: ", dev_vars)
+    #print("var_labels: ", var_labels)
+    #print("ref_labels: ", ref_labels)
+    #sys.exit()
+    ################
+
+    skies = ["clear", "cloudy", "all_sky"]
+    campaigns = np.unique(ds0["Campaign"].values)
+    locations = np.unique(ds0["Location"].values)
+    for campaign in campaigns:
+        print("Processing Campaign: ", campaign)
+        for location in locations:
+            ds_sel = select_ds_camp_loc(ds0, campaign, location)
+            if len(ds_sel["time"]) == 0:
+                continue
+            else:
+                print("Processing location:", location)
+            for sky in skies:
+                ds_cf = apply_sky_mask(ds_sel, sky)
+                print("Processing sky-tag:", sky)
+                for dev_var, var_label, ref_label in zip(dev_vars, var_labels,\
+                            ref_labels):
+                    if ds_cf[dev_var].isnull().all():
+                        continue
+                    else:
+                        print("Processing Variable:", dev_var)
+                    stds, rmses, biases, n_valid, var_label, ref_label,\
+                        pearsons_rs = derive_stats_per_chan_and_elev(ds_cf,\
+                        dev_var, var_label, ref_label)
+                    create_plot_by_chan_and_ele(ds_cf, stds, rmses, biases,\
+                        n_valid, var_label, ref_label, pearsons_rs,\
+                        campaign=campaign,location=location ,args=args, tag=sky,\
+                        elevations=ds_cf["elevation"].values)
+                    del stds, rmses, biases, n_valid, pearsons_rs
+            del ds_sel  # nach der sky-Schleife
+
+    #######
+    # One plot of all data:
+    print("Running once on full dataset!")
+    ds_sel = ds0
+    for sky in skies:
+        ds_cf = apply_sky_mask(ds_sel, sky)
+        print("Processing sky-tag:", sky)
+        for dev_var, var_label, ref_label in zip(dev_vars, var_labels,\
+                    ref_labels):
+            if ds_cf[dev_var].isnull().all():
+                continue
+            else:
+                print("Processing Variable:", dev_var)
+            stds, rmses, biases, n_valid, var_label, ref_label,\
+                pearsons_rs = derive_stats_per_chan_and_elev(ds_cf,\
+                dev_var, var_label, ref_label)
+            create_plot_by_chan_and_ele(ds_cf, stds, rmses, biases,\
+                n_valid, var_label, ref_label, pearsons_rs,\
+                campaign="4 campaigns",location="all" ,args=args, tag=sky,\
+                elevations=ds_cf["elevation"].values)
+            del stds, rmses, biases, n_valid, pearsons_rs
+    del ds_sel  # nach der sky-Schleife
+
+

@@ -672,6 +672,28 @@ def process_site(rs_dir, mwr_dir, campaign, location, n_levels, min_p,\
     return ds
 
 ##############################################################################
+
+def drop_duplicate_profiles(ds, keys=("Campaign", "Location", "MWR_1_name"), keep="first"):
+    """Entfernt Profile, die in Zeit UND allen keys übereinstimmen."""
+    df = pd.DataFrame({"time": ds["time"].values})
+    for k in keys:
+        if k in ds:
+            df[k] = ds[k].values.astype(str)
+
+    dup = df.duplicated(keep=keep).values
+    if dup.any():
+        print(f"Entferne {dup.sum()} doppelte Profile:")
+        print(df[dup].to_string())
+    ds = ds.isel(time=~dup)
+
+    # Warnen, falls danach noch gleiche Zeitstempel mit unterschiedlichen keys übrig sind
+    same_time = pd.Index(ds["time"].values).duplicated(keep=False)
+    if same_time.any():
+        print(f"Hinweis: {same_time.sum()} Profile teilen sich weiterhin einen Zeitstempel "
+              f"(unterschiedliche {keys}) — bewusst behalten.")
+    return ds
+
+##############################################################################
 # Main
 ##############################################################################
 
@@ -708,6 +730,7 @@ if __name__ == "__main__":
     else:
         combined = ds_new
 
+    combined = drop_duplicate_profiles(combined)
     os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
     combined.to_netcdf(args.output, format="NETCDF4")
     print(f"Saved: {args.output}  (total profiles: {combined.sizes['time']})")

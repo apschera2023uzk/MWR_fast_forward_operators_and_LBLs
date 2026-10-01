@@ -303,13 +303,13 @@ if __name__ == "__main__":
     ds_write["Deviations_MWR1_R24"] = (ds["TBs"] -\
         ds["TBs_PyRTlib_R24"]).squeeze().transpose("time",\
         "N_Channels", "elevation", ...)
-    ds_write["Deviations_MWR1_R24"].attrs["var_label"] = "TBs_MWR1"
+    ds_write["Deviations_MWR1_R24"].attrs["var_label"] = "TBs"
     ds_write["Deviations_MWR1_R24"].attrs["ref_label"] = "TBs_PyRTlib_R24"
  
     ds_write["Deviations_MWR2_R24"] = (ds["TBs_2"] -\
         ds["TBs_PyRTlib_R24"]).squeeze().transpose("time",\
         "N_Channels", "elevation", "azimuth", ...)
-    ds_write["Deviations_MWR2_R24"].attrs["var_label"] = "TBs_MWR2"
+    ds_write["Deviations_MWR2_R24"].attrs["var_label"] = "TBs_2"
     ds_write["Deviations_MWR2_R24"].attrs["ref_label"] = "TBs_PyRTlib_R24"
 
     '''    
