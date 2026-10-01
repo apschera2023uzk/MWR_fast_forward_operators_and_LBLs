@@ -193,6 +193,13 @@ def create_plot_by_chan_and_ele(ds, stds, rmses, biases, n_valid, label,\
         varmax = 3
     else:
         varmax = 7
+
+    ###
+    # Rename MWR:
+    if "MWR 1" in label:
+        label = ds["MWR_1_name"].values[0]
+    elif "MWR 2" in label:
+        label = ds["MWR_2_name"].values[0]
         
     ###
     # Plot of Std:
@@ -454,14 +461,6 @@ if __name__ == "__main__":
     ###
     # 1st choose dataset (RAO / clear) & Make sure Output dirs exist: 
     dev_vars, var_labels, ref_labels = get_deviation_variables(ds0)
-
-    #########################
-    # Still the question is: How to fit labels to different MWRs instead of 1 /2
-    #print("dev_vars: ", dev_vars)
-    #print("var_labels: ", var_labels)
-    #print("ref_labels: ", ref_labels)
-    #sys.exit()
-    ################
 
     skies = ["clear", "cloudy", "all_sky"]
     campaigns = np.unique(ds0["Campaign"].values)

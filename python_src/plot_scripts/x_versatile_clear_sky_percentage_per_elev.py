@@ -20,7 +20,8 @@ from PIL import Image
 import matplotlib.colors as colors
 import sys
 sys.path.append("./")
-from m_mod_plot import select_ds_camp_loc, ensure_folder_exists, apply_sky_mask
+#from m_mod_plot import select_ds_camp_loc, ensure_folder_exists, apply_sky_mask
+from m_mod_plot import ensure_folder_exists, apply_sky_mask
 
 ##############################################################################
 # 1.5 Parameters:
@@ -55,17 +56,21 @@ def parse_arguments():
     parser.add_argument(
         "--NetCDF", "-nc",
         type=str,
-        default=os.path.expanduser("~/PhD_data/TB_preproc_and_proc_results/3campaigns_3models_all_results_and_stats.nc"),
+        default=os.path.expanduser("~/PhD_data/TB_preproc_and_proc_results/4campaigns_3models_all_results_and_stats.nc"),
         help="Input data"
     )
     parser.add_argument(
         "--output", "-o",
         type=str,
-        default=os.path.expanduser("~/PhD_plots/2026/"),
+        default=os.path.expanduser("~/PhD_plots/paper_1/"),
         help="Output plot directory"
     )
     return parser.parse_args()
 
+##############################################################################
+def select_ds_camp_loc(ds, campaign, location):
+    mask = (ds["Campaign"] == campaign) & (ds["Location"] == location)
+    return ds.isel(time=mask.values)
 ##############################################################################
 
 def get_deviation_variables(ds):
