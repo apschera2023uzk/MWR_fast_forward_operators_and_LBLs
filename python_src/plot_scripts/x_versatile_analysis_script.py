@@ -21,7 +21,7 @@ plt.style.use('seaborn-poster')
 matplotlib.use("Qt5Agg")
 
 # Clear sky LWP threshold
-thres_lwp=0.005 # kg m-2 fitting with Moritz' threshold of 5 g m-2
+thres_lwp=0.0 ###0.005 # kg m-2 fitting with Moritz' threshold of 5 g m-2
 n_chans=14
 model_tbs=["TBs_PyRTlib_R24",'TBs_RTTOV_gb', 'TBs_ARMS_gb']
 mwr_vars = ['TBs_dwdhat', 'TBs_sunhat', 'TBs_tophat',\
@@ -235,6 +235,17 @@ def add_cloud_flag(ds, args, thres_lwp=thres_lwp):
         ]))        
         lwp_flag[i] = 1.0 if water_sum > thres_lwp else 0.0
     lwp_flag_2d = np.tile(lwp_flag, (mlnn_flag.shape[0], 1))
+
+    #########################
+    # Check LWP threshold:  
+    n_time = ds.sizes["time"]
+    for thres_lwp_x in [0.005, 0.0]:
+        n_flag = int(np.sum(water_sum > thres_lwp_x))
+        print(f"thres_lwp = {thres_lwp_x}: {n_flag} von {n_time} Zeitschritten "
+              f"({100 * n_flag / n_time:.1f} %) als bewölkt markiert")
+    #thres_lwp = 0.005: 0 von 642 Zeitschritten (0.0 %) als bewölkt markiert
+    #thres_lwp = 0.0: 1 von 642 Zeitschritten (0.2 %) als bewölkt markiert
+    #################################
 
     # ── 3. MLNN dominant; fill NaNs with LWP-based flag ──────────────────────
     nan_mask      = np.isnan(mlnn_flag)

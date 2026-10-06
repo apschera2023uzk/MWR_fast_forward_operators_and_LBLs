@@ -430,7 +430,7 @@ def get_tbs_from_mwr_dir(mwr_dir, datestring, datetime_np,
 def get_profile_from_mwr_dir(mwr_dir, datestring, datetime_np, n_levels, height_offset=0.0):
     """Generic L2 profile reader — same logic as get_profs_from_l2, single dir."""
     data = np.full((4, n_levels), np.nan)
-    lwp, iwv = np.nan, np.nan
+    lwp, iwv, irt = np.nan, np.nan, np.nan
 
     all_files = glob.glob(os.path.join(mwr_dir, "**", "*.nc"), recursive=True)
     files = [f for f in all_files if datestring in os.path.basename(f)]
@@ -491,9 +491,23 @@ def get_profile_from_mwr_dir(mwr_dir, datestring, datetime_np, n_levels, height_
             if idx_list:
                 lwp = np.nanmean(ds["clwvi"].values[idx_list])
 
+        ####################
+        # Find IR variable:
+        ir_threshold_K = 273.15 - 30  # -30°C in Kelvin
+        if "ds" in locals():
+            if "tb_irp" in ds:
+                ir_var = "tb_irp"
+            elif "irt" in ds:
+                ir_var = "irt"
+            if "ir_var" in locals():
+                if time_idx_list is not None and len(time_idx_list) > 0 and ir_var in ds:
+                    irt = np.nanmean(ds[ir_var].values[time_idx_list, 0])
+                else:
+                    print("WARNING: No IR temperatures found for MWR!")
+
     data[0, :] = data[0, :] + height_offset
     lwp, iwv = check_lwp_iwv(lwp, iwv)
-    return data[:, ::-1], lwp, iwv
+    return data[:, ::-1], lwp, iwv, irt
 
 ##############################################################################
 # Main processing loop for one site/campaign
@@ -539,6 +553,7 @@ def process_site(rs_dir, mwr_dir, campaign, location, n_levels, min_p,\
     lwps_rs       = np.full(n, np.nan)
     lwps_mwr      = np.full(n, np.nan)
     iwvs_mwr      = np.full(n, np.nan)
+    irts_mwr     = np.full(n, np.nan)
 
     ####
     # Second set of vars for 2nd MWR:
@@ -547,6 +562,7 @@ def process_site(rs_dir, mwr_dir, campaign, location, n_levels, min_p,\
     qual_flags_2   = np.full(n, np.nan)
     lwps_mwr_2     = np.full(n, np.nan)
     iwvs_mwr_2     = np.full(n, np.nan)
+    irts_mwr_2     = np.full(n, np.nan)
     mwr1_name      = [os.path.basename(mwr_dir.rstrip("/"))] * n
     mwr2_name      = [os.path.basename(mwr2_dir.rstrip("/")) if mwr2_dir else None] * n
 
@@ -570,7 +586,7 @@ def process_site(rs_dir, mwr_dir, campaign, location, n_levels, min_p,\
         datestring = str(datetime_np).replace("T", "").replace(":", "").replace("-", "")[:8]
 
         tbs, lat, lon, qual_flag = get_tbs_from_mwr_dir(mwr_dir, datestring, datetime_np)
-        mwr_prof, lwp_mwr, iwv_mwr = get_profile_from_mwr_dir(
+        mwr_prof, lwp_mwr, iwv_mwr,irt_mwr = get_profile_from_mwr_dir(
             mwr_dir, datestring, datetime_np, n_levels, height_offset)
 
         tbs_all[i] = tbs
@@ -578,18 +594,20 @@ def process_site(rs_dir, mwr_dir, campaign, location, n_levels, min_p,\
         qual_flags[i] = qual_flag
         lwps_mwr[i] = lwp_mwr
         iwvs_mwr[i] = iwv_mwr
+        irts_mwr[i] = irt_mwr
 
         ########
         # If second MWR is existing:
         if mwr2_dir is not None:
             tbs2, lat2, lon2, qual_flag2 = get_tbs_from_mwr_dir(mwr2_dir, datestring, datetime_np)
-            mwr_prof2, lwp_mwr2, iwv_mwr2 = get_profile_from_mwr_dir(
+            mwr_prof2, lwp_mwr2, iwv_mwr2, irt_mwr2 = get_profile_from_mwr_dir(
                 mwr2_dir, datestring, datetime_np, n_levels, height_offset)
             tbs_all_2[i] = tbs2
             mwr_profiles_2[i] = mwr_prof2
             qual_flags_2[i] = qual_flag2
             lwps_mwr_2[i] = lwp_mwr2
             iwvs_mwr_2[i] = iwv_mwr2
+            irts_mwr_2[i] = irt_mwr2
         #######
 
         length_value, p_array, t_array, ppmv_array, height_in_km, deg_lat, \
@@ -627,6 +645,7 @@ def process_site(rs_dir, mwr_dir, campaign, location, n_levels, min_p,\
             "MWR_hua":          (("time","N_Levels"), mwr_profiles[:,3,:]),
             "MWR_IWV":          (("time",), iwvs_mwr),
             "MWR_LWP":          (("time",), lwps_mwr),
+            "MWR_IRT":          (("time",), irts_mwr),            
             "qual_flag":        (("time",), qual_flags),
 
             ######
@@ -637,6 +656,7 @@ def process_site(rs_dir, mwr_dir, campaign, location, n_levels, min_p,\
             "MWR_hua_2":   (("time","N_Levels"), mwr_profiles_2[:,3,:]),
             "MWR_IWV_2":   (("time",), iwvs_mwr_2),
             "MWR_LWP_2":   (("time",), lwps_mwr_2),
+            "MWR_IRT_2":   (("time",), irts_mwr_2), 
             "qual_flag_2": (("time",), qual_flags_2),
             "MWR_1_name":  (("time",), mwr1_name),
             "MWR_2_name":  (("time",), mwr2_name),

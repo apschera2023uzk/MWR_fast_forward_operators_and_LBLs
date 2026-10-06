@@ -359,8 +359,20 @@ def get_profs_from_l2(l2_files, datetime_np, n_levels = n_levels):
                 lwp_after = np.nanmean(ds["clwvi"].values[time_idx_list])
                 lwp = lwp_after        
             
+        ####################
+        # Find IR variable:
+        ir_threshold_K = 273.15 - 30  # -30°C in Kelvin
+        if "tb_irp" in ds:
+            ir_var = "tb_irp"
+        elif "irt" in ds:
+            ir_var = "irt"
+        if time_idx_list is not None and len(time_idx_list) > 0:
+            irt = np.nanmean(ds[ir_var].values[time_idx_list, 0])
+
+    print("LWP beofre: ", lwp)
     lwp, iwv = check_lwp_iwv(lwp, iwv)
-    return data[:,::-1], lwp, iwv
+    print("LWP after: ", lwp)
+    return data[:,::-1], lwp, iwv, irt
 
 ##############################################################################
 
@@ -377,7 +389,7 @@ def get_mwr_data(datetime_np, mwrs,n_levels=n_levels,\
         l1_files = [file for file in files if "l1" in file]   
         l2_files = [file for file in files if "l2" in file] 
         tbs_dwdhat, lat, lon, qual_flag = get_tbs_from_l1(l1_files, datetime_np)
-        dwd_profiles, lwp_dwd, iwv_dwd = get_profs_from_l2(l2_files, datetime_np)
+        dwd_profiles, lwp_dwd, iwv_dwd, irt_dwd = get_profs_from_l2(l2_files, datetime_np)
         dwd_profiles[0,:] = dwd_profiles[0,:] + 112
     else:
         tbs_dwdhat = np.full((10, 72, 14), np.nan)
@@ -389,7 +401,7 @@ def get_mwr_data(datetime_np, mwrs,n_levels=n_levels,\
         l1_files = [file for file in files if "l1" in file]   
         l2_files = [file for file in files if "l2" in file] 
         tbs_foghat, lat, lon, qual_flag = get_tbs_from_l1(l1_files, datetime_np)
-        fog_profiles, lwp_fog, iwv_fog = get_profs_from_l2(l2_files, datetime_np)
+        fog_profiles, lwp_fog, iwv_fog, irt_fog = get_profs_from_l2(l2_files, datetime_np)
         fog_profiles[0,:] = fog_profiles[0,:] + 112
     else:
         tbs_foghat = np.full((10, 72, 14), np.nan)
@@ -401,7 +413,7 @@ def get_mwr_data(datetime_np, mwrs,n_levels=n_levels,\
         l1_files = [file for file in files if "l1" in file]   
         l2_files = [file for file in files if "l2" in file] 
         tbs_sunhat, lat, lon, qual_flag = get_tbs_from_l1(l1_files, datetime_np)
-        sun_profiles, lwp_sun, iwv_sun = get_profs_from_l2(l2_files, datetime_np)
+        sun_profiles, lwp_sun, iwv_sun, irt_sun = get_profs_from_l2(l2_files, datetime_np)
         sun_profiles[0,:] = sun_profiles[0,:] + 74
     else:
         tbs_sunhat = np.full((10, 72, 14), np.nan)    
@@ -413,7 +425,7 @@ def get_mwr_data(datetime_np, mwrs,n_levels=n_levels,\
         l1_files = [file for file in files if "l1" in file]   
         l2_files = [file for file in files if "l2" in file] 
         tbs_tophat, lat, lon, qual_flag = get_tbs_from_l1(l1_files, datetime_np)
-        top_profiles, lwp_top, iwv_top = get_profs_from_l2(l2_files, datetime_np)
+        top_profiles, lwp_top, iwv_top, irt_top = get_profs_from_l2(l2_files, datetime_np)
         top_profiles[0,:] = top_profiles[0,:] + 110
     else:
         tbs_tophat = np.full((10, 72, 14), np.nan)
@@ -425,7 +437,7 @@ def get_mwr_data(datetime_np, mwrs,n_levels=n_levels,\
         l1_files = [file for file in files if "1C01" in file]   
         l2_files = [file for file in files if "single" in file] 
         tbs_joyhat, lat, lon, qual_flag = get_tbs_from_l1(l1_files, datetime_np)
-        joy_profiles, lwp_joy, iwv_joy = get_profs_from_l2(l2_files, datetime_np) 
+        joy_profiles, lwp_joy, iwv_joy, irt_joy = get_profs_from_l2(l2_files, datetime_np) 
     else:
         tbs_joyhat = np.full((10, 72, 14), np.nan)
         joy_profiles = np.full((4,n_levels), np.nan)
@@ -436,7 +448,7 @@ def get_mwr_data(datetime_np, mwrs,n_levels=n_levels,\
         l1_files = [file for file in files if "1C01" in file]   
         l2_files = [file for file in files if "single" in file] 
         tbs_hamhat, lat, lon, qual_flag = get_tbs_from_l1(l1_files, datetime_np)
-        ham_profiles, lwp_ham, iwv_ham = get_profs_from_l2(l2_files, datetime_np)
+        ham_profiles, lwp_ham, iwv_ham, irt_ham = get_profs_from_l2(l2_files, datetime_np)
     else:
         tbs_hamhat = np.full((10, 72, 14), np.nan)
         ham_profiles = np.full((4,n_levels), np.nan)
