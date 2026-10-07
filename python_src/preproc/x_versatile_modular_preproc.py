@@ -359,6 +359,46 @@ def derive_elevation_index(ds_bl, elevation):
 
 ##############################################################################
 
+def derive_std710(ds, datetime_np, min_time_diff_thres=min_time_diff_thres,
+                        ch_idx=6, min_samples=5):
+    # This function finds the 10min standard deviation of channel 7 in zenith:
+    if "ele" in ds.data_vars:
+        ele_var ="ele"
+    elif "elevation_angle" in ds.data_vars:
+        ele_var ="elevation_angle"
+
+    # 2. Masken: Zenit UND Zeitfenster
+    zenith_mask = np.abs(ds[ele_var].values - 90.0) < 1.0
+
+    t0 = np.datetime64(datetime_np, "ns")
+    dt = np.timedelta64(min_time_diff_thres, "m")
+    times = ds["time"].values.astype("datetime64[ns]")
+    time_mask = (times >= t0 - dt) & (times <= t0 + dt)
+
+    sel = zenith_mask & time_mask
+    if not sel.any():
+        print(f"Keine Zenitmessungen innerhalb ±{min_time_diff_thres} min um {t0}")
+        return pd.Series(dtype=float)
+
+    # 3. Kanal 7 (Index 6) als Zeitreihe
+    tb = ds["tb"].isel(time=sel)
+    chan_dim = [d for d in tb.dims if d != "time"][0]
+    tb_ch = tb.isel({chan_dim: ch_idx})
+    s = pd.Series(tb_ch.values, index=pd.DatetimeIndex(tb_ch["time"].values))
+
+    # 4. 10-min-Intervalle, ausgerichtet am Fensteranfang
+    origin = pd.Timestamp(t0 - dt)
+    std10 = s.resample("10min", origin=origin).std()
+    n10   = s.resample("10min", origin=origin).count()
+    std10[n10 < min_samples] = np.nan     # zu wenige Werte → keine belastbare Std
+
+    # print(std10)
+    std_710 = np.nanmax(std10.values)
+    # print(std_710)
+    return std_710
+
+##############################################################################
+
 def get_tbs_from_mwr_dir(mwr_dir, datestring, datetime_np,
                          elevations=elevations, azimuths=azimuths):
     """
@@ -392,6 +432,7 @@ def get_tbs_from_mwr_dir(mwr_dir, datestring, datetime_np,
 
         elif "1C01" in fname:
             ds_c1 = xr.open_dataset(file)
+            std_710 = derive_std710(ds_c1, datetime_np)
             for i, elevation in enumerate(elevations):
                 for j, azi in enumerate(azimuths):
                     idx_list = nearest_ele4elevation_mean(
@@ -408,6 +449,7 @@ def get_tbs_from_mwr_dir(mwr_dir, datestring, datetime_np,
 
         elif all(v in xr.open_dataset(file).data_vars for v in ["ele", "azi", "tb"]):
             ds_mwr = xr.open_dataset(file)
+            std_710 = derive_std710(ds_mwr, datetime_np)
             for i, elevation in enumerate(elevations):
                 for j, azi in enumerate(azimuths):
                     idx_list = nearest_ele4elevation_mean(
@@ -423,7 +465,7 @@ def get_tbs_from_mwr_dir(mwr_dir, datestring, datetime_np,
             elif "lat" in ds_mwr.data_vars:
                 lat, lon = ds_mwr["lat"].values, ds_mwr["lon"].values
 
-    return tbs, lat, lon, qual_flag
+    return tbs, lat, lon, qual_flag, std_710
 
 ##############################################################################
 
@@ -506,7 +548,10 @@ def get_profile_from_mwr_dir(mwr_dir, datestring, datetime_np, n_levels, height_
                     print("WARNING: No IR temperatures found for MWR!")
 
     data[0, :] = data[0, :] + height_offset
+    # print("LWP beofre: ", lwp)
     lwp, iwv = check_lwp_iwv(lwp, iwv)
+    # print("LWP after: ", lwp)
+    # LWP correction works so far!!
     return data[:, ::-1], lwp, iwv, irt
 
 ##############################################################################
@@ -554,6 +599,7 @@ def process_site(rs_dir, mwr_dir, campaign, location, n_levels, min_p,\
     lwps_mwr      = np.full(n, np.nan)
     iwvs_mwr      = np.full(n, np.nan)
     irts_mwr     = np.full(n, np.nan)
+    std_710s    = np.full(n, np.nan)
 
     ####
     # Second set of vars for 2nd MWR:
@@ -563,6 +609,7 @@ def process_site(rs_dir, mwr_dir, campaign, location, n_levels, min_p,\
     lwps_mwr_2     = np.full(n, np.nan)
     iwvs_mwr_2     = np.full(n, np.nan)
     irts_mwr_2     = np.full(n, np.nan)
+    std_710s_2    = np.full(n, np.nan)
     mwr1_name      = [os.path.basename(mwr_dir.rstrip("/"))] * n
     mwr2_name      = [os.path.basename(mwr2_dir.rstrip("/")) if mwr2_dir else None] * n
 
@@ -585,7 +632,7 @@ def process_site(rs_dir, mwr_dir, campaign, location, n_levels, min_p,\
         times[i] = datetime_np
         datestring = str(datetime_np).replace("T", "").replace(":", "").replace("-", "")[:8]
 
-        tbs, lat, lon, qual_flag = get_tbs_from_mwr_dir(mwr_dir, datestring, datetime_np)
+        tbs, lat, lon, qual_flag, std_710 = get_tbs_from_mwr_dir(mwr_dir, datestring, datetime_np)
         mwr_prof, lwp_mwr, iwv_mwr,irt_mwr = get_profile_from_mwr_dir(
             mwr_dir, datestring, datetime_np, n_levels, height_offset)
 
@@ -595,11 +642,12 @@ def process_site(rs_dir, mwr_dir, campaign, location, n_levels, min_p,\
         lwps_mwr[i] = lwp_mwr
         iwvs_mwr[i] = iwv_mwr
         irts_mwr[i] = irt_mwr
+        std_710s[i] = std_710
 
         ########
         # If second MWR is existing:
         if mwr2_dir is not None:
-            tbs2, lat2, lon2, qual_flag2 = get_tbs_from_mwr_dir(mwr2_dir, datestring, datetime_np)
+            tbs2, lat2, lon2, qual_flag2, std_710_2 = get_tbs_from_mwr_dir(mwr2_dir, datestring, datetime_np)
             mwr_prof2, lwp_mwr2, iwv_mwr2, irt_mwr2 = get_profile_from_mwr_dir(
                 mwr2_dir, datestring, datetime_np, n_levels, height_offset)
             tbs_all_2[i] = tbs2
@@ -608,6 +656,7 @@ def process_site(rs_dir, mwr_dir, campaign, location, n_levels, min_p,\
             lwps_mwr_2[i] = lwp_mwr2
             iwvs_mwr_2[i] = iwv_mwr2
             irts_mwr_2[i] = irt_mwr2
+            std_710s_2[i] = std_710_2
         #######
 
         length_value, p_array, t_array, ppmv_array, height_in_km, deg_lat, \
@@ -647,6 +696,7 @@ def process_site(rs_dir, mwr_dir, campaign, location, n_levels, min_p,\
             "MWR_LWP":          (("time",), lwps_mwr),
             "MWR_IRT":          (("time",), irts_mwr),            
             "qual_flag":        (("time",), qual_flags),
+            "MWR_STD710":          (("time",), std_710s),   
 
             ######
             # Second MWR:
@@ -658,6 +708,8 @@ def process_site(rs_dir, mwr_dir, campaign, location, n_levels, min_p,\
             "MWR_LWP_2":   (("time",), lwps_mwr_2),
             "MWR_IRT_2":   (("time",), irts_mwr_2), 
             "qual_flag_2": (("time",), qual_flags_2),
+            "MWR_STD710_2":          (("time",), std_710s_2), 
+
             "MWR_1_name":  (("time",), mwr1_name),
             "MWR_2_name":  (("time",), mwr2_name),
             #####

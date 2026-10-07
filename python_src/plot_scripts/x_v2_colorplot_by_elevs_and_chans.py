@@ -20,8 +20,7 @@ from PIL import Image
 import matplotlib.colors as colors
 import sys
 sys.path.append("./")
-from m_mod_plot import ensure_folder_exists, apply_sky_mask
-# from m_mod_plot import select_ds_camp_loc, ensure_folder_exists, apply_sky_mask
+from m_mod_plot import select_ds_camp_loc, ensure_folder_exists, apply_sky_mask
 
 ##############################################################################
 # 1.5 Parameters:
@@ -67,10 +66,6 @@ def parse_arguments():
     )
     return parser.parse_args()
 
-##############################################################################
-def select_ds_camp_loc(ds, campaign, location):
-    mask = (ds["Campaign"] == campaign) & (ds["Location"] == location)
-    return ds.isel(time=mask.values)
 ##############################################################################
 
 def get_deviation_variables(ds):

@@ -369,9 +369,9 @@ def get_profs_from_l2(l2_files, datetime_np, n_levels = n_levels):
         if time_idx_list is not None and len(time_idx_list) > 0:
             irt = np.nanmean(ds[ir_var].values[time_idx_list, 0])
 
-    print("LWP beofre: ", lwp)
+
     lwp, iwv = check_lwp_iwv(lwp, iwv)
-    print("LWP after: ", lwp)
+
     return data[:,::-1], lwp, iwv, irt
 
 ##############################################################################
